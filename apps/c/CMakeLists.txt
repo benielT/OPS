@@ -711,7 +711,8 @@
             add_executable(${Name}_cuda ${OPS} ${OTHERS}
                             "${TMP_SOURCE_DIR}/cuda/cuda_kernels.cu")
             target_include_directories(${Name}_cuda PRIVATE ${TMP_SOURCE_DIR})
-            target_compile_options(${Name}_cuda PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--fmad=false>)
+            target_compile_options(${Name}_cuda PRIVATE $<$<COMPILE_LANGUAGE:CUDA>: --fmad=false >)
+            target_compile_options(${Name}_cuda PRIVATE $<$<COMPILE_LANGUAGE:CUDA>: -Xcompiler="-fPIC" >)
             target_link_libraries(${Name}_cuda ops_cuda CUDA::cudart_static -lcurand OpenMP::OpenMP_CXX)
             if(HDF5_SEQ)
                 target_link_libraries(${Name}_cuda ops_hdf5_seq hdf5::hdf5 hdf5::hdf5_hl)
@@ -848,6 +849,8 @@
                 target_compile_definitions(${Name}_mpi_cuda PRIVATE "-DOPS_MPI -DMPICH_IGNORE_CXX_SEEK")
                 target_compile_options(${Name}_mpi_cuda
                              PRIVATE $<$<COMPILE_LANGUAGE:CUDA>: --fmad=false >)
+                target_compile_options(${Name}_cuda 
+                             PRIVATE $<$<COMPILE_LANGUAGE:CUDA>: -Xcompiler="-fPIC" >)
                 foreach(include_dir IN LISTS MPI_INC_LIST)
                     string(FIND ${include_dir} "include" include_index)
                     if(NOT include_index EQUAL -1)
@@ -861,6 +864,8 @@
                 target_compile_definitions(${Name}_mpi_cuda_tiled PRIVATE "-DOPS_MPI -DMPICH_IGNORE_CXX_SEEK -DOPS_LAZY")
                 target_compile_options(${Name}_mpi_cuda_tiled
                              PRIVATE $<$<COMPILE_LANGUAGE:CUDA>: --fmad=false >)
+                target_compile_options(${Name}_cuda
+                             PRIVATE $<$<COMPILE_LANGUAGE:CUDA>: -Xcompiler="-fPIC" >)
                 foreach(include_dir IN LISTS MPI_INC_LIST)
                     string(FIND ${include_dir} "include" include_index)
                     if(NOT include_index EQUAL -1)
@@ -974,14 +979,14 @@
     add_subdirectory(CloverLeaf)    # Compiles OK
 
 #   App: Cloverleaf_3D  # Compiles OK, Runtime Floating point exception
-    add_subdirectory(CloverLeaf_3D)
+#    add_subdirectory(CloverLeaf_3D)
 
 #   App: Tealeaf    # Compiles OK
-    add_subdirectory(TeaLeaf)
+#    add_subdirectory(TeaLeaf)
 
     if(HDF5_FOUND)
 #       App: Cloverleaf_3D_HDF5 # Compiles OK, Runtime Floating point exception
-        add_subdirectory(CloverLeaf_3D_HDF5)
+#        add_subdirectory(CloverLeaf_3D_HDF5)
 
 #       App: lowdim # Compiles OK
 #        add_subdirectory(lowdim_test)
@@ -1007,7 +1012,7 @@
     endif()
 
 #   App: mb_shsgc   # Compiles OK
-    add_subdirectory(mb_shsgc)
+#    add_subdirectory(mb_shsgc)
 
 #   App: ops-lbm    # Compiles OK
     add_subdirectory(ops-lbm/step5)
