@@ -17,7 +17,7 @@ build:NVHCP23:API_CXX:
     - cmake ../ -DCMAKE_INSTALL_PREFIX=$CI_PROJECT_DIR/OPS-INSTALL -DBUILD_OPS_APPS=ON -DAPP_INSTALL_DIR=$CI_PROJECT_DIR/OPS-APP -DOPS_TEST=ON -DGPU_ARCH=75 -DGPU_NUMBER=1
     - cmake --build . -j 4
     - cmake --install . 
-    - ctest
+    - ctest -v
   artifacts:
     expire_in: 1 week
     paths:
