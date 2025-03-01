@@ -95,27 +95,7 @@
 typedef std::complex<double> complexd;
 typedef std::complex<float> complexf;
 
-#if (defined(__HIP_PLATFORM_HCC__) || defined(__HIP_PLATFORM_AMD__)) && !(defined(__HIP_PLATFORM_NVCC__) || defined(__HIP_PLATFORM_NVIDIA__))
 #include <hip/hip_fp16.h>
-#elif !(defined(__HIP_PLATFORM_HCC__) || defined(__HIP_PLATFORM_AMD__)) && (defined(__HIP_PLATFORM_NVCC__) || defined(__HIP_PLATFORM_NVIDIA__))
-#ifndef __HALF_DEFINED__
-#include <cuda_fp16.h>
-#endif
-#elif defined(__CUDA_ARCH__) || defined(__CUDACC__)
-#ifndef __HALF_DEFINED__
-#include <cuda_fp16.h>
-#endif
-typedef __half half;
-//#elif defined(__SYCL_DEVICE_ONLY__)
-#elif defined(__INTEL_SYCL__)
-#include <CL/sycl.hpp>
-typedef sycl::half half;
-#elif defined(__STDCPP_FLOAT16_T__) || defined(FLT16_MIN)
-typedef _Float16 half;
-#else
-typedef uint16_t half;
-//typedef _Float16 half;
-#endif
 
 /*#ifdef __CUDACC__
 __device__ inline half operator*(int lhs, const half& rhs) {

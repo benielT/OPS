@@ -1268,9 +1268,8 @@ void ops_set_halo_dirtybit3_tiled(ops_arg *arg, int *iter_range, int *left_bound
                            sd->decomp_disp[dim] - MAX_DEPTH + 1, sd->decomp_disp[dim]);
   }
 
-  int left_bnd_beg[ndim]={0}, left_bnd_end[ndim]={0}, left_halo_beg[ndim]={0}, left_halo_end[ndim]={0};
-  int right_bnd_beg[ndim]={0}, right_bnd_end[ndim]={0}, right_halo_beg[ndim]={0}, right_halo_end[ndim]={0};
-
+  std::vector<int> left_bnd_beg(ndim), left_bnd_end(ndim), left_halo_beg(ndim), left_halo_end(ndim);
+  std::vector<int> right_bnd_beg(ndim), right_bnd_end(ndim), right_halo_beg(ndim), right_halo_end(ndim);
   sd->dirtybit = 1;
   for (int dim = 0; dim < ndim; dim++) {
     int other_dims = 1;
