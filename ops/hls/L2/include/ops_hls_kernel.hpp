@@ -81,7 +81,12 @@ public:
 
 	void* get_raw_pointer()
 	{
+#ifndef ASYNC_DISPATCH
 		getGrid(*this);
+#else
+        cl::Event event = getGrid(*this);
+        event.wait();
+#endif
 		return (void*)hostBuffer.data();
 	}
 
@@ -139,7 +144,11 @@ cl::Event& emplaceEvent(Grid<T>& p_grid, std::string prompt="")
 }
 
 template <typename T>
+#ifndef ASYNC_DISPATCH
 void getGrid(Grid<T>& p_grid)
+#else
+cl::Event getGrid(Grid<T>& p_grid)
+#endif
 {
 	if (p_grid.isDevBufDirty)
 	{
@@ -152,12 +161,23 @@ void getGrid(Grid<T>& p_grid)
 		p_grid.isDevBufDirty = false;
 #ifndef ASYNC_DISPATCH
 		event.wait();
+        p_grid.activeEvents.resize(0);
+#else
+        return event;
 #endif
 	}
+#ifdef ASYNC_DISPATCH
+    return cl::Event();
+#endif
 }
 
+
 template <typename T>
+#ifndef ASYNC_DISPATCH
 void sendGrid(Grid<T>& p_grid)
+#else
+cl::Event sendGrid(Grid<T>& p_grid)
+#endif
 {
 	if (p_grid.isHostBufDirty and p_grid.isSetAsArg)
 	{
@@ -165,23 +185,29 @@ void sendGrid(Grid<T>& p_grid)
 		printf("Sending dirty Host buffer to device. \n");
 #endif
 		cl_int err;
-		cl::Event event;
+        cl::Event event;
+
 		OCL_CHECK(err, err = FPGA::getInstance()->getCommandQueue().enqueueMigrateMemObjects({p_grid.deviceBuffer}, 0, &p_grid.activeEvents, &event));
-//		addEvent(p_grid, event, __func__);
 		p_grid.activeEvents.resize(0);
 		p_grid.activeEvents.push_back(event);
 		p_grid.isHostBufDirty = false;
 		p_grid.isSetAsArg = false;
 #ifndef ASYNC_DISPATCH
-#ifdef DEBUG_LOG
+    #ifdef DEBUG_LOG
 		printf("Waiting for sync completion. \n");
-#endif
+    #endif
 		event.wait();
-#ifdef DEBUG_LOG
+        p_grid.activeEvents.resize(0);
+    #ifdef DEBUG_LOG
 		printf("Sync completed \n");
-#endif
+    #endif
+#else
+        return event;
 #endif
 	}
+#ifdef ASYNC_DISPATCH
+    return cl::Event();
+#endif
 }
 
 
