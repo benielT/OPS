@@ -52,6 +52,8 @@ extern const unsigned short mem_vector_factor;
 // #define OPS_FPGA
 // #define PROFILE
 // #define POWER_PROFILE
+// #define BATCHING
+// #define ASYNC_DISPATCH
 #include "user_types.h"
 #include <ops_seq_v2.h>
 #include <ops_hls_rt_support.h>
@@ -78,6 +80,11 @@ void ops_par_loop_kernel_copy(ops::hls::Block, int, int*, ops::hls::Grid<float>&
     exit(-1);
     #endif  
 #endif
+
+
+// #ifdef BATCHING
+//     #define ASYNC_DISPATCH
+// #endif
 /******************************************************************************
 * Main program
 *******************************************************************************/
@@ -98,6 +105,10 @@ int main(int argc, const char **argv)
 #ifdef POWER_PROFILE
     unsigned int power_iter = 1;
 #endif
+#ifdef BATCHING
+    unsigned int batch_size = 1;
+#endif
+
     const char* pch;
     for ( int n = 1; n < argc; n++ ) 
     {
@@ -121,6 +132,20 @@ int main(int argc, const char **argv)
         if(pch != NULL) {
             batches = atoi ( argv[n] + 7 ); continue;
         }
+#ifdef BATCHING
+        pch = strstr(argv[n], "-bsize=");
+        if(pch != NULL) {
+            batch_size = atoi ( argv[n] + 7 ); continue;
+        }
+        if(batch_size < 1) {
+            std::cerr << "Batch size must be greater than 0" << std::endl;
+            exit(-1);
+        }
+        if(batches % batch_size != 0) {
+            std::cerr << "Batch size must divide the number of batches evenly" << std::endl;
+            exit(-1);
+        }
+#endif
 #ifdef POWER_PROFILE
         pch = strstr(argv[n], "-piter=");
         if(pch != NULL) {
@@ -219,9 +244,7 @@ int main(int argc, const char **argv)
 
         ops_dat_fetch_data(u[bat], 0, (char*)u_cpu[bat]);
 
-        ops_par_loop(kernel_copy, "kernel_update", blocks[bat], 2, full_range, 
-            ops_arg_dat(u[bat], 1, S2D_00, "float", OPS_READ),
-            ops_arg_dat(u2[bat], 1, S2D_00, "float", OPS_WRITE));
+        ops_par_loop_kernel_copy( blocks[bat],  2 ,  full_range, u[bat], u2[bat]);
 #else
         ops_par_loop_kernel_populate( blocks[bat],  2 ,  full_range, u[bat]);
 
@@ -270,8 +293,6 @@ int main(int argc, const char **argv)
         auto main_loop_end_clk_point = std::chrono::high_resolution_clock::now();
     #ifndef OPS_FPGA
         main_loop_runtime[bat] = std::chrono::duration<double, std::micro>(main_loop_end_clk_point - main_loop_start_clk_point).count();
-    #else
-        main_loop_runtime[bat] = ops_hls_get_execution_runtime<std::chrono::microseconds>(std::string("isl0"));
     #endif
 #endif
     }
@@ -343,6 +364,9 @@ int main(int argc, const char **argv)
 
 	for (unsigned int bat = 0; bat < batches; bat++)
 	{
+#ifdef OPS_FPGA
+        main_loop_runtime[bat] = ops_hls_get_execution_runtime<std::chrono::microseconds>(std::string("isl0"), bat);
+#endif
         fstream << imax << "," << jmax << "," << 1 << "," << iter_max << "," << 1 << "," << bat << "," << init_runtime[bat] \
         << "," << main_loop_runtime[bat] << "," << main_loop_runtime[bat] + init_runtime[bat] << std::endl;
 
@@ -368,6 +392,7 @@ int main(int argc, const char **argv)
 		}
 	}
 
+    // This is only valid if the kernel is executed synchronously
 	avg_init_runtime /= batches;
 	avg_main_loop_runtime /= batches;
 
@@ -378,6 +403,12 @@ int main(int argc, const char **argv)
 		total_std += std::pow(main_loop_runtime[bat] + init_runtime[bat] - avg_init_runtime - avg_main_loop_runtime, 2);
 	}
 
+#if defined(OPS_FPGA) && defined(ASYNC_DISPATCH)
+    // For FPGA, we can get the total execution runtime for isl0
+    // This is needed for async dispatch, as the individual kernel runtimes may not be accurate
+    std::cout << "[WARNING] Async dispatch is enabled, using average execution runtime from fpga events for isl0" << std::endl;
+    avg_main_loop_runtime = ops_hls_get_total_execution_runtime<std::chrono::microseconds>(std::string("isl0"))/ batches;
+#endif
 	main_loop_std = std::sqrt(main_loop_std / batches);
 	init_std = std::sqrt(init_std / batches);
 	total_std = std::sqrt(total_std / batches);

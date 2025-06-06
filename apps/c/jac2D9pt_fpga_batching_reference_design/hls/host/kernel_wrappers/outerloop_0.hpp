@@ -98,14 +98,16 @@ public:
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.deviceBuffer));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg1.deviceBuffer));
 
-#ifdef PROFILE
-    startHtoDTimer();
-#endif
-        arg0.set_as_arg();
-        arg1.set_as_arg();
-#ifdef PROFILE
-    endHtoDTimer();
-#endif
+
+        std::vector<cl::Event> h2d_events;
+        cl::Event event_h2d_0 = arg0.set_as_arg();
+        cl::Event event_h2d_1 = arg1.set_as_arg();
+    #ifdef PROFILE
+        h2d_events.push_back(event_h2d_0);
+        h2d_events.push_back(event_h2d_1);
+        recordH2DEvent(event_h2d_1);
+    #endif
+
 
         cl::Event event_kernel_0;
         cl::Event event_kernel_1;
@@ -116,9 +118,9 @@ public:
         activeEvents.insert(activeEvents.end(), arg0.activeEvents.begin(), arg0.activeEvents.end());
         activeEvents.insert(activeEvents.end(), arg1.activeEvents.begin(), arg1.activeEvents.end());
 
-#ifdef PROFILE
-    startExecTimer();
-#endif
+// #ifdef PROFILE
+//     startExecTimer();
+// #endif
         OCL_CHECK(err, err = m_fpga->getCommandQueue().enqueueTask(m_datamover, &activeEvents, &event_datamover));
         OCL_CHECK(err, err = m_fpga->getCommandQueue().enqueueTask(m_kernel_0, &activeEvents, &event_kernel_0));
         OCL_CHECK(err, err = m_fpga->getCommandQueue().enqueueTask(m_kernel_1, &activeEvents, &event_kernel_1));
@@ -142,10 +144,23 @@ public:
         event_kernel_0.wait();
         event_kernel_1.wait();
         event_kernel_2.wait();
+#else
+        // If ASYNC_DISPATCH is defined, we do not wait for the events to complete.
+        // This allows for overlapping execution of multiple kernels.
+    #ifdef DEBUG_LOG
+        printf("[HOST] Async dispatch enabled, not waiting for kernel completion.\n");
+    #endif
 #endif
 #ifdef PROFILE
-    endExecTimer();
-    registerProfileTime();
+    std::vector<cl::Event> execEvents;
+    execEvents.push_back(event_datamover);
+    execEvents.push_back(event_kernel_0);   
+    execEvents.push_back(event_kernel_1);  
+    execEvents.push_back(event_kernel_2);
+    recordExecEvent(event_kernel_2);
+
+    // endExecTimer();
+    registerProfileEvents();
 #endif
 
 /*

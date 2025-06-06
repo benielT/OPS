@@ -3,7 +3,7 @@
 
 PLATFORM=xilinx_u280_gen3x16_xdma_1_202211_1
 # PLATFORM=xilinx_vck5000_gen4x8_xdma_2_202210_1
-HLS_TARGET_MODE=sw_emu
+HLS_TARGET_MODE=hw
 HLS_JOBS=64
 include $(OPS_INSTALL_PATH)/../makefiles/Makefile_hls.mk
 
@@ -30,14 +30,18 @@ endif
 
 ########  PRFOFILE OPTIONS (ONLY ENABLE ONE OPTION) ######
 
-#Enable if wanted to profile
+### Enable if wanted to profile
 CXXFLAGS += -DPROFILE
-#Enable if wanted to power_profile
+### Enable if wanted to power_profile
 # CXXFLAGS += -DPOWER_PROFILE
 
-########  VERIIFICATION OPTIONS  ######
+########  VERIIFICATION OPTION  ######
 #Enable if wanted to verify
 # CXXFLAGS += -DVERIFICATION
+
+######## ASYN_DISPATCH OPTION ########
+#Enable if wanted to use asynchronous dispatch
+#CXXFLAGS += -DASYNC_DISPATCH
 
 # Default target
 .DEFAULT_GOAL := $(APP)_hls
