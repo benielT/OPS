@@ -48,6 +48,9 @@ endif
 
 DEFINES+= -DOPS_ACC_IGNORE
 
+#filtering -D flags from CXXFLAGS and append to DEFINES
+DEFINES += $(filter -D%, $(CXXFLAGS))
+
 .generated: $(HEADERS) $(OPS_FILES) $(OPS_INSTALL_PATH)/../ops_translator/ops-translator/*.py
 	@echo "generating translations for ${OPS_FILES}"
 	@echo "OPS_EXTENTIONS: ${OPS_GENERATED_SUFFIX}"
