@@ -54,13 +54,15 @@ public:
 typedef std::chrono::system_clock::time_point time_point;
 typedef std::chrono::duration<double, std::nano> duration;
 
-class RuntimeRecords
+
+
+class RuntimeEventRecords
 {
 public:
-	RuntimeRecords() = default;
+    RuntimeEventRecords() = default;
 
-	duration kernel_runtime;
-	duration data_HtD_runtime;
+    cl::Event kernel_event;
+    cl::Event data_HtD_event;
 };
 
 //class bad_runtime_record : public std::exception
@@ -185,63 +187,82 @@ class FPGA {
 		}
     }
 
-    void registerRuntime(const std::string& kernel_name, const duration exec_time,
-    		const duration HtoD_time)
+    void registerRuntimeEvents(const std::string& kernel_name, cl::Event& h2d_event, cl::Event& exec_event)
     {
 #ifdef DEBUG_LOG
-    	printf("reginstering runtime for %s\n", kernel_name.c_str());
+    	printf("registering runtime for %s\n", kernel_name.c_str());
 #endif
-    	if (not runtimeRecExists(kernel_name))
-    	{
-    		RuntimeRecords newrecord;
-    		m_runtimes[kernel_name] = newrecord;
-    	}
+        if (not runtimeEventRecExists(kernel_name))
+        {
+            std::vector<RuntimeEventRecords> newrecord;
+            m_runtimeEvents[kernel_name] = newrecord;
+        }
 
-    	m_runtimes[kernel_name].kernel_runtime = exec_time;
-    	m_runtimes[kernel_name].data_HtD_runtime = HtoD_time;
+        RuntimeEventRecords new_record;
+        new_record.data_HtD_event = h2d_event;
+        new_record.kernel_event = exec_event;
+        m_runtimeEvents[kernel_name].push_back(new_record);
     }
 
-    void registerExecutionRuntime(const std::string& kernel_name, const duration& exec_time)
+    bool runtimeEventRecExists(const std::string& kernel_name) const
     {
-#ifdef DEBUG_LOG
-    	printf("reginstering exec runtime for %s\n", kernel_name.c_str());
-#endif
-    	if (not runtimeRecExists(kernel_name))
-    		m_runtimes[kernel_name] = RuntimeRecords();
-
-    	m_runtimes[kernel_name].kernel_runtime = exec_time;
+        auto it = m_runtimeEvents.find(kernel_name);
+        return it != m_runtimeEvents.end();
     }
 
-    void registerHtoDRuntime(const std::string& kernel_name, const duration& HtoD_time)
+    template<typename DurationType>
+    double getExecutionRuntime(const std::string& kernel_name, const int execId = 0) const
     {
-    	if (not runtimeRecExists(kernel_name))
-    		m_runtimes[kernel_name] = RuntimeRecords();
-
-    	m_runtimes[kernel_name].data_HtD_runtime = HtoD_time;
+        if (not runtimeEventRecExists(kernel_name))
+            throw std::runtime_error((std::string("bad_runtime_record. Record do not exists for ") + kernel_name).c_str());
+        else if (execId >= m_runtimeEvents.at(kernel_name).size())
+            throw std::runtime_error((std::string("bad_runtime_record. Record do not exists for ") + kernel_name + " with execId " + std::to_string(execId)).c_str());
+        
+        m_runtimeEvents.at(kernel_name)[execId].kernel_event.wait();
+        return std::chrono::duration_cast<DurationType>(std::chrono::nanoseconds(m_runtimeEvents.at(kernel_name)[execId].kernel_event.getProfilingInfo<CL_PROFILING_COMMAND_END>() -
+                                                        m_runtimeEvents.at(kernel_name)[execId].kernel_event.getProfilingInfo<CL_PROFILING_COMMAND_START>())).count();
+        
     }
 
-    bool runtimeRecExists(const std::string& kernel_name) const
+    template<typename DurationType> 
+    double getTotalExecutionRuntime(const std::string& kernel_name) const
     {
-        auto it = m_runtimes.find(kernel_name);
-        return it != m_runtimes.end();
+        if (not runtimeEventRecExists(kernel_name))
+            throw std::runtime_error((std::string("bad_runtime_record. Record do not exists for ") + kernel_name).c_str());
+        
+        double total_runtime = 0.0;
+
+        
+        auto start_record =  m_runtimeEvents.at(kernel_name)[0];
+        auto end_record =  m_runtimeEvents.at(kernel_name)[m_runtimeEvents.at(kernel_name).size() - 1];
+
+        if (start_record.kernel_event.getInfo<CL_EVENT_COMMAND_EXECUTION_STATUS>() != CL_COMPLETE) {
+            std::cout <<"[WARNING] Waiting for start kernel event to complete." << std::endl;
+            start_record.kernel_event.wait();
+        }
+        
+        if (end_record.kernel_event.getInfo<CL_EVENT_COMMAND_EXECUTION_STATUS>() != CL_COMPLETE) {
+            std::cout <<"[WARNING] Waiting for end kernel event to complete." << std::endl;
+            end_record.kernel_event.wait();
+        }
+
+        auto start_time = start_record.kernel_event.getProfilingInfo<CL_PROFILING_COMMAND_START>();
+        auto end_time = end_record.kernel_event.getProfilingInfo<CL_PROFILING_COMMAND_END>();
+        total_runtime = std::chrono::duration_cast<DurationType>(std::chrono::nanoseconds(end_time - start_time)).count();
+        return total_runtime;
     }
 
-    template<typename _Period>
-    double getExecutionRuntime(const std::string& kernel_name)
+    template<typename DurationType>
+    double getHtoDRuntime(const std::string& kernel_name, const int execId = 0) const
     {
-    	if (not runtimeRecExists(kernel_name))
-			throw std::runtime_error((std::string("bad_runtime_record. Record do not exists for ") + kernel_name).c_str());
-
-    	return std::chrono::duration_cast<_Period>(m_runtimes[kernel_name].kernel_runtime).count();
-    }
-
-    template<typename _Period>
-    double getHtoDRuntime(const std::string& kernel_name)
-    {
-    	if (not runtimeRecExists(kernel_name))
-    		throw std::runtime_error((std::string("bad_runtime_record. Record do not exists for ") + kernel_name).c_str());
-
-    	return std::chrono::duration_cast<_Period>(m_runtimes[kernel_name].data_HtD_runtime).count();
+        if (not runtimeEventRecExists(kernel_name))
+            throw std::runtime_error((std::string("bad_runtime_record. Record do not exists for ") + kernel_name).c_str());
+        else if (execId >= m_runtimeEvents.at(kernel_name).size())
+            throw std::runtime_error((std::string("bad_runtime_record. Record do not exists for ") + kernel_name + " with execId " + std::to_string(execId)).c_str());
+        
+        m_runtimeEvents.at(kernel_name)[execId].data_HtD_event.wait();
+        return std::chrono::duration_cast<DurationType>(std::chrono::nanoseconds(m_runtimeEvents.at(kernel_name)[execId].data_HtD_event.getProfilingInfo<CL_PROFILING_COMMAND_END>() -
+                                                        m_runtimeEvents.at(kernel_name)[execId].data_HtD_event.getProfilingInfo<CL_PROFILING_COMMAND_START>())).count();
     }
 
    protected:
@@ -290,7 +311,7 @@ class FPGA {
     cl::CommandQueue m_queue;
     cl::Program m_program;
     std::unordered_map<const void*, cl::Buffer> m_bufferMaps;
-    std::unordered_map<std::string, RuntimeRecords> m_runtimes;
+    std::unordered_map<std::string, std::vector<RuntimeEventRecords>> m_runtimeEvents;
 };
 
 }
@@ -298,11 +319,16 @@ class FPGA {
 
 void ops_init_backend(int argc, const char** argv, unsigned int devId = 0);
 
-template<typename _Period>
-double ops_hls_get_execution_runtime(const std::string&);
+// template<typename _Period>
+// double ops_hls_get_execution_runtime(const std::string&);
 
-template<typename _Period>
-double ops_hls_get_execution_runtime(const char*);
+// template<typename _Period>
+// double ops_hls_get_execution_runtime(const char*);
+template<typename DurationType>
+double ops_hls_get_execution_runtime(const std::string& kernel_name, const int execId = 0);
+
+template<typename DurationType>
+double ops_hls_get_total_execution_runtime(const std::string& kernel_name);
 
 void ops_exit_backend();
 

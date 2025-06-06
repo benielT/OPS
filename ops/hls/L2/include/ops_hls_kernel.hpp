@@ -81,20 +81,16 @@ public:
 
 	void* get_raw_pointer()
 	{
-#ifndef ASYNC_DISPATCH
 		getGrid(*this);
-#else
-        cl::Event event = getGrid(*this);
-        event.wait();
-#endif
 		return (void*)hostBuffer.data();
 	}
 
-	void set_as_arg()
+    cl::Event set_as_arg()
 	{
 		isSetAsArg = true;
-		sendGrid(*this);
+        auto event = sendGrid(*this);
 		isSetAsArg = false;
+        return event;
 	}
 };
 #else
@@ -118,11 +114,12 @@ public:
 		return (void*)hostBuffer.data();
 	}
 
-	void set_as_arg()
+    cl::Event set_as_arg()
 	{
 		isSetAsArg = true;
-		sendGrid(*this);
+        auto event = sendGrid(*this);       
 		isSetAsArg = false;
+        return event;
 	}
 };
 #endif
@@ -144,11 +141,7 @@ cl::Event& emplaceEvent(Grid<T>& p_grid, std::string prompt="")
 }
 
 template <typename T>
-#ifndef ASYNC_DISPATCH
-void getGrid(Grid<T>& p_grid)
-#else
 cl::Event getGrid(Grid<T>& p_grid)
-#endif
 {
 	if (p_grid.isDevBufDirty)
 	{
@@ -161,23 +154,14 @@ cl::Event getGrid(Grid<T>& p_grid)
 		p_grid.isDevBufDirty = false;
 #ifndef ASYNC_DISPATCH
 		event.wait();
-        p_grid.activeEvents.resize(0);
-#else
+#endif
         return event;
-#endif
 	}
-#ifdef ASYNC_DISPATCH
     return cl::Event();
-#endif
 }
 
-
 template <typename T>
-#ifndef ASYNC_DISPATCH
-void sendGrid(Grid<T>& p_grid)
-#else
 cl::Event sendGrid(Grid<T>& p_grid)
-#endif
 {
 	if (p_grid.isHostBufDirty and p_grid.isSetAsArg)
 	{
@@ -185,9 +169,9 @@ cl::Event sendGrid(Grid<T>& p_grid)
 		printf("Sending dirty Host buffer to device. \n");
 #endif
 		cl_int err;
-        cl::Event event;
-
+		cl::Event event;
 		OCL_CHECK(err, err = FPGA::getInstance()->getCommandQueue().enqueueMigrateMemObjects({p_grid.deviceBuffer}, 0, &p_grid.activeEvents, &event));
+//		addEvent(p_grid, event, __func__);
 		p_grid.activeEvents.resize(0);
 		p_grid.activeEvents.push_back(event);
 		p_grid.isHostBufDirty = false;
@@ -197,17 +181,13 @@ cl::Event sendGrid(Grid<T>& p_grid)
 		printf("Waiting for sync completion. \n");
     #endif
 		event.wait();
-        p_grid.activeEvents.resize(0);
     #ifdef DEBUG_LOG
 		printf("Sync completed \n");
     #endif
-#else
+#endif
         return event;
-#endif
 	}
-#ifdef ASYNC_DISPATCH
     return cl::Event();
-#endif
 }
 
 
@@ -219,33 +199,14 @@ class Kernel
 		Kernel(std::string name = ""): m_kernel_name(name)
 		{
 			m_fpga = FPGA::getInstance();
-			if (m_fpga->runtimeRecExists(name))
+			if (m_fpga->runtimeEventRecExists(name))
 				throw std::runtime_error("bad_kernel_name");
 #ifdef DEBUG_LOG
 			printf("initiating: %s \n", m_kernel_name.c_str());
 #endif
-			m_isExecStart = false;
-			m_isExecEnd = false;
-			m_isHtoDStart = false;
-			m_isHtoDEnd = false;
 		}
 
 		void fpga(FPGA* p_fpga) { m_fpga = p_fpga; }
-
-		// void getCU(const std::string& p_name)
-		// {
-		// 	cl_int err;
-		// 	OCL_CHECK(err, m_kernel = cl::Kernel(m_fpga->getProgram(), p_name.c_str(), &err));
-		// }
-
-		// const cl::Kernel& operator()() const { return m_kernel; }
-		// cl::Kernel& operator()() { return m_kernel; }
-
-	//    void enqueueTask() const
-	//    {
-	//        cl_int err;
-	//        OCL_CHECK(err, err = m_fpga->getCommandQueue().enqueueTask(m_kernel));
-	//    }
 
 		void finish() const { m_fpga->finish(); }
 
@@ -258,34 +219,12 @@ class Kernel
 			finish();
 		}
 
-//		template <typename T>
-//		void getGrid(Grid<T>& p_grid)
-//		{
-//			cl_int err;
-//			cl::Event event;
-//			OCL_CHECK(err, err = m_fpga->getCommandQueue().enqueueMigrateMemObjects({p_grid.deviceBuffer}, CL_MIGRATE_MEM_OBJECT_HOST, &p_grid.activeEvents, &event));
-//			addEvent(p_grid, event, __func__);
-//			p_grid.activeEvents.resize(0);
-//			p_grid.activeEvents.push_back(event);
-//		}
-
 		void sendBuffer(std::vector<cl::Memory>& h_m)
 		{
 			cl_int err;
 			OCL_CHECK(err, err = m_fpga->getCommandQueue().enqueueMigrateMemObjects(h_m, 0)); /* 0 means from host*/
 			finish();
 		}
-
-//		template <typename T>
-//		void sendGrid(Grid<T>& p_grid)
-//		{
-//			cl_int err;
-//			cl::Event event;
-//			OCL_CHECK(err, err = m_fpga->getCommandQueue().enqueueMigrateMemObjects({p_grid.deviceBuffer}, 0, &p_grid.activeEvents, &event));
-//			addEvent(p_grid, event, __func__);
-//			p_grid.activeEvents.resize(0);
-//			p_grid.activeEvents.push_back(event);
-//		}
 
 		template <typename T>
 		void sendGrid(std::vector<Grid<T>>& p_grid_vect)
@@ -323,37 +262,33 @@ class Kernel
 			}
 		}
 
-		void startHtoDTimer()
-		{
-			m_HtoD_start_time_point = std::chrono::high_resolution_clock::now();
-			m_isHtoDStart = true;
-		}
+        void recordH2DEvent(cl::Event& event)
+        {
+            m_h2d_event = event;
+        }
 
-		void endHtoDTimer()
-		{
-			m_HtoD_end_time_point = std::chrono::high_resolution_clock::now();
-			m_isHtoDEnd = true;
-		}
+        void recordH2DEvent(std::vector<cl::Event> events)
+        {
+            cl::Event event;
+            m_fpga->getCommandQueue().enqueueMarkerWithWaitList(&events, &event);
+            recordH2DEvent(event);
+        }
 
-		void startExecTimer()
-		{
-			m_exc_start_time_point = std::chrono::high_resolution_clock::now();
-			m_isExecStart = true;
-		}
+        void recordExecEvent(cl::Event& event)
+        {  
+            m_exec_event = event;
+        }
 
-		void endExecTimer()
-		{
-			m_exc_end_time_point = std::chrono::high_resolution_clock::now();
-			m_isExecEnd = true;
-		}
+        void recordExecEvent(std::vector<cl::Event> events)
+        {
+            cl::Event event;
+            m_fpga->getCommandQueue().enqueueMarkerWithWaitList(&events, &event);
+            recordExecEvent(event);
+        }
 
-		void registerProfileTime()
+		void registerProfileEvents() 
 		{
-			if (m_isExecStart and m_isExecEnd and m_isExecStart and m_isHtoDEnd)
-			{
-				m_fpga->registerRuntime(m_kernel_name, duration(m_exc_end_time_point - m_exc_start_time_point),
-						duration(m_HtoD_end_time_point - m_HtoD_start_time_point));
-			}
+            m_fpga->registerRuntimeEvents(m_kernel_name, m_h2d_event, m_exec_event);
 		}
 
 	protected:
@@ -361,15 +296,8 @@ class Kernel
 		std::string m_kernel_name;
 	private:
 
-
-		bool m_isExecStart;
-		bool m_isExecEnd;
-		bool m_isHtoDStart;
-		bool m_isHtoDEnd;
-		time_point m_exc_start_time_point;
-		time_point m_exc_end_time_point;
-		time_point m_HtoD_start_time_point;
-		time_point m_HtoD_end_time_point;
+        cl::Event m_h2d_event;
+        cl::Event m_exec_event;
 };
 
 }
