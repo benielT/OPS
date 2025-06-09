@@ -179,18 +179,13 @@ ops::hls::Block ops_hls_decl_block(int dims, std::string name)
 	return block;
 }
 
-ops::hls::Block ops_hls_decl_block_batch(int dims, std::string name, int batch_size, int batchdim)
+ops::hls::Block ops_hls_decl_block_batch(int dims, std::string name, int batch_size)
 {
     ops::hls::Block block;
     block.dims = dims;
     block.name = std::string(name);
     block.batch_size = batch_size;
     
-    if (batchdim < 1 || batchdim >= dims)
-    {
-        std::cerr << "Error: Invalid batch dimension specified: " << batchdim << ". It should be between 1 and " << (dims) << "." << std::endl;
-        throw std::invalid_argument("Invalid batch dimension");
-    }
     return block;
 }
 
@@ -218,7 +213,7 @@ ops::hls::Grid<T> ops_hls_decl_dat(ops::hls::Block& block, int elem_size, int* s
 	}
 
 	ops::hls::Grid<T> grid;
-	grid.originalProperty = createGridPropery(block.dims, elem_size, size_, d_m_, d_p_, block.batch_size, block.batchdim, mem_vector_factor);
+	grid.originalProperty = createGridPropery(block.dims, elem_size, size_, d_m_, d_p_, block.batch_size, mem_vector_factor);
 
 	unsigned int data_size = elem_size;
     
