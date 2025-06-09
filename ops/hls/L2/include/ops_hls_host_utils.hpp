@@ -109,11 +109,13 @@ ops::hls::GridPropertyCore createGridPropery(const unsigned short dim,
 		const ops::hls::SizeType& size,
 		const ops::hls::SizeType& d_m,
 		const ops::hls::SizeType& d_p,
+        const int batch_size = 1,
 		const unsigned short vector_factor=16)
 {
 	ops::hls::GridPropertyCore gridProp;
 	gridProp.dim = dim;
     gridProp.multidim_dim = multidim_dim;
+    gridProp.batch_size = batch_size;
 
 	for (int i = 0; i < ops_max_dim; i++)
 	{
@@ -145,11 +147,13 @@ ops::hls::GridPropertyCoreV2 createGridPropery(const unsigned short dim,
 		const ops::hls::SizeType& size,
 		const ops::hls::SizeType& d_m,
 		const ops::hls::SizeType& d_p,
+        const int batch_size = 1,
 		const unsigned short vector_factor=16)
 {
 	ops::hls::GridPropertyCoreV2 gridProp;
     gridProp.multidim_dim = multidim_dim;
 	gridProp.dim = dim;
+    gridProp.batch_size = batch_size;
 
 	for (int i = 0; i < ops_max_dim; i++)
 	{
@@ -173,6 +177,21 @@ ops::hls::Block ops_hls_decl_block(int dims, std::string name)
 	block.name = name;
 
 	return block;
+}
+
+ops::hls::Block ops_hls_decl_block_batch(int dims, std::string name, int batch_size, int batchdim)
+{
+    ops::hls::Block block;
+    block.dims = dims;
+    block.name = std::string(name);
+    block.batch_size = batch_size;
+    
+    if (batchdim < 1 || batchdim >= dims)
+    {
+        std::cerr << "Error: Invalid batch dimension specified: " << batchdim << ". It should be between 1 and " << (dims) << "." << std::endl;
+        throw std::invalid_argument("Invalid batch dimension");
+    }
+    return block;
 }
 
 template <typename T>
@@ -199,14 +218,15 @@ ops::hls::Grid<T> ops_hls_decl_dat(ops::hls::Block& block, int elem_size, int* s
 	}
 
 	ops::hls::Grid<T> grid;
-	grid.originalProperty = createGridPropery(block.dims, elem_size, size_, d_m_, d_p_, mem_vector_factor);
+	grid.originalProperty = createGridPropery(block.dims, elem_size, size_, d_m_, d_p_, block.batch_size, block.batchdim, mem_vector_factor);
 
 	unsigned int data_size = elem_size;
     
 	for (int i = 0; i < block.dims; i++)
 		data_size *= grid.originalProperty.grid_size[i];
 	
-	// unsigned int data_size_bytes = data_size * sizeof(T);
+    data_size *= grid.originalProperty.batch_size;
+
 	grid.hostBuffer.resize(data_size);
 	grid.isSetAsArg = false;
 

@@ -49,6 +49,7 @@ class Block
 public:
 	int dims;
 	std::string name;
+    int batch_size = 1;
 };
 
 typedef std::chrono::system_clock::time_point time_point;
