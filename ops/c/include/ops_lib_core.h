@@ -694,6 +694,16 @@ OPS_FTN_INTEROP
 ops_block ops_decl_block(int dims, const char *name);
 
 /**
+ * This routine defines a collection of structured grid blocks.
+ *
+ * @param dims  dimension of the block
+ * @param name  a name used for output diagnostics
+ * @param count batch size
+ * @return
+ */
+OPS_FTN_INTEROP
+ops_block ops_decl_block_batch(int dims, const char *name, int count);
+/**
  * This routine defines a dataset.
  *
  * The @p size allows to declare different sized data arrays on a given block.
