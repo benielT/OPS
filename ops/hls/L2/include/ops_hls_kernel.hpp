@@ -270,8 +270,7 @@ class Kernel
         void recordH2DEvent(std::vector<cl::Event> events)
         {
             cl::Event event;
-            m_fpga->getCommandQueue().enqueueMarkerWithWaitList(&events, &event);
-            recordH2DEvent(event);
+            m_fpga->getCommandQueue().enqueueMarkerWithWaitList(&events, &m_h2d_event);
         }
 
         void recordExecEvent(cl::Event& event)
@@ -279,11 +278,10 @@ class Kernel
             m_exec_event = event;
         }
 
-        void recordExecEvent(std::vector<cl::Event> events)
+        void recordExecEvent(std::vector<cl::Event>& events)
         {
             cl::Event event;
-            m_fpga->getCommandQueue().enqueueMarkerWithWaitList(&events, &event);
-            recordExecEvent(event);
+            m_fpga->getCommandQueue().enqueueMarkerWithWaitList(&events, &m_exec_event);
         }
 
 		void registerProfileEvents() 

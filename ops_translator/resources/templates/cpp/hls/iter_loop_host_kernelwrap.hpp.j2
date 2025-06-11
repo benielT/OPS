@@ -117,16 +117,19 @@ public:
         {% endif%}
     {% endfor %}
 
-#ifdef PROFILE
-    startHtoDTimer();
-#endif
+        std::vector<cl::Event> h2d_events;
     {% for arg in ilh.joint_args %}
         {% if arg is ops_dat %}
-        arg{{arg.id}}.set_as_arg();
+        cl::Event event_h2d_arg{{arg.id}} = arg{{arg.id}}.set_as_arg();
         {% endif %}
     {% endfor %}
 #ifdef PROFILE
-    endHtoDTimer();
+    {% for arg in ilh.joint_args %}
+        {% if arg is ops_dat %}
+        h2d_events.push_back(event_h2d_arg{{arg.id}});
+        {% endif %}
+    {% endfor %}
+        recordH2DEvent(h2d_events);
 #endif
 
     {% for slr_id in range(config["SLR_count"]) %}
@@ -141,9 +144,6 @@ public:
         {% endif %}
     {% endfor %}
 
-#ifdef PROFILE
-    startExecTimer();
-#endif
         OCL_CHECK(err, err = m_fpga->getCommandQueue().enqueueTask(m_datamover, &activeEvents, &event_datamover));
     {% for slr_id in range(config["SLR_count"]) %}
         OCL_CHECK(err, err = m_fpga->getCommandQueue().enqueueTask(m_kernel_{{slr_id}}, &activeEvents, &event_kernel_{{slr_id}}));
@@ -157,6 +157,17 @@ public:
         {% endif %}
     {% endfor %}
 #endif#}
+
+#ifdef PROFILE
+    std::vector<cl::Event> execEvents;
+    execEvents.push_back(event_datamover);
+    {% for slr_id in range(config["SLR_count"]) %}
+        execEvents.push_back(event_kernel_{{slr_id}});
+    {% endfor %}
+    recordExecEvent(event_datamover);
+    registerProfileEvents();
+#endif
+
     {% for arg in ilh.joint_args %}
         {% if arg is ops_dat %}
         arg{{arg.id}}.isDevBufDirty = true;
@@ -173,10 +184,10 @@ public:
     {% for slr_id in range(config["SLR_count"]) %}
         event_kernel_{{slr_id}}.wait();
     {% endfor %}
-#endif
-#ifdef PROFILE
-    endExecTimer();
-    registerProfileTime();
+#else
+    #ifdef DEBUG_LOG
+        printf("[DEBUG_HOST] Async dispatch enabled, not waiting for kernel completion.\n");
+    #endif
 #endif
 
 /*
