@@ -21,6 +21,11 @@ void ops_par_loop_kernel_populate(ops::hls::Block dummyBlock, int dim, int* ops_
     constexpr int arg0_0_stencil_offset[] = { 0, 0, 0 };
     getGrid(arg0);
 
+    for (unsigned short k = 0; k < dummyBlock.batch_size; k++)
+    {
+        range.start[1] += k * arg0.originalProperty.grid_size[1];
+        range.end[1] += k * arg0.originalProperty.grid_size[1];
+
         for (unsigned short j = range.start[1]; j < range.end[1]; j++)
         {
             for (unsigned short i = range.start[0]; i < range.end[0]; i++)
@@ -30,7 +35,7 @@ void ops_par_loop_kernel_populate(ops::hls::Block dummyBlock, int dim, int* ops_
                 );
             }
         }
-
+    }
     arg0.isHostBufDirty = true;
 
 }

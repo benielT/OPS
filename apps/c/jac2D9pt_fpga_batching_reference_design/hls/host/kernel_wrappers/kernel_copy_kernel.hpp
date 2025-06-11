@@ -25,14 +25,20 @@ void ops_par_loop_kernel_copy(ops::hls::Block dummyBlock, int dim, int* ops_rang
     getGrid(arg0);
     getGrid(arg1);
 
-        for (unsigned short j = range.start[1]; j < range.end[1]; j++)
+        for (unsigned short k = 0; k < dummyBlock.batch_size; k++)
         {
-            for (unsigned short i = range.start[0]; i < range.end[0]; i++)
+            range.start[1] += k * arg0.originalProperty.grid_size[1];
+            range.end[1] += k * arg0.originalProperty.grid_size[1];
+            
+            for (unsigned short j = range.start[1]; j < range.end[1]; j++)
             {
-                kernel_kernel_copy_core(
-                    arg0.hostBuffer[getOffset(arg0_0_stencil_offset, arg0.originalProperty, i , j)],
-                    arg1.hostBuffer[getOffset(arg1_0_stencil_offset, arg1.originalProperty, i , j)]
-                );
+                for (unsigned short i = range.start[0]; i < range.end[0]; i++)
+                {
+                    kernel_kernel_copy_core(
+                        arg0.hostBuffer[getOffset(arg0_0_stencil_offset, arg0.originalProperty, i , j)],
+                        arg1.hostBuffer[getOffset(arg1_0_stencil_offset, arg1.originalProperty, i , j)]
+                    );
+                }
             }
         }
 

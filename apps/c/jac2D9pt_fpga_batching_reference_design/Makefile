@@ -3,7 +3,7 @@
 
 PLATFORM=xilinx_u280_gen3x16_xdma_1_202211_1
 # PLATFORM=xilinx_vck5000_gen4x8_xdma_2_202210_1
-HLS_TARGET_MODE=hw
+HLS_TARGET_MODE=sw_emu
 HLS_JOBS=64
 include $(OPS_INSTALL_PATH)/../makefiles/Makefile_hls.mk
 
@@ -41,7 +41,15 @@ CXXFLAGS += -DPROFILE
 
 ######## ASYN_DISPATCH OPTION ########
 #Enable if wanted to use asynchronous dispatch
-#CXXFLAGS += -DASYNC_DISPATCH
+# CXXFLAGS += -DASYNC_DISPATCH
+
+####### BATCHING OPTION ########
+# Enable if wanted to use batching
+CXXFLAGS += -DBATCHING
+
+######### DEBUG LOGGING OPTION ######## 
+# CXXFLAGS += -DDEBUG_LOG
+# VPP_FLAGS += -DDEBUG_LOG
 
 # Default target
 .DEFAULT_GOAL := $(APP)_hls

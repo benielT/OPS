@@ -105,9 +105,7 @@ int main(int argc, const char **argv)
 #ifdef POWER_PROFILE
     unsigned int power_iter = 1;
 #endif
-#ifdef BATCHING
     unsigned int batch_size = 1;
-#endif
 
     const char* pch;
     for ( int n = 1; n < argc; n++ ) 
@@ -135,15 +133,20 @@ int main(int argc, const char **argv)
 #ifdef BATCHING
         pch = strstr(argv[n], "-bsize=");
         if(pch != NULL) {
-            batch_size = atoi ( argv[n] + 7 ); continue;
-        }
-        if(batch_size < 1) {
-            std::cerr << "Batch size must be greater than 0" << std::endl;
-            exit(-1);
-        }
-        if(batches % batch_size != 0) {
-            std::cerr << "Batch size must divide the number of batches evenly" << std::endl;
-            exit(-1);
+            batch_size = atoi ( argv[n] + 7 );
+
+            if(batch_size < 1) {
+                std::cerr << "Batch size must be greater than 0" << std::endl;
+                exit(-1);
+            }
+
+            if(batches % batch_size != 0) {
+                std::cerr << "Batch size must divide the number of batches evenly" << std::endl;
+                exit(-1);
+            }
+            batches /= batch_size;
+            std::cout << "Batching enabled, number of batches: " << batches << ", batch size: " << batch_size << std::endl;
+            continue;
         }
 #endif
 #ifdef POWER_PROFILE
@@ -176,7 +179,11 @@ int main(int argc, const char **argv)
     for (unsigned int bat = 0; bat < batches; bat++)
     {
         std::string name = std::string("batch_") + std::to_string(bat);
+#ifndef BATCHING
         blocks[bat] = ops_hls_decl_block(2, name.c_str());
+#else 
+        blocks[bat] = ops_hls_decl_block_batch(2, name.c_str(), batch_size);
+#endif
     }
 
 
@@ -221,10 +228,10 @@ int main(int argc, const char **argv)
         name = std::string("ref_") + std::to_string(bat);
         ref[bat] = ops_hls_decl_dat(blocks[bat],  1,  size,  base,  d_m,  d_p,  temp,  "float",  name.c_str(), mem_vector_factor);
 #ifdef VERIFICATION
-        u_cpu[bat] = (float*)malloc(sizeof(float) * grid_size_x * grid_size_y);
-        u2_cpu[bat] = (float*)malloc(sizeof(float) * grid_size_x * grid_size_y);
-        f_cpu[bat] = (float*)malloc(sizeof(float) * grid_size_x * grid_size_y);
-        ref_cpu[bat] = (float*)malloc(sizeof(float) * grid_size_x * grid_size_y);
+        u_cpu[bat] = (float*)malloc(sizeof(float) * grid_size_x * grid_size_y * batch_size);
+        u2_cpu[bat] = (float*)malloc(sizeof(float) * grid_size_x * grid_size_y * batch_size);
+        f_cpu[bat] = (float*)malloc(sizeof(float) * grid_size_x * grid_size_y * batch_size);
+        ref_cpu[bat] = (float*)malloc(sizeof(float) * grid_size_x * grid_size_y * batch_size);
 #endif
     }
 
@@ -238,9 +245,9 @@ int main(int argc, const char **argv)
         auto init_start_clk_point =  std::chrono::high_resolution_clock::now();
 #endif
 #ifdef VERIFICATION
-        initialise_grid(u_cpu[bat], size, d_m, d_p, full_range);
-        // printGrid2D(u_cpu[bat], u[bat].originalProperty, "u_CPU after init");
-        copy_grid(u2_cpu[bat], u_cpu[bat], size, d_m, d_p, full_range);
+        initialise_grid(u_cpu[bat], size, d_m, d_p, full_range, batch_size);
+        printGrid2D(u_cpu[bat], u[bat].originalProperty, "u_CPU after init");
+        copy_grid(u2_cpu[bat], u_cpu[bat], size, d_m, d_p, full_range, batch_size);
 
         ops_dat_fetch_data(u[bat], 0, (char*)u_cpu[bat]);
 
@@ -261,14 +268,15 @@ int main(int argc, const char **argv)
         auto u_raw = (float*)u[bat].get_raw_pointer();
         auto u2_raw = (float*)u2[bat].get_raw_pointer();
 
-        // printGrid2D(u_raw, u[bat].originalProperty, "test");
+        printGrid2D(u_raw, u[bat].originalProperty, "test init u");
+        printGrid2D(u2_raw, u2[bat].originalProperty, "test init u2");
 
-        if(verify(u_raw, u_cpu[bat], size, d_m, d_p, full_range))
+        if(verify(u_raw, u_cpu[bat], size, d_m, d_p, full_range, batch_size))
             std::cout << "[BATCH - " << bat << "] verification of u after initiation" << "[PASSED]" << std::endl;
         else
             std::cout << "[BATCH - " << bat << "] verification of u after initiation" << "[FAILED]" << std::endl;
 
-        if(verify(u2_raw, u2_cpu[bat], size, d_m, d_p, full_range))
+        if(verify(u2_raw, u2_cpu[bat], size, d_m, d_p, full_range, batch_size))
             std::cout << "[BATCH - " << bat << "] verification of u2 after initiation" << "[PASSED]" << std::endl;
         else
             std::cout << "[BATCH - " << bat << "] verification of u2 after initiation" << "[FAILED]" << std::endl;
@@ -309,12 +317,13 @@ int main(int argc, const char **argv)
 
         for (int iter = 0; iter < iter_max; iter++)
         {
-            stencil_computation(u_cpu[bat], u2_cpu[bat], size, d_m, d_p, internal_range);
-            copy_grid(u_cpu[bat], u2_cpu[bat], size, d_m, d_p, internal_range);
+            stencil_computation(u_cpu[bat], u2_cpu[bat], size, d_m, d_p, internal_range, batch_size);
+            copy_grid(u_cpu[bat], u2_cpu[bat], size, d_m, d_p, internal_range, batch_size);
         }
 
-		// printGrid2D<float>(u_raw, u[bat].originalProperty, "u after computation");
-		// printGrid2D<float>(u_cpu[bat], u[bat].originalProperty, "u_Acpu after computation");
+		printGrid2D<float>(u_raw, u[bat].originalProperty, "u after computation");
+        printGrid2D<float>(u2_raw, u2[bat].originalProperty, "u2 after computation");
+		printGrid2D<float>(u_cpu[bat], u[bat].originalProperty, "u_Acpu after computation");
 
         // if(verify(u_raw, u_cpu[bat], size, d_m, d_p, full_range))
         //     std::cout << "[BATCH - " << bat << "] verification of u after calculation" << "[PASSED]" << std::endl;

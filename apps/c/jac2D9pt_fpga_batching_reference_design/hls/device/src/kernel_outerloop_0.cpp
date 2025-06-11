@@ -42,11 +42,11 @@ hls::stream <ap_axiu<axis_data_width, 0, 0, 0>>& arg0_axis_in, hls::stream <ap_a
 ::hls::stream<ap_uint<axis_data_width>> arg0_arg1_streams[iter_par_factor + 1];
     #pragma HLS STREAM variable = arg0_arg1_streams depth = 360
     
-        ops::hls::axis2stream<axis_data_width, axis_data_width>(arg0_axis_in, arg0_arg1_streams[0], total_bytes);
+        ops::hls::axis2stream<axis_data_width, axis_data_width>(arg0_axis_in, arg0_arg1_streams[0], total_bytes * stencilConfig.batch_size);
 
         kernel_outerloop_0_dataflow_region_cascaded(slr_region, stencilConfig, arg0_arg1_streams);
 
-        ops::hls::stream2axis<axis_data_width, axis_data_width>(arg1_axis_out, arg0_arg1_streams[iter_par_factor], total_bytes);
+        ops::hls::stream2axis<axis_data_width, axis_data_width>(arg1_axis_out, arg0_arg1_streams[iter_par_factor], total_bytes * stencilConfig.batch_size);
 
 }
 
@@ -62,6 +62,7 @@ extern "C" void kernel_outerloop_0(
         const unsigned short stencilConfig_upper_limit_0,
         const unsigned short stencilConfig_upper_limit_1,
         const unsigned short stencilConfig_outer_loop_limit,
+        const unsigned short stencilConfig_batch_size,
     //u
         hls::stream <ap_axiu<axis_data_width, 0, 0, 0>>& arg0_axis_in,
     //u2
@@ -80,7 +81,7 @@ extern "C" void kernel_outerloop_0(
     #pragma HLS INTERFACE s_axilite port = stencilConfig_upper_limit_0 bundle = control
     #pragma HLS INTERFACE s_axilite port = stencilConfig_upper_limit_1 bundle = control
     #pragma HLS INTERFACE s_axilite port = stencilConfig_outer_loop_limit bundle = control
-
+    #pragma HLS INTERFACE s_axilite port = stencilConfig_batch_size bundle = control
     
 
     #pragma HLS INTERFACE axis port = arg0_axis_in register
@@ -101,7 +102,8 @@ extern "C" void kernel_outerloop_0(
     stencilConfig.upper_limit[1] = stencilConfig_upper_limit_1;
     stencilConfig.total_itr = stencilConfig_total_itr;
     stencilConfig.outer_loop_limit = stencilConfig_outer_loop_limit;
-
+    stencilConfig.batch_size = stencilConfig_batch_size;
+    
     unsigned int total_bytes = stencilConfig_total_itr * vector_factor * sizeof(stencil_type);
 
 #ifdef DEBUG_LOG

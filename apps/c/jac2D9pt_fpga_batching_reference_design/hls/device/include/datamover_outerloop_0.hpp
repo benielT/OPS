@@ -14,6 +14,7 @@ extern "C" void datamover_outerloop_0(
         const unsigned short gridSize_0,
         const unsigned short gridSize_1,
         const unsigned int outer_itr,
+        const unsigned short batch_size,
     //u
         ap_uint<mem_data_width>* arg0,
     //u2

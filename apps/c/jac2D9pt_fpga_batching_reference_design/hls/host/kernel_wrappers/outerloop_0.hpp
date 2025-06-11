@@ -33,11 +33,11 @@ public:
         ops::hls::AccessRange read_range;
         getAdjustedRange(arg0.originalProperty, range, read_range, read_stencil_d_m, read_stencil_d_p);
 
-#ifdef DEBUG_LOG
+// #ifdef DEBUG_LOG
         printAccessRange(range, "common access range");
         printGridProp(arg0.originalProperty, "arg0_originalGridProp");
         printStencilConfig(read_stencilConfig, "read_stencilConfig");
-#endif
+// #endif
 
 		unsigned int total_iter_par_factor = iter_par_factor * 3;
 		unsigned int adjusted_outer_iter = (outer_iter + total_iter_par_factor - 1) / total_iter_par_factor;
@@ -55,6 +55,7 @@ public:
         OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.upper_limit[0]));
         OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.upper_limit[1]));
         OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.outer_loop_limit));
+        OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.batch_size));
         narg = 0; 
         OCL_CHECK(err, err = m_kernel_1.setArg(narg++, (unsigned short)1));
         OCL_CHECK(err, err = m_kernel_1.setArg(narg++, adjusted_outer_iter));
@@ -67,6 +68,7 @@ public:
         OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.upper_limit[0]));
         OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.upper_limit[1]));
         OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.outer_loop_limit));
+        OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.batch_size));
         narg = 0; 
         OCL_CHECK(err, err = m_kernel_2.setArg(narg++, (unsigned short)2));
         OCL_CHECK(err, err = m_kernel_2.setArg(narg++, adjusted_outer_iter));
@@ -79,6 +81,7 @@ public:
         OCL_CHECK(err, err = m_kernel_2.setArg(narg++, read_stencilConfig.upper_limit[0]));
         OCL_CHECK(err, err = m_kernel_2.setArg(narg++, read_stencilConfig.upper_limit[1]));
         OCL_CHECK(err, err = m_kernel_2.setArg(narg++, read_stencilConfig.outer_loop_limit));
+        OCL_CHECK(err, err = m_kernel_2.setArg(narg++, read_stencilConfig.batch_size));
 
 #ifndef OPS_HLS_NO_LOOPBACK
         bool loopback_enbl = true;
@@ -93,8 +96,8 @@ public:
         OCL_CHECK(err, err = m_datamover.setArg(narg++, read_range.end[1]));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.originalProperty.grid_size[0]));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.originalProperty.grid_size[1]));
- 
         OCL_CHECK(err, err = m_datamover.setArg(narg++, adjusted_outer_iter));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.originalProperty.batch_size));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.deviceBuffer));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg1.deviceBuffer));
 
@@ -148,7 +151,7 @@ public:
         // If ASYNC_DISPATCH is defined, we do not wait for the events to complete.
         // This allows for overlapping execution of multiple kernels.
     #ifdef DEBUG_LOG
-        printf("[HOST] Async dispatch enabled, not waiting for kernel completion.\n");
+        printf("[DEBUG_HOST] Async dispatch enabled, not waiting for kernel completion.\n");
     #endif
 #endif
 #ifdef PROFILE

@@ -43,15 +43,24 @@ inline void kernel_jac2D_kernel_stencil_core(
     printf("[KERNEL_INTERNAL_CORE]|%s| starting kernel core: kernel_jac2D_kernel_stencil_core\n",__func__);
 #endif
 
-    float tmp1 = reg_0_0 * (-0.07f);
-    float tmp2 = reg_0_3 * (-0.08f);
-    float tmp3 = reg_0_6 * (-0.01f);
-    float tmp4 = reg_0_1 * (-0.06f);
-    float tmp5 = reg_0_4 * (0.36f);
-    float tmp6 = reg_0_7 * (-0.02f);
-    float tmp7 = reg_0_2 * (-0.05f);
-    float tmp8 = reg_0_5 * (-0.04f);
-    float tmp9 = reg_0_8 * (-0.03f);
+    // float tmp1 = reg_0_0 * (-0.07f);
+    // float tmp2 = reg_0_3 * (-0.08f);
+    // float tmp3 = reg_0_6 * (-0.01f);
+    // float tmp4 = reg_0_1 * (-0.06f);
+    // float tmp5 = reg_0_4 * (0.36f);
+    // float tmp6 = reg_0_7 * (-0.02f);
+    // float tmp7 = reg_0_2 * (-0.05f);
+    // float tmp8 = reg_0_5 * (-0.04f);
+    // float tmp9 = reg_0_8 * (-0.03f);
+    float tmp1 = reg_0_0 * (0.125f);
+    float tmp3 = reg_0_6 * (0.125f);
+    float tmp4 = reg_0_1 * (0.125f);
+    float tmp2 = reg_0_3 * (0.125f);
+    float tmp5 = 0.0f; // reg_0_4 * (0.125f); // This was commented out in the original code
+    float tmp6 = reg_0_7 * (0.125f);
+    float tmp7 = reg_0_2 * (0.125f);
+    float tmp8 = reg_0_5 * (0.125f);
+    float tmp9 = reg_0_8 * (0.125f);
     float tmp10 = tmp1 + tmp2;
     float tmp11 = tmp3 + tmp4;
     float tmp12 = tmp5 + tmp6;
@@ -248,7 +257,7 @@ public:
                 else
                     S2D_9PT_buf_r1_2_p0_wr++;
 
-#ifdef DEBUG_LOG
+// #ifdef DEBUG_LOG
                 printf("[DEBUG][INTERNAL][jac2D_kernel_stencil_PE_%d] loop params after update i(%d), "\
                                 "j(%d), "\
                                 "S2D_9PT_buf_r0_1_p0_rd(%d), "\
@@ -274,7 +283,7 @@ public:
                     printf("%f ", tmpConverter.f);
                 }
                 printf(")\n");
-#endif      
+// #endif      
             }
 
             vec2arr: for (unsigned short x = 0; x < vector_factor; x++)
@@ -336,10 +345,10 @@ public:
                         || (j >= stencilConfig.upper_limit[1])
                 );
 
-#ifdef DEBUG_LOG
+// #ifdef DEBUG_LOG
                 printf("[DEBUG][INTERNAL][jac2D_kernel_stencil_PE_%d] index=(%d, %d), lowerbound=(%d, %d), upperbound=(%d, %d), neg_cond=%d\n", m_PEId, index, j,
                             stencilConfig.lower_limit[0], stencilConfig.lower_limit[1], stencilConfig.upper_limit[0], stencilConfig.upper_limit[1], neg_cond);
-#endif
+// #endif
 
                 stencil_type arg1_result;
 
@@ -360,6 +369,7 @@ public:
 
                 if (not neg_cond)
                 {
+                    printf("[DEBUG][INTERNAL][jac2D_kernel_stencil_PE_%d] Writing result to arg1: %f\n", m_PEId, arg1_result);
                     arg1_tmpConvWrite.f = arg1_result;
                 }
                 else
@@ -381,7 +391,7 @@ public:
 
                 if (cond_write)
                 {
-#ifdef DEBUG_LOG
+// #ifdef DEBUG_LOG
                     printf("[DEBUG][INTERNAL][jac2D_kernel_stencil_PE_%d] --------------------------------------------------------\n\n", m_PEId);
 
                     printf("[DEBUG][INTERNAL][jac2D_kernel_stencil_PE_%d] wirte values arg1: (", m_PEId);
@@ -392,7 +402,7 @@ public:
                         printf("%f ", tmpConverter.f);
                     }
                     printf(")\n");
-#endif
+// #endif
                     arg1_wr_buffer <<  arg1_update_val;
                 }
             }
@@ -418,12 +428,17 @@ void kernel_jac2D_kernel_stencil_PE(const short& PEId, const ops::hls::StencilCo
     printf("[KERNEL_DEBUG]|%s| starting stencil kernel PE\n", __func__);
 #endif
 
-    stencil.stencilRun(
+    for (unsigned short bat = 0; bat < stencilConfig.batch_size; bat++)
+    {
+#ifdef DEBUG_LOG
+    printf("[KERNEL_DEBUG]|%s| Starting Batch: %d\n", __func__, bat);
+#endif
+        stencil.stencilRun(
             arg0_rd_buffer,
-            arg1_wr_buffer
+            arg1_wr_buffer);
 
-);
-
+    }
+    
 #ifdef DEBUG_LOG
     printf("[KERNEL_DEBUG]|%s| Ending stencil kernel PE\n", __func__);
 #endif
