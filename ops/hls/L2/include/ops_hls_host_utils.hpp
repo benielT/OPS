@@ -41,20 +41,25 @@ void printGridProp(ops::hls::GridPropertyCore& gridProp, std::string prompt = ""
 	std::cout << "-------------------------------" << std::endl;
 	std::cout << "  grid properties: " << prompt << std::endl;
 	std::cout << "-------------------------------" << std::endl;
-	std::cout << std::setw(15) << std::right << "dim: "  << gridProp.dim << std::endl;
-	std::cout << std::setw(15) << std::right << "d_m: " << "(" << gridProp.d_m[0]
+	std::cout << std::setw(21) << std::right << "dim: "  << gridProp.dim << std::endl;
+    std::cout << std::setw(21) << std::right << "batch_size: "  << gridProp.batch_size << std::endl;
+	std::cout << std::setw(21) << std::right << "d_m: " << "(" << gridProp.d_m[0]
 				<< ", " << gridProp.d_m[1] << ", " << gridProp.d_m[2] <<")"<< std::endl;
-	std::cout << std::setw(15) << std::right << "d_p: " << "(" << gridProp.d_p[0]
+	std::cout << std::setw(21) << std::right << "d_p: " << "(" << gridProp.d_p[0]
 				<< ", " << gridProp.d_p[1] << ", " << gridProp.d_p[2] <<")"<< std::endl;
-	std::cout << std::setw(15) << std::right << "logical size: " << "(" << gridProp.size[0]
+	std::cout << std::setw(21) << std::right << "logical size: " << "(" << gridProp.size[0]
 				<< ", " << gridProp.size[1] << ", " << gridProp.size[2] <<")"<< std::endl;
-	std::cout << std::setw(15) << std::right << "actual size: " << "(" << gridProp.actual_size[0]
+	std::cout << std::setw(21) << std::right << "actual size: " << "(" << gridProp.actual_size[0]
 				<< ", " << gridProp.actual_size[1] << ", " << gridProp.actual_size[2] <<")"<< std::endl;
-	std::cout << std::setw(15) << std::right << "grid size: " << "(" << gridProp.grid_size[0]
+	std::cout << std::setw(21) << std::right << "grid size: " << "(" << gridProp.grid_size[0]
 				<< ", " << gridProp.grid_size[1] << ", " << gridProp.grid_size[2] <<")"<< std::endl;
-	std::cout << std::setw(15) << std::right << "xblocks: " << gridProp.xblocks << std::endl;
-	std::cout << std::setw(15) << std::right << "total iterations: " << gridProp.total_itr << std::endl;
-	std::cout << std::setw(15) << std::right << "outer limit: " << gridProp.outer_loop_limit << std::endl;
+    ops::hls::SizeType ralizedGridSize = {gridProp.grid_size[0], gridProp.grid_size[1], gridProp.grid_size[2]};
+    ralizedGridSize[gridProp.dim - 1] *= gridProp.batch_size;
+    std::cout << std::setw(21) << std::right << "realized grid size: " << "(" << ralizedGridSize[0]
+				<< ", " << ralizedGridSize[1] << ", " << ralizedGridSize[2] <<")"<< std::endl;
+	std::cout << std::setw(21) << std::right << "xblocks: " << gridProp.xblocks << std::endl;
+	std::cout << std::setw(21) << std::right << "total iterations: " << gridProp.total_itr << std::endl;
+	std::cout << std::setw(21) << std::right << "outer limit: " << gridProp.outer_loop_limit << std::endl;
 	std::cout << "-------------------------------" << std::endl;
 }
 
@@ -63,17 +68,22 @@ void printGridProp(ops::hls::GridPropertyCoreV2& gridProp, std::string prompt = 
 	std::cout << "-------------------------------" << std::endl;
 	std::cout << "  grid properties (V2): " << prompt << std::endl;
 	std::cout << "-------------------------------" << std::endl;
-	std::cout << std::setw(15) << std::right << "dim: "  << gridProp.dim << std::endl;
-	std::cout << std::setw(15) << std::right << "d_m: " << "(" << gridProp.d_m[0]
+	std::cout << std::setw(21) << std::right << "dim: "  << gridProp.dim << std::endl;
+    std::cout << std::setw(21) << std::right << "batch_size: "  << gridProp.batch_size << std::endl;
+	std::cout << std::setw(21) << std::right << "d_m: " << "(" << gridProp.d_m[0]
 				<< ", " << gridProp.d_m[1] << ", " << gridProp.d_m[2] <<")"<< std::endl;
-	std::cout << std::setw(15) << std::right << "d_p: " << "(" << gridProp.d_p[0]
+	std::cout << std::setw(21) << std::right << "d_p: " << "(" << gridProp.d_p[0]
 				<< ", " << gridProp.d_p[1] << ", " << gridProp.d_p[2] <<")"<< std::endl;
-	std::cout << std::setw(15) << std::right << "logical size: " << "(" << gridProp.size[0]
+	std::cout << std::setw(21) << std::right << "logical size: " << "(" << gridProp.size[0]
 				<< ", " << gridProp.size[1] << ", " << gridProp.size[2] <<")"<< std::endl;
-	std::cout << std::setw(15) << std::right << "actual size: " << "(" << gridProp.actual_size[0]
+	std::cout << std::setw(21) << std::right << "actual size: " << "(" << gridProp.actual_size[0]
 				<< ", " << gridProp.actual_size[1] << ", " << gridProp.actual_size[2] <<")"<< std::endl;
-	std::cout << std::setw(15) << std::right << "grid size: " << "(" << gridProp.grid_size[0]
+	std::cout << std::setw(21) << std::right << "grid size: " << "(" << gridProp.grid_size[0]
 				<< ", " << gridProp.grid_size[1] << ", " << gridProp.grid_size[2] <<")"<< std::endl;
+    ops::hls::SizeType ralizedGridSize = {gridProp.grid_size[0], gridProp.grid_size[1], gridProp.grid_size[2]};
+    ralizedGridSize[gridProp.dim - 1] *= gridProp.batch_size;
+    std::cout << std::setw(21) << std::right << "realized grid size: " << "(" << ralizedGridSize[0]
+				<< ", " << ralizedGridSize[1] << ", " << ralizedGridSize[2] <<")"<< std::endl;
 	std::cout << "-------------------------------" << std::endl;
 }
 
@@ -314,7 +324,7 @@ void getRangeAdjustedGridProp(ops::hls::GridPropertyCore& original,
 			adjusted.total_itr *= adjusted.actual_size[i];
 		}
 	}
-
+    adjusted.batch_size = original.batch_size;
 	adjusted.outer_loop_limit = adjusted.actual_size[adjusted.dim - 1] + (adjusted.d_m[adjusted.dim-1] + adjusted.d_p[adjusted.dim -1])/2;
 }
 #else
@@ -372,6 +382,8 @@ ops::hls::StencilConfigCore getStencilConfig(ops::hls::GridPropertyCoreV2& origi
         }
     }
 
+    stencilConfig.batch_size = original.batch_size;
+
     return stencilConfig;
 }
 
@@ -418,15 +430,21 @@ void printGrid2D(ops::hls::Grid<T> p_grid, std::string prompt="")
 	std::cout << " [DEBUG] grid values: " << prompt << std::endl;
 	std::cout << "----------------------------------------------" << std::endl;
 
-	for (int j = 0; j < p_grid.originalProperty.grid_size[1]; j++)
-	{
-		for (int i = 0; i < p_grid.originalProperty.grid_size[0]; i++)
-		{
-			int index = i + j * p_grid.originalProperty.grid_size[0];
-			std::cout << std::setw(12) << p_grid.hostBuffer[index];
-		}
-		std::cout << std::endl;
-	}
+    for (int k = 0; k < p_grid.originalProperty.batch_size; k++)
+    {
+        std::cout << "----------- batch: " << k <<"----------" << std::endl;
+        for (int j = 0; j < p_grid.originalProperty.grid_size[1]; j++)
+        {
+            for (int i = 0; i < p_grid.originalProperty.grid_size[0]; i++)
+            {
+                int index = i + j * p_grid.originalProperty.grid_size[0] 
+                        + k * p_grid.originalProperty.grid_size[0] * p_grid.originalProperty.grid_size[1];
+                std::cout << std::setw(12) << p_grid.hostBuffer[index];
+            }
+            std::cout << std::endl;
+        }
+        std::cout << "----------------------------------------------" << std::endl;
+    }
 }
 
 template<typename T>
@@ -440,27 +458,34 @@ void printGrid2D(T* p_grid, ops::hls::GridPropertyCoreV2& gridProperty, std::str
 	std::cout << " [DEBUG] grid values: " << prompt << std::endl;
 	std::cout << "----------------------------------------------" << std::endl;
 
-	for (int j = 0; j < gridProperty.grid_size[1]; j++)
-	{
-		for (int i = 0; i < gridProperty.grid_size[0]; i++)
-		{
-			int index = i + j * gridProperty.grid_size[0];
+    for (int k = 0; k < gridProperty.batch_size; k++)
+    {
+        std::cout << "----------- batch: " << k <<"----------" << std::endl;
+        for (int j = 0; j < gridProperty.grid_size[1]; j++)
+        {
+            for (int i = 0; i < gridProperty.grid_size[0]; i++)
+            {
+                int index = i + j * gridProperty.grid_size[0] + 
+                        k * gridProperty.grid_size[0] * gridProperty.grid_size[1];
 
-            if (gridProperty.multidim_dim == 1)
-            {
-			    std::cout << std::setw(12) << p_grid[index];
-            }
-            else
-            {
-                std::cout << "[";
-                for (int m_dim = 0; m_dim < gridProperty.multidim_dim; m_dim++)
+                if (gridProperty.multidim_dim == 1)
                 {
-                    std::cout << std::setw(12) << p_grid[index * gridProperty.multidim_dim + m_dim];
+                    std::cout << std::setw(12) << p_grid[index];
                 }
-                std::cout << "]";
+                else
+                {
+                    std::cout << "[";
+                    for (int m_dim = 0; m_dim < gridProperty.multidim_dim; m_dim++)
+                    {
+                        std::cout << std::setw(12) << p_grid[index * gridProperty.multidim_dim + m_dim];
+                    }
+                    std::cout << "]";
+                }
             }
-		}
-		std::cout << std::endl;
+            std::cout << std::endl; 
+        }
+        std::cout << "----------------------------------------------" << std::endl;
+		
 	}
 }
 
@@ -526,19 +551,23 @@ void ops_dat_fetch_data(ops::hls::Grid<T>& p_grid, int part, char* data)
 	T* cast_data = (T*)data;
 	T* grid_host_data = (T*)p_grid.get_raw_pointer();
 
-	for (unsigned int k = 0; k < gridsize[2]; k++)
-	{
-		for (unsigned int j = 0; j < gridsize[1]; j++)
-		{
-			for (unsigned int i = 0; i < gridsize[0]; i++)
-			{
-				unsigned int index = i + j *gridsize[0]
-						+ k * gridsize[0] * gridsize[1];
+    for (unsigned int l = 0; l < p_grid.originalProperty.batch_size; l++)
+    {
+        unsigned int offset = l * gridsize[0] * gridsize[1] * gridsize[2];
+        for (unsigned int k = 0; k < gridsize[2]; k++)
+        {
+            for (unsigned int j = 0; j < gridsize[1]; j++)
+            {
+                for (unsigned int i = 0; i < gridsize[0]; i++)
+                {
+                    unsigned int index = i + j * gridsize[0]
+                            + k * gridsize[0] * gridsize[1] + offset;
 
-				grid_host_data[index] = cast_data[index];
-			}
-		}
-	}
+                    grid_host_data[index] = cast_data[index];
+                }
+            }
+        }
+    }
 
 	p_grid.isHostBufDirty = true;
 	p_grid.isDevBufDirty = false;

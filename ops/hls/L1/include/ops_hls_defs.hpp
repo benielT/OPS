@@ -139,6 +139,7 @@ struct StencilConfigCore
     unsigned short dim;
     unsigned short outer_loop_limit;
     unsigned int total_itr;
+    unsigned short batch_size;
 };
 
 struct AccessRange
