@@ -81,7 +81,7 @@ public:
 
 	void* get_raw_pointer()
 	{
-		getGrid(*this);
+		getGrid(*this, true);
 		return (void*)hostBuffer.data();
 	}
 
@@ -110,7 +110,7 @@ public:
 
 	void* get_raw_pointer()
 	{
-		getGrid(*this);
+		getGrid(*this, true);
 		return (void*)hostBuffer.data();
 	}
 
@@ -141,7 +141,7 @@ cl::Event& emplaceEvent(Grid<T>& p_grid, std::string prompt="")
 }
 
 template <typename T>
-cl::Event getGrid(Grid<T>& p_grid)
+cl::Event getGrid(Grid<T>& p_grid, bool force_sync = false)
 {
 	if (p_grid.isDevBufDirty)
 	{
@@ -154,6 +154,11 @@ cl::Event getGrid(Grid<T>& p_grid)
 		p_grid.isDevBufDirty = false;
 #ifndef ASYNC_DISPATCH
 		event.wait();
+#else
+        if (force_sync)
+        {
+            event.wait();
+        }
 #endif
         return event;
 	}
