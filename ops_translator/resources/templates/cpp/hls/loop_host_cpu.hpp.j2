@@ -74,28 +74,30 @@ void inline kernel_{{lh.kernel}}_core(
     getGrid(arg{{arg.id}});
     {% endfor %}
 
-    {% if lh.ndim > 2 %}
-    for (unsigned short k = range.start[2]; k < range.end[2]; k++)
+    for (unsigned short bat = 0; bat < dummyBlock.batch_size; bat++)
     {
-    {% endif %}
-    {% if lh.ndim > 1 %}
-        for (unsigned short j = range.start[1]; j < range.end[1]; j++)
+    {% if lh.ndim > 2 %}
+        for (unsigned short k = range.start[2]; k < range.end[2]; k++)
         {
     {% endif %}
-    {% if lh.ndim > 0 %}
-            for (unsigned short i = range.start[0]; i < range.end[0]; i++)
+    {% if lh.ndim > 1 %}
+            for (unsigned short j = range.start[1]; j < range.end[1]; j++)
             {
+    {% endif %}
+    {% if lh.ndim > 0 %}
+                for (unsigned short i = range.start[0]; i < range.end[0]; i++)
+                {
     {% endif %}
     {% if lh.arg_idx != -1 %}{% for arg in lh.args|ops_dat %}{% if loop.first %}
         {% if lh.ndim > 2%}
-                ops::hls::IdxType idx({i - arg{{arg.id}}.originalProperty.d_m[0], j - arg{{arg.id}}.originalProperty.d_m[1], k - arg{{arg.id}}.originalProperty.d_m[2]});
+                    ops::hls::IdxType idx({i - arg{{arg.id}}.originalProperty.d_m[0], j - arg{{arg.id}}.originalProperty.d_m[1], k - arg{{arg.id}}.originalProperty.d_m[2]} - (bat * arg{{arg.id}}.originalProperty.grid_size[2]));
         {% elif lh.ndim > 1 %}
-                ops::hls::IdxType idx({i - arg{{arg.id}}.originalProperty.d_m[0], j - arg{{arg.id}}.originalProperty.d_m[1], 0});
+                    ops::hls::IdxType idx({i - arg{{arg.id}}.originalProperty.d_m[0], j - arg{{arg.id}}.originalProperty.d_m[1] - (bat * arg{{arg.id}}.originalProperty.grid_size[1]), 0});
         {% else %}
-                ops::hls::IdxType idx({i - arg{{arg.id}}.originalProperty.d_m[0], 0, 0});
+                    ops::hls::IdxType idx({i - arg{{arg.id}}.originalProperty.d_m[0] - (bat * arg{{arg.id}}.originalProperty.grid_size[0]), 0, 0});
         {% endif %}
     {% endif %}{% endfor %}{% endif %}
-                kernel_{{lh.kernel}}_core(
+                    kernel_{{lh.kernel}}_core(
     {% for arg in lh.args %}
         {% if loop.last %}
             {% set last_check = True %}
@@ -106,29 +108,41 @@ void inline kernel_{{lh.kernel}}_core(
             {% if prog.findStencil(arg.stencil_ptr) %}
                 {% for i in range(prog.findStencil(arg.stencil_ptr).num_points)%}
                     {% if lh.dats[arg.dat_id].isMultiDim() %}
-                    &arg{{arg.id}}.hostBuffer[getOffset(arg{{arg.id}}_{{i}}_stencil_offset, arg{{arg.id}}.originalProperty, i {{", j" if (lh.ndim > 1)}}{{", k" if (lh.ndim > 2)}})]{{"," if not last_check or not loop.last}}
+                        &arg{{arg.id}}.hostBuffer[getOffset(arg{{arg.id}}_{{i}}_stencil_offset, arg{{arg.id}}.originalProperty, i {{", j" if (lh.ndim > 1)}}{{", k" if (lh.ndim > 2)}})]{{"," if not last_check or not loop.last}}
                     {% else %}
-                    arg{{arg.id}}.hostBuffer[getOffset(arg{{arg.id}}_{{i}}_stencil_offset, arg{{arg.id}}.originalProperty, i {{", j" if (lh.ndim > 1)}}{{", k" if (lh.ndim > 2)}})]{{"," if not last_check or not loop.last}}
+                        arg{{arg.id}}.hostBuffer[getOffset(arg{{arg.id}}_{{i}}_stencil_offset, arg{{arg.id}}.originalProperty, i {{", j" if (lh.ndim > 1)}}{{", k" if (lh.ndim > 2)}})]{{"," if not last_check or not loop.last}}
                     {% endif %}
                 {% endfor %}
             {% endif %}
         {% elif arg is ops_idx %}
-                    idx{{"," if not last_check}}
+                        idx{{"," if not last_check}}
         {% elif arg is ops_gbl %}
-                    {{get_arg_gbl_name(arg)}}{{"," if (not loop.last or not last_check)}}
+                        {{get_arg_gbl_name(arg)}}{{"," if (not loop.last or not last_check)}}
         {% endif %}
     {% endfor %}
-                );
+                    );
     {% if lh.ndim > 0 %}
-            }
+                }
     {% endif %}
     {% if lh.ndim > 1 %}
-        }
+            }
     {% endif %}
     {% if lh.ndim > 2 %}
-    }
+        }
     {% endif %}
 
+    {% if lh.ndim == 3 %}
+        range.start[2] += arg0.originalProperty.grid_size[2];
+        range.end[2] += arg0.originalProperty.grid_size[2];
+    {% elif lh.ndim == 2 %}
+        range.start[1] += arg0.originalProperty.grid_size[1];
+        range.end[1] += arg0.originalProperty.grid_size[1];
+    {% elif lh.ndim == 1 %}
+        range.start[0] += arg0.originalProperty.grid_size[0];
+        range.end[0] += arg0.originalProperty.grid_size[0];
+    {% endif %}
+    }
+    
     {% for arg in lh.args|ops_dat %}
         {% if arg is ops_write or arg is ops_rw %}
     arg{{arg.id}}.isHostBufDirty = true;

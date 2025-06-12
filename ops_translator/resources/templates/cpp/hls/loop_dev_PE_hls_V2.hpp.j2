@@ -911,7 +911,12 @@ void kernel_{{lh.kernel}}_PE(const short& PEId, const ops::hls::StencilConfigCor
     printf("[KERNEL_DEBUG]|%s| starting stencil kernel PE\n", __func__);
 #endif
 
-    stencil.stencilRun(
+    for (unsigned short bat = 0; bat < stencilConfig.batch_size; bat++)
+    {
+#ifdef DEBUG_LOG
+        printf("[KERNEL_DEBUG]|%s| Starting Batch: %d\n", __func__, bat);
+#endif
+        stencil.stencilRun(
         {% for arg in lh.args|ops_not_idx %}
         {% if loop.last %}
             {% if consts %}
@@ -924,20 +929,21 @@ void kernel_{{lh.kernel}}_PE(const short& PEId, const ops::hls::StencilConfigCor
         {% endif %}
         {% if arg is ops_dat %}
             {% if (arg is ops_read)  %}
-            {{hls_stream_name(arg)-}}{{"," if (not loop.last or not last_check)}}
+                {{hls_stream_name(arg)-}}{{"," if (not loop.last or not last_check)}}
             {% elif arg is ops_write %}
-            {{hls_stream_name(arg)-}}{{"," if (not loop.last or not last_check)}}
+                {{hls_stream_name(arg)-}}{{"," if (not loop.last or not last_check)}}
             {% else %}
-            {{hls_stream_name_t2(arg, "rd")-}},
-            {{hls_stream_name_t2(arg, "wr")-}}{{"," if (not loop.last or not last_check)}}
+                {{hls_stream_name_t2(arg, "rd")-}},
+                {{hls_stream_name_t2(arg, "wr")-}}{{"," if (not loop.last or not last_check)}}
             {% endif %}
         {% elif arg is ops_gbl %}
-            {{get_arg_gbl_name(arg)}}{{"," if (not loop.last or not last_check)}}
+                {{get_arg_gbl_name(arg)}}{{"," if (not loop.last or not last_check)}}
         {% endif %}
     {% endfor %}    
     {% for const in consts %}
-            {{const.ptr}}{{"," if not loop.last}}
+                {{const.ptr}}{{"," if not loop.last}}
     {% endfor %});
+    }
 
 #ifdef DEBUG_LOG
     printf("[KERNEL_DEBUG]|%s| Ending stencil kernel PE\n", __func__);

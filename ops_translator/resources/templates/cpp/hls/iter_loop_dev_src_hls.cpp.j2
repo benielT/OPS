@@ -191,6 +191,7 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& sl
     #pragma HLS INTERFACE s_axilite port = stencilConfig_upper_limit_{{i}} bundle = control
     {% endfor %}
     #pragma HLS INTERFACE s_axilite port = stencilConfig_outer_loop_limit bundle = control
+    #pragma HLS INTERFACE s_axilite port = stencilConfig_batch_size bundle = control
 
     {% for const_arg in ilh.joint_args|ops_gbl%}
     #pragma HLS INTERFACE s_axilite port = {{get_arg_gbl_name(const_arg)}} bundle = control
@@ -226,8 +227,12 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& sl
     {% endfor %}
     stencilConfig.total_itr = stencilConfig_total_itr;
     stencilConfig.outer_loop_limit = stencilConfig_outer_loop_limit;
+    stencilConfig.batch_size = stencilConfig_batch_size;
 
-    unsigned int total_bytes = stencilConfig_total_itr * vector_factor * sizeof(stencil_type);
+    unsigned short tmp1 = stencilConfig_batch_size * vector_factor;
+    unsigned short tmp2 = stencilConfig_total_itr * sizeof(stencil_type);
+    unsigned int total_bytes = tmp1 * tmp2;
+    
     {% if ilh.isMultiDim() %}
         {% for m_dim in ilh.getMultidimList() %}
     unsigned int total_bytes_d{{m_dim}} = total_bytes * {{m_dim}};

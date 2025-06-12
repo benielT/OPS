@@ -84,6 +84,7 @@ public:
         OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, read_stencilConfig.upper_limit[{{i}}]));
         {% endfor %}
         OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, read_stencilConfig.outer_loop_limit));
+        OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, read_stencilConfig.batch_size));
         {% for arg in ilh.joint_args|ops_gbl%}
         OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, *{{get_arg_gbl_name(arg)}}));
         {% endfor %}
@@ -111,6 +112,7 @@ public:
         {% endif %}
     {% endfor %} 
         OCL_CHECK(err, err = m_datamover.setArg(narg++, adjusted_outer_iter));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.originalProperty.batch_size));    
     {% for arg in ilh.joint_args %}
         {% if arg is ops_dat %}
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.deviceBuffer));
