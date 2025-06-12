@@ -53,6 +53,19 @@ CXXFLAGS += -DPROFILE
 #Enable if wanted to verify
 # CXXFLAGS += -DVERIFICATION
 
+######## ASYN_DISPATCH OPTION ########
+#Enable if wanted to use asynchronous dispatch
+# CXXFLAGS += -DASYNC_DISPATCH
+
+######## BATCHING OPTION ########
+# Enable if wanted to use batching
+# CXXFLAGS += -DBATCHING
+
+########  DEBUG OPTIONS  ######
+#Enable if wanted to debug
+# CXXFLAGS += -DDEBUG_LOG
+# VPP_FLAGS += -DDEBUG_LOG
+
 #include $(OPS_INSTALL_PATH)/../makefiles/Makefile.c_app_legacy
 include $(OPS_INSTALL_PATH)/../makefiles/Makefile.c_app
 

@@ -23,26 +23,26 @@ if [[ "${CXXFLAGS}" == *"-DPOWER_PROFILE"* ]]; then
     if [[ "${TARGET_MODE}" == "hw" ]]; then
         if [[ "${PLATFORM}" == *"u280"* ]]; then
             parameter_sets=(
-                "100,100,60120,5000"
-                "200,100,60120,5000"
-                "200,200,60120,5000"
-                "300,150,60120,2500"
-                "300,300,60120,1000"
-                "400,200,60120,1000"
-                "400,300,60120,500"
-                "400,400,60120,500"
+                "100,100,60120,5000,1"
+                "200,100,60120,5000,1"
+                "200,200,60120,5000,1"
+                "300,150,60120,2500,1"
+                "300,300,60120,1000,1"
+                "400,200,60120,1000,1"
+                "400,300,60120,500,1"
+                "400,400,60120,500,1"
                 # Add more parameter sets here as needed
             )
         else
             parameter_sets=(
-            "100,100,60032,5000"
-            "200,100,60032,5000"
-            "200,200,60032,5000"
-            "300,150,60032,2500"
-            "300,300,60032,1000"
-            "400,200,60032,1000"
-            "400,300,60032,500"
-            "400,400,60032,500"
+            "100,100,60032,5000,1"
+            "200,100,60032,5000,1"
+            "200,200,60032,5000,1"
+            "300,150,60032,2500,1"
+            "300,300,60032,1000,1"
+            "400,200,60032,1000,1"
+            "400,300,60032,500,1"
+            "400,400,60032,500,1"
             # Add more parameter sets here as needed
             )
         fi
@@ -54,74 +54,81 @@ else
     if [[ "${TARGET_MODE}" == "hw" ]]; then
         if [[ "${PLATFORM}" == *"u280"* ]]; then
             parameter_sets=(
-                "30,30,60120,100"
-                "60,60,60120,100"
-                "100,100,60120,100"
-                "200,100,60120,100"
-                "200,200,60120,100"
-                "300,150,60120,100"
-                "300,300,60120,20"
-                "400,200,60120,20"
-                "400,300,60120,20"
-                "400,400,60120,20"
-                "400,425,60120,20"
-                "400,350,60120,20"
-                "400,375,60120,20"
-                "300,350,60120,20"
-                "300,375,60120,20"
-                "300,400,60120,20"
-                "300,425,60120,20"
-                "300,450,60120,20"
-                "300,475,60120,20"
-                "300,500,60120,20"
-                "300,525,60120,20"
-                "300,550,60120,20"
-                "300,575,60032,20"
+                "30,30,60120,100,1"
+                "60,60,60120,100,1"
+                "100,100,60120,100,1"
+                "200,100,60120,100,1"
+                "200,200,60120,100,1"
+                "300,150,60120,100,1"
+                "300,300,60120,20,1"
+                "400,200,60120,20,1"
+                "400,300,60120,20,1"
+                "400,400,60120,20,1"
+                "400,425,60120,20,1"
+                "400,350,60120,20,1"
+                "400,375,60120,20,1"
+                "300,350,60120,20,1"
+                "300,375,60120,20,1"
+                "300,400,60120,20,1"
+                "300,425,60120,20,1"
+                "300,450,60120,20,1"
+                "300,475,60120,20,1"
+                "300,500,60120,20,1"
+                "300,525,60120,20,1"
+                "300,550,60120,20,1"
+                "300,575,60032,20,1"
                 # Add more parameter sets here as needed
                 )
         else
             parameter_sets=(
-                "30,30,60032,100"
-                "60,60,60032,100"
-                "100,100,60032,100"
-                "200,100,60032,100"
-                "200,200,60032,100"
-                "300,150,60032,100"
-                "300,300,60032,20"
-                "400,200,60032,20"
-                "400,300,60032,20"
-                "400,400,60032,20"
-                "400,425,60032,20"
-                "400,350,60032,20"
-                "400,375,60032,20"
-                "300,350,60032,20"
-                "300,375,60032,20"
-                "300,400,60032,20"
-                "300,425,60032,20"
-                "300,450,60032,20"
-                "300,475,60032,20"
-                "300,500,60032,20"
-                "300,525,60032,20"
-                "300,550,60032,20"
-                "300,575,60032,20"
+                "30,30,60032,100,1"
+                "60,60,60032,100,1"
+                "100,100,60032,100,1"
+                "200,100,60032,100,1"
+                "200,200,60032,100,1"
+                "300,150,60032,100,1"
+                "300,300,60032,20,1"
+                "400,200,60032,20,1"
+                "400,300,60032,20,1"
+                "400,400,60032,20,1"
+                "400,425,60032,20,1"
+                "400,350,60032,20,1"
+                "400,375,60032,20,1"
+                "300,350,60032,20,1"
+                "300,375,60032,20,1"
+                "300,400,60032,20,1"
+                "300,425,60032,20,1"
+                "300,450,60032,20,1"
+                "300,475,60032,20,1"
+                "300,500,60032,20,1"
+                "300,525,60032,20,1"
+                "300,550,60032,20,1"
+                "300,575,60032,20,1"
                 # Add more parameter sets here as needed
                 )
         fi
     
     else
-    parameter_sets=(
-        "30,30,112,1"
-        # Add more parameter sets here as needed
-    )
+        if [[ "${PLATFORM}" == *"u280"* ]]; then
+            parameter_sets=(
+                "30,30,180,2,2"
+                # Add more parameter sets here as needed
+            )
+        else
+            parameter_sets=(
+                "30,30,112,2,2"
+                # Add more parameter sets here as needed
+            )
+        fi
     fi
 fi
 
 echo "Running application '${APP_NAME}' in '${TARGET_MODE}' mode with hardcoded parameters:"
 
 for params in "${parameter_sets[@]}"; do
-    IFS=',' read -r sizex sizey iters batch <<< "$params"
+    IFS=',' read -r sizex sizey iters batch bsize<<< "$params"
 
-    if [[ -z "$sizex" || -z "$sizey" || -z "$iters" || -z "$batch" ]]; then
+    if [[ -z "$sizex" || -z "$sizey" || -z "$iters" || -z "$batch" || -z "$bsize" ]]; then
         echo "Warning: Skipping invalid parameter set: $params"
         continue
     fi
@@ -142,15 +149,15 @@ for params in "${parameter_sets[@]}"; do
 
     if [[ "${CXXFLAGS}" == *"-DPOWER_PROFILE"* ]]; then
         echo "Running HW mode with power profiling"
-            ${OPS_INSTALL_PATH}/../scripts/power_profile_hls.sh ${DEVICE_BDF} ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}_host ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}.xclbin -sizex="${sizex}" -sizey="${sizey}" -iters="${iters}" -piter="${batch}"
+            ${OPS_INSTALL_PATH}/../scripts/power_profile_hls.sh ${DEVICE_BDF} ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}_host ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}.xclbin -sizex="${sizex}" -sizey="${sizey}" -iters="${iters}" -piter="${batch}" -bsize="${bsize}"
 
     else
         if [[ $TARGET_MODE == sw_emu || $TARGET_MODE == hw_emu ]]; then
             echo "Running in emulation mode with ${TARGET_MODE}"
-            XCL_EMULATION_MODE=${TARGET_MODE} ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}_host ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}.xclbin -sizex="${sizex}" -sizey="${sizey}" -iters="${iters}" -batch="${batch}"
+            XCL_EMULATION_MODE=${TARGET_MODE} ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}_host ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}.xclbin -sizex="${sizex}" -sizey="${sizey}" -iters="${iters}" -batch="${batch}" -bsize="${bsize}"
         else
             echo "Running HW mode"
-            ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}_host ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}.xclbin -sizex="${sizex}" -sizey="${sizey}" -iters="${iters}" -batch="${batch}"
+            ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}_host ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}.xclbin -sizex="${sizex}" -sizey="${sizey}" -iters="${iters}" -batch="${batch}" -bsize="${bsize}"
         fi
     fi
 
@@ -160,7 +167,7 @@ for params in "${parameter_sets[@]}"; do
     fi
     if [ -f "${PROFILE_FILE}" ]; then
         # Construct the new filename for the profile directory
-        new_filename="${PROFILE_DIR}/${sizex}_${sizey}_${PROFILE_FILE}"
+        new_filename="${PROFILE_DIR}/${sizex}_${sizey}_${bsize}_${PROFILE_FILE}"
         echo "Moving '${PROFILE_FILE}' to '${new_filename}'"
         mv "${PROFILE_FILE}" "${new_filename}"
     else
@@ -168,7 +175,7 @@ for params in "${parameter_sets[@]}"; do
     fi
     if [ -f "${POWER_PROFILE_FILE}" ]; then
         # Construct the new filename for the profile directory
-        new_filename="${PROFILE_DIR}/${sizex}_${sizey}_${POWER_PROFILE_FILE}"
+        new_filename="${PROFILE_DIR}/${sizex}_${sizey}_${bsize}_${POWER_PROFILE_FILE}"
         echo "Moving '${POWER_PROFILE_FILE}' to '${new_filename}'"
         mv "${POWER_PROFILE_FILE}" "${new_filename}"
     else

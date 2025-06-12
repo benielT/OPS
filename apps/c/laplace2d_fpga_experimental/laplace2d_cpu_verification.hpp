@@ -39,32 +39,32 @@
 #define EPSILON 0.0001
 typedef float stencil_type;
 
-void printGrid(stencil_type * grid_data, int size[2], int d_m[2], int d_p[2], std::string prompt="")
-{
-    std::cout << "----------------------------------------------" << std::endl;
-	std::cout << " [DEBUG] grid values: " << prompt << std::endl;
-	std::cout << "----------------------------------------------" << std::endl;
+// void printGrid(stencil_type * grid_data, int size[2], int d_m[2], int d_p[2], std::string prompt="")
+// {
+//     std::cout << "----------------------------------------------" << std::endl;
+// 	std::cout << " [DEBUG] grid values: " << prompt << std::endl;
+// 	std::cout << "----------------------------------------------" << std::endl;
     
-    int grid_size_y = size[1] - d_m[1] + d_p[1];
-#ifdef OPS_FPGA
-    int grid_size_x = ((size[0] - d_m[0] + d_p[0] + 16 - 1) / 16) * 16;
-#else
-    int grid_size_x = size[0] - d_m[0] + d_p[0];
-#endif
+//     int grid_size_y = size[1] - d_m[1] + d_p[1];
+// #ifdef OPS_FPGA
+//     int grid_size_x = ((size[0] - d_m[0] + d_p[0] + 16 - 1) / 16) * 16;
+// #else
+//     int grid_size_x = size[0] - d_m[0] + d_p[0];
+// #endif
 
-    for (int j = 0; j < grid_size_y; j++)
-    {
-        for (int i = 0; i < grid_size_x; i++)
-        {
-            int index = j * grid_size_x + i;
+//     for (int j = 0; j < grid_size_y; j++)
+//     {
+//         for (int i = 0; i < grid_size_x; i++)
+//         {
+//             int index = j * grid_size_x + i;
 
-            std::cout << std::setw(12) << grid_data[index];
-        }
-        std::cout << std::endl;
-    }
-}
+//             std::cout << std::setw(12) << grid_data[index];
+//         }
+//         std::cout << std::endl;
+//     }
+// }
 
-bool verify(stencil_type * grid_data1, stencil_type *  grid_data2, int size[2], int d_m[2], int d_p[2])
+bool verify(stencil_type * grid_data1, stencil_type *  grid_data2, int size[2], int d_m[2], int d_p[2], int batch_size = 1)
 {
     bool passed = true;
     int grid_size_y = size[1] - d_m[1] + d_p[1];
@@ -73,18 +73,20 @@ bool verify(stencil_type * grid_data1, stencil_type *  grid_data2, int size[2], 
 #else
     int grid_size_x = size[0] - d_m[0] + d_p[0];
 #endif
-
-    for (int j = 0; j < grid_size_y; j++)
+    for (int k = 0; k < batch_size; k++)
     {
-        for (int i = 0; i < grid_size_x; i++)
+        for (int j = 0; j < grid_size_y; j++)
         {
-            int index = j * grid_size_x + i;
-
-            if (abs(grid_data1[index] - grid_data2[index]) > EPSILON)
+            for (int i = 0; i < grid_size_x; i++)
             {
-                std::cerr << "[ERROR] value Mismatch index: (" << i << ", " << j << "), grid_data1: "
-						<< grid_data1[index] << ", and grid_data2: " << grid_data2[index] << std::endl;
-                passed = false;
+                int index = j * grid_size_x + i + k * grid_size_x * grid_size_y;
+
+                if (abs(grid_data1[index] - grid_data2[index]) > EPSILON)
+                {
+                    std::cerr << "[ERROR] value Mismatch " << "batch " << k << " index: (" << i << ", " << j << "), grid_data1: "
+                            << grid_data1[index] << ", and grid_data2: " << grid_data2[index] << std::endl;
+                    passed = false;
+                }
             }
         }
     }
@@ -92,7 +94,7 @@ bool verify(stencil_type * grid_data1, stencil_type *  grid_data2, int size[2], 
     return passed;
 }
 
-void copyGrid(stencil_type * grid_dst, stencil_type * grid_src, int size[2], int d_m[2], int d_p[2])
+void copyGrid(stencil_type * grid_dst, stencil_type * grid_src, int size[2], int d_m[2], int d_p[2], int batch_size = 1)
 {
     int grid_size_y = size[1] - d_m[1] + d_p[1];
 #ifdef OPS_FPGA
@@ -100,17 +102,20 @@ void copyGrid(stencil_type * grid_dst, stencil_type * grid_src, int size[2], int
 #else
     int grid_size_x = size[0] - d_m[0] + d_p[0];
 #endif
-    for (int j = 0; j < grid_size_y; j++)
+    for (int k = 0; k < batch_size; k++)
     {
-        for (int i = 0; i < grid_size_x; i++)
+        for (int j = 0; j < grid_size_y; j++)
         {
-            int index = j * grid_size_x + i;
-            grid_dst[index] = grid_src[index];
+            for (int i = 0; i < grid_size_x; i++)
+            {
+                int index = j * grid_size_x + i + k * grid_size_x * grid_size_y;
+                grid_dst[index] = grid_src[index];
+            }
         }
     }
 }
 
-void testInitGrid(stencil_type* grid_data, int size[2], int d_m[2], int d_p[2])
+void testInitGrid(stencil_type* grid_data, int size[2], int d_m[2], int d_p[2], int batch_size = 1)
 {
     int grid_size_y = size[1] - d_m[1] + d_p[1];
 #ifdef OPS_FPGA
@@ -118,17 +123,20 @@ void testInitGrid(stencil_type* grid_data, int size[2], int d_m[2], int d_p[2])
 #else
     int grid_size_x = size[0] - d_m[0] + d_p[0];
 #endif
-    for (int j = 0; j < grid_size_y; j++)
+    for (int k = 0; k < batch_size; k++)
     {
-        for (int i = 0; i < grid_size_x; i++)
+        for (int j = 0; j < grid_size_y; j++)
         {
-        	int index = j * grid_size_x + i;
-        	grid_data[index] = index;
+            for (int i = 0; i < grid_size_x; i++)
+            {
+                int index = j * grid_size_x + i + k * grid_size_x * grid_size_y;
+                grid_data[index] = index;
+            }
         }
-	}
+    }
 }
 
-void initilizeGrid(stencil_type * grid_data, int size[2], int d_m[2], int d_p[2], const float& pi, const int& jmax)
+void initilizeGrid(stencil_type * grid_data, int size[2], int d_m[2], int d_p[2], const float& pi, const int& jmax, const int& batch_size = 1)
 {
     int grid_size_y = size[1] - d_m[1] + d_p[1];
 #ifdef OPS_FPGA
@@ -138,33 +146,35 @@ void initilizeGrid(stencil_type * grid_data, int size[2], int d_m[2], int d_p[2]
 #endif
     int actual_size_x = size[0] - d_m[0] + d_p[0];
 
-    for (int j = 0; j < grid_size_y; j++)
+    for (int k = 0; k < batch_size; k++)
     {
-        for (int i = 0; i < grid_size_x; i++)
+        for (int j = 0; j < grid_size_y; j++)
         {
-            int index = j * grid_size_x + i;
+            for (int i = 0; i < grid_size_x; i++)
+            {
+                int index = j * grid_size_x + i + k * grid_size_x * grid_size_y;
 
-            if (i == 0)
-            {
-                grid_data[index] = sin(pi * (j) / (jmax + 1));
-            }
-            else if (i == (actual_size_x - 1))
-            {
-                grid_data[index] = sin(pi * (j) / (jmax + 1)) * exp(-pi);
-            }
-            else
-            {
-                grid_data[index] = 0;
-            }
-
+                if (i == 0)
+                {
+                    grid_data[index] = sin(pi * (j) / (jmax + 1));
+                }
+                else if (i == (actual_size_x - 1))
+                {
+                    grid_data[index] = sin(pi * (j) / (jmax + 1)) * exp(-pi);
+                }
+                else
+                {
+                    grid_data[index] = 0;
+                }
 #ifdef DEBUG_LOG
-                std::cout << "[DEBUG] index: " << index << ", value: " << grid_data[index] << std::endl;
+                    std::cout << "[DEBUG] index: " << index << ", value: " << grid_data[index] << std::endl;
 #endif
+            }
         }
     }
 }
 
-void calcGrid(stencil_type* grid1, stencil_type* grid2, int size[2], int d_m[2], int d_p[2])
+void calcGrid(stencil_type* grid1, stencil_type* grid2, int size[2], int d_m[2], int d_p[2], int batch_size = 1)
 {
     int grid_size_y = size[1] - d_m[1] + d_p[1];
 #ifdef OPS_FPGA
@@ -174,17 +184,20 @@ void calcGrid(stencil_type* grid1, stencil_type* grid2, int size[2], int d_m[2],
 #endif
     int actual_size_x = size[0] - d_m[0] + d_p[0];
 
-    for (int j = -d_m[1]; j < (grid_size_y - d_p[1]); j++)
+    for (int k = 0; k < batch_size; k++)
     {
-        for (int i = -d_m[0]; i < (actual_size_x - d_p[0]); i++)
+        for (int j = -d_m[1]; j < (grid_size_y - d_p[1]); j++)
         {
-            int index = j * grid_size_x + i;
+            for (int i = -d_m[0]; i < (actual_size_x - d_p[0]); i++)
+            {
+                int index = j * grid_size_x + i + k * grid_size_x * grid_size_y;
 
-            grid2[index] = 0.25 * (grid1[index - 1] + grid1[index + 1] + grid1[index + grid_size_x] + grid1[index - grid_size_x]);
+                grid2[index] = 0.25 * (grid1[index - 1] + grid1[index + 1] + grid1[index + grid_size_x] + grid1[index - grid_size_x]);
 
 #ifdef DEBUG_LOG
                 std::cout << "[DEBUG] index: " << index << ", value: " << grid2[index] << std::endl;
 #endif
+            }
         }
     }
 }
