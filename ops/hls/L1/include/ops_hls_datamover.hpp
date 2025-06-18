@@ -954,7 +954,7 @@ void stream2axis(::hls::stream<ap_uint<STREAM_DATA_WIDTH>>& strm_in,
 			, __func__, pkts);
 #endif
 #endif
-	for (int itr = 0; itr < pkts; itr++){
+	for (unsigned itr = 0; itr < pkts; itr++){
 		#pragma HLS PIPELINE II=1
 
 		ap_axiu<STREAM_DATA_WIDTH,0,0,0> tmp;

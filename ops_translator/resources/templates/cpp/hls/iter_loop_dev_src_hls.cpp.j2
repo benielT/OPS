@@ -229,8 +229,8 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& sl
     stencilConfig.outer_loop_limit = stencilConfig_outer_loop_limit;
     stencilConfig.batch_size = stencilConfig_batch_size;
 
-    unsigned short tmp1 = stencilConfig_batch_size * vector_factor;
-    unsigned short tmp2 = stencilConfig_total_itr * sizeof(stencil_type);
+    unsigned int tmp1 = stencilConfig_batch_size * vector_factor;
+    unsigned int tmp2 = stencilConfig_total_itr * sizeof(stencil_type);
     unsigned int total_bytes = tmp1 * tmp2;
     
     {% if ilh.isMultiDim() %}
