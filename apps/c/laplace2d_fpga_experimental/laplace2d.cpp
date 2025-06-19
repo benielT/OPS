@@ -469,6 +469,7 @@ int main(int argc, const char** argv)
 	std::cout << "Standard Deviation total: " << total_std << std::endl;
 	std::cout << "======================================================" << std::endl;
 
+    fstream << "args: " << "-sizex=" << imax << " -sizey=" << jmax << " -iters=" << iter_max << " -batch=" << batches << " -bsize=" << batch_size << std::endl;
     fstream.close();
 
     if (fstream.good()) { // Check if operations were successful after closing
