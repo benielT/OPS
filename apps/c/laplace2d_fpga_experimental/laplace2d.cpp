@@ -200,9 +200,14 @@ int main(int argc, const char** argv)
 
         ops_partition("");
 
+#ifdef POWER_PROFILE
+    for (unsigned int p = 0; p < power_iter; p++)
+    {
+#endif
 #ifdef PROFILE
 		auto init_start_clk_point = std::chrono::high_resolution_clock::now();
 #endif
+        ops_printf("Laplace 2D Calculation: %d x %d mesh\n", imax+2, jmax+2);
 
         // set boundary conditions
         int bottom_range[] = {-1, imax+1, -1, 0};
@@ -223,20 +228,6 @@ int main(int argc, const char** argv)
             ops_arg_dat(d_A, 1, S2D_00, "float", OPS_WRITE),
             ops_arg_idx());
 
-#ifdef PROFILE
-		auto init_end_clk_point = std::chrono::high_resolution_clock::now();
-		init_runtime[bat] = std::chrono::duration<double, std::micro> (init_end_clk_point - init_start_clk_point).count();
-#endif
-#ifdef POWER_PROFILE
-    for (unsigned int p = 0; p < power_iter; p++)
-    {
-#endif
-        ops_printf("Laplace 2D Calculation: %d x %d mesh\n", imax+2, jmax+2);
-
-#ifdef PROFILE
-		init_start_clk_point = std::chrono::high_resolution_clock::now();
-#endif
-
         ops_par_loop(set_zero, "set_zero", block, 2, bottom_range,
             ops_arg_dat(d_Anew, 1, S2D_00, "float", OPS_WRITE));
 
@@ -252,7 +243,7 @@ int main(int argc, const char** argv)
             ops_arg_idx());
 
 #ifdef PROFILE
-		init_end_clk_point = std::chrono::high_resolution_clock::now();
+		auto init_end_clk_point = std::chrono::high_resolution_clock::now();
 		init_runtime[bat] += std::chrono::duration<double, std::micro> (init_end_clk_point - init_start_clk_point).count();
 #endif
 
@@ -262,7 +253,7 @@ int main(int argc, const char** argv)
         A = (float*)ops_dat_get_raw_pointer(d_A, 0, S2D_5pt, &memspace);
         Anew = (float*)ops_dat_get_raw_pointer(d_Anew, 0, S2D_5pt, &memspace);
 
-        if(verify(A, Anew, size, d_m, d_p))
+        if(verify(A, Anew, size, d_m, d_p, batch_size))
             std::cout << "verification of d_A and d_Anew" << "[PASSED]" << std::endl;
         else
             std::cerr << "verification of d_A and d_Anew" << "[FAILED]" << std::endl;
@@ -286,18 +277,21 @@ int main(int argc, const char** argv)
 #endif
 
         int interior_range[] = {0,imax,0,jmax};
-        // ops_par_loop(test_init, "test_init", block, 2, interior_range, 
-        //     ops_arg_dat(d_A, 2, S2D_00, "float", OPS_WRITE),
+        // int outer_range[] = {-1, imax+1, -1, jmax+1};
+        // ops_par_loop(test_init, "test_init", block, 2, outer_range, 
+        //     ops_arg_dat(d_A, 1, S2D_00, "float", OPS_WRITE),
         //     ops_arg_idx());
 
-        // ops_par_loop(test_init, "test_init", block, 2, interior_range, 
-        //     ops_arg_dat(d_Anew, 2, S2D_00, "float", OPS_WRITE),
+        // ops_par_loop(test_init, "test_init", block, 2, outer_range, 
+        //     ops_arg_dat(d_Anew, 1, S2D_00, "float", OPS_WRITE),
         //     ops_arg_idx());
 
-        // testInitGrid(Acpu, size, d_m, d_p);
-        // testInitGrid(AnewCpu, size, d_m, d_p);
+        // A = (float*)d_A.get_raw_pointer();
+        // printGrid2D<float>(A, d_A.originalProperty, "d_A after computation");
 
 #ifdef VERIFICATION
+        // testInitGrid(Acpu, size, d_m, d_p);
+        // testInitGrid(AnewCpu, size, d_m, d_p);
         // printGrid2D<float>(A, d_A.originalProperty, "d_A after computation");
         // printGrid2D<float>(Acpu, d_A.originalProperty, "d_Acpu after computation");
 
@@ -354,11 +348,13 @@ int main(int argc, const char** argv)
 			copyGrid(Acpu, AnewCpu, size, d_m, d_p, batch_size);
 		}
 
-        if (verify(A, Acpu, size, d_m, d_p))
+        // Uncomment this if datamover_mode == 1
+        if (verify(A, Acpu, size, d_m, d_p, batch_size))
 			std::cout << "verification of A and Acpu after calc" << "[PASSED]" << std::endl;
 		else
 			std::cerr << "verification of A and Acpu after calc" << "[FAILED]" << std::endl;
 
+        // Uncomment this if datamover_mode == 2
 		// if (verify(Anew, AnewCpu, size, d_m, d_p, batch_size))
 		// 	std::cout << "verification of Anew and AnewCpu after calc" << "[PASSED]" << std::endl;
 		// else
