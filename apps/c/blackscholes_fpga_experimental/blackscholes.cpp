@@ -80,6 +80,7 @@ int main(int argc, const char **argv)
 	gridProp.logical_size_y = 1;
 	gridProp.batch = 1;
 	gridProp.num_iter = 6000;
+    gridProp.batch_size = 1;
 
     	// setting grid parameters given by user
 	const char* pch;
@@ -105,16 +106,46 @@ int main(int argc, const char **argv)
 		{
 			gridProp.batch = atoi ( argv[n] + 7 ); continue;
 		}
+#ifdef BATCHING
+        pch = strstr(argv[n], "-bsize=");
+        if(pch != NULL) {
+            gridProp.batch_size = atoi ( argv[n] + 7 );
+            if(gridProp.batch_size < 1) {
+                std::cerr << "Batch size must be greater than 0" << std::endl;
+                exit(-1);
+            }
+    #ifndef POWER_PROFILE
+            if(gridProp.batch % gridProp.batch_size != 0) {
+                std::cerr << "Batch size must divide the number of batches evenly" << std::endl;
+                exit(-1);
+            }
+    
+            gridProp.batch /= gridProp.batch_size;
+            std::cout << "Batching enabled, number of batches: " << gridProp.batch << ", batch size: " << gridProp.batch_size << std::endl;
+    #endif
+            continue;
+        }
+#endif
 #ifdef POWER_PROFILE
         pch = strstr(argv[n], "-piter=");
         if(pch != NULL) {
-            power_iter = atoi ( argv[n] + 7 ); continue;
+            power_iter = atoi ( argv[n] + 7 );  continue;
         }
-        gridProp.batch = 1;
 #endif
 	}
-
-    	printf("Grid: %dx1 , %d iterations, %d batches\n", gridProp.logical_size_x, gridProp.num_iter, gridProp.batch);
+#ifdef POWER_PROFILE
+    #ifdef BATCHING
+            if(power_iter % gridProp.batch_size != 0) {
+                    std::cerr << "Batch size must divide the number of power batches evenly" << std::endl;
+                    exit(-1);
+            }
+            std::cout << "Total power iterations: " << power_iter << std::endl;
+            std::cout << "Power profiling enabled, number of power iterations per batch: " << power_iter / gridProp.batch_size << std::endl;
+            power_iter = power_iter / gridProp.batch_size;
+    #endif 
+            std::cout << "Power profiling enabled, number of power iterations: " << power_iter << std::endl;
+#endif
+    printf("Grid: %dx1 , %d iterations, %d batches\n", gridProp.logical_size_x, gridProp.num_iter, gridProp.batch);
 
 	//adding halo
 	gridProp.act_size_x = gridProp.logical_size_x+2;
@@ -131,7 +162,7 @@ gridProp.grid_size_x = gridProp.act_size_x;
 	gridProp.grid_size_y = gridProp.act_size_y;
 
 	//allocating memory buffer
-	unsigned int data_size_bytes = gridProp.grid_size_x * gridProp.grid_size_y * sizeof(float) * gridProp.batch;
+	unsigned int data_size_bytes = gridProp.grid_size_x * gridProp.grid_size_y * sizeof(float) * gridProp.batch * gridProp.batch_size;
 
 	if(data_size_bytes >= 4000000000)
 	{
@@ -155,7 +186,7 @@ gridProp.grid_size_x = gridProp.act_size_x;
         return 1; // Indicate an error occurred
     }
 #endif
-	std::vector<blackscholesParameter> calcParam(gridProp.batch); //multiple blackscholes calculations
+	std::vector<blackscholesParameter> calcParam(gridProp.batch * gridProp.batch_size); //multiple blackscholes calculations
 
 	//First calculation for test value
 
@@ -175,7 +206,7 @@ gridProp.grid_size_x = gridProp.act_size_x;
 	std::mt19937 rndGen(dev());
 	std::uniform_real_distribution<> dis(0.0, 0.05);
 
-	for (int i = 1; i < gridProp.batch; i++)
+	for (int i = 1; i < gridProp.batch * gridProp.batch_size; i++)
 	{
 		calcParam[i].spot_price = 16 + dis(rndGen);
 		calcParam[i].strike_price = 10 + dis(rndGen);
@@ -196,7 +227,17 @@ gridProp.grid_size_x = gridProp.act_size_x;
 	}
 
 	//ops_block
-	ops_block grid1D = ops_decl_block(1, "grid1D");
+    ops_block grid1D[gridProp.batch];
+
+    for (unsigned int bat = 0; bat < gridProp.batch; bat++)
+    {
+        std::string name = std::string("batch_") + std::to_string(bat);
+#ifndef BATCHING
+        grid1D[bat] = ops_decl_block(1, name.c_str());
+#else
+        grid1D[bat] = ops_decl_block_batch(1, name.c_str(), gridProp.batch_size);
+#endif
+    }
 
 	//ops_data
 	int size[] = {static_cast<int>(gridProp.logical_size_x)};
@@ -221,15 +262,15 @@ gridProp.grid_size_x = gridProp.act_size_x;
 		float *a = nullptr, *b = nullptr, *c = nullptr;
 
 		std::string name = std::string("current_") + std::to_string(bat);
-		dat_current[bat] = ops_decl_dat(grid1D, 1, size, base, d_m, d_p, current,"float", name.c_str());
+		dat_current[bat] = ops_decl_dat(grid1D[bat], 1, size, base, d_m, d_p, current,"float", name.c_str());
 		name = std::string("next_") + std::to_string(bat);
-		dat_next[bat] = ops_decl_dat(grid1D, 1, size, base, d_m, d_p, next,"float", name.c_str());
+		dat_next[bat] = ops_decl_dat(grid1D[bat], 1, size, base, d_m, d_p, next,"float", name.c_str());
 		name = std::string("a_") + std::to_string(bat);
-		dat_a[bat] = ops_decl_dat(grid1D, 1, size, base, d_m, d_p, a, "float", name.c_str());
+		dat_a[bat] = ops_decl_dat(grid1D[bat], 1, size, base, d_m, d_p, a, "float", name.c_str());
 		name = std::string("b_") + std::to_string(bat);
-		dat_b[bat] = ops_decl_dat(grid1D, 1, size, base, d_m, d_p, a, "float", name.c_str());
+		dat_b[bat] = ops_decl_dat(grid1D[bat], 1, size, base, d_m, d_p, a, "float", name.c_str());
 		name = std::string("x_") + std::to_string(bat);
-		dat_c[bat] = ops_decl_dat(grid1D, 1, size, base, d_m, d_p, a, "float", name.c_str());
+		dat_c[bat] = ops_decl_dat(grid1D[bat], 1, size, base, d_m, d_p, a, "float", name.c_str());
 #ifdef VERIFICATION
 		grid_u1_cpu[bat] = (float*) aligned_alloc(4096, data_size_bytes);
 		grid_u2_cpu[bat] = (float*) aligned_alloc(4096, data_size_bytes);
@@ -260,11 +301,15 @@ gridProp.grid_size_x = gridProp.act_size_x;
 
 	for (unsigned int bat = 0; bat < gridProp.batch; bat++)
 	{
-		std::cout << "Batch [" << bat << "]" << std::endl;
-		for (unsigned int i = 0; i < gridProp.act_size_x; i++)
-		{
-			std::cout << "index: " << i << " initial_val: " << grid_u1_cpu[bat][i]<< std::endl;
-		}
+        for (unsigned int sub_bat = 0; sub_bat < gridProp.batch_size; sub_bat++)
+        {
+            std::cout << "Batch [" << bat << ":" << sub_bat << "]" << std::endl;
+        
+            for (unsigned int i = 0; i < gridProp.act_size_x; i++)
+            {
+                std::cout << "index: " << i << " initial_val: " << grid_u1_cpu[bat][i]<< std::endl;
+            }
+        }
 	}
 	std::cout << "============================================="  << std::endl << std::endl;
 	#endif
@@ -290,27 +335,27 @@ gridProp.grid_size_x = gridProp.act_size_x;
 #ifdef PROFILE
 		auto grid_init_start_clk_point = std::chrono::high_resolution_clock::now();
 #endif
-		ops_par_loop(ops_krnl_zero_init, "ops_zero_init", grid1D, 1, lower_Pad_range,
+		ops_par_loop(ops_krnl_zero_init, "ops_zero_init", grid1D[bat], 1, lower_Pad_range,
 				ops_arg_dat(dat_current[bat], 1, S1D_1pt, "float", OPS_WRITE));
 
 		
 		float sMax = calcParam[bat].SMaxFactor * calcParam[bat].strike_price;
 
-		ops_par_loop(ops_krnl_const_init, "ops_const_init", grid1D, 1, upper_pad_range,
+		ops_par_loop(ops_krnl_const_init, "ops_const_init", grid1D[bat], 1, upper_pad_range,
 				ops_arg_dat(dat_current[bat], 1, S1D_1pt, "float", OPS_WRITE),
 				ops_arg_gbl(&sMax, 1, "float", OPS_READ));
 		
 		float* delta_s = &calcParam[bat].delta_S;
 		float* strike_price = &calcParam[bat].strike_price;
 
-		ops_par_loop(ops_krnl_interior_init, "interior_init", grid1D, 1, interior_range,
+		ops_par_loop(ops_krnl_interior_init, "interior_init", grid1D[bat], 1, interior_range,
 				ops_arg_dat(dat_current[bat], 1, S1D_1pt, "float", OPS_WRITE),
 				ops_arg_idx(),
 				ops_arg_gbl(delta_s, 1, "float", OPS_READ),
 				ops_arg_gbl(strike_price, 1,"float", OPS_READ));
 
 
-		ops_par_loop(ops_krnl_copy, "init_dat_next", grid1D, 1, full_range,
+		ops_par_loop(ops_krnl_copy, "init_dat_next", grid1D[bat], 1, full_range,
 				ops_arg_dat(dat_current[bat], 1, S1D_1pt, "float", OPS_READ),
 				ops_arg_dat(dat_next[bat], 1, S1D_1pt, "float", OPS_WRITE));
 
@@ -318,7 +363,7 @@ gridProp.grid_size_x = gridProp.act_size_x;
 		float alpha = calcParam[bat].volatility * calcParam[bat].volatility * calcParam[bat].delta_t;
 		float beta = calcParam[bat].risk_free_rate * calcParam[bat].delta_t;
 
-		ops_par_loop(ops_krnl_calc_coefficient, "calc_coefficient", grid1D, 1, interior_range,
+		ops_par_loop(ops_krnl_calc_coefficient, "calc_coefficient", grid1D[bat], 1, interior_range,
 				ops_arg_dat(dat_a[bat], 1, S1D_1pt, "float", OPS_WRITE),
 				ops_arg_dat(dat_b[bat], 1, S1D_1pt, "float", OPS_WRITE),
 				ops_arg_dat(dat_c[bat], 1, S1D_1pt, "float", OPS_WRITE),
@@ -337,10 +382,13 @@ gridProp.grid_size_x = gridProp.act_size_x;
 
     #ifdef DEBUG_VERBOSE
 
+        printGrid2D<float>(current_raw, dat_current[bat].originalProperty, "curr after init");
 		printGrid2D<float>(next_raw, dat_next[bat].originalProperty, "next after init");
 		printGrid2D<float>(a_raw, dat_a[bat].originalProperty, "coeff a after init");
-        printGrid2D<float>(a_raw, dat_b[bat].originalProperty, "coeff b after init");
-        printGrid2D<float>(a_raw, dat_c[bat].originalProperty, "coeff c after init");
+        printGrid2D<float>(b_raw, dat_b[bat].originalProperty, "coeff b after init");
+        printGrid2D<float>(c_raw, dat_c[bat].originalProperty, "coeff c after init");
+        printGrid2D<float>(grid_u1_cpu[bat], dat_current[bat].originalProperty, "curr CPU after init");
+        printGrid2D<float>(grid_u2_cpu[bat], dat_next[bat].originalProperty, "next CPU after init");
 	#endif
     }
 #endif
@@ -353,6 +401,7 @@ gridProp.grid_size_x = gridProp.act_size_x;
 #ifdef POWER_PROFILE
     for (unsigned int p = 0; p < power_iter; p++)
     {
+        std::cout << "Power profiling iter: " << p << " of " << power_iter << std::endl;
 #endif
 #ifdef OPS_FPGA
         #pragma ISL "isl0" calcParam[bat].N
@@ -360,26 +409,26 @@ gridProp.grid_size_x = gridProp.act_size_x;
 // #ifndef OPS_FPGA
 		for (int iter = 0 ; iter < calcParam[bat].N; iter++)
 		{
-			ops_par_loop(ops_krnl_blackscholes, "blackscholes_1", grid1D, 1, interior_range,
+			ops_par_loop(ops_krnl_blackscholes, "blackscholes_1", grid1D[bat], 1, interior_range,
 					ops_arg_dat(dat_next[bat], 1, S1D_1pt, "float", OPS_WRITE),
 					ops_arg_dat(dat_current[bat], 1, S1D_3pt, "float", OPS_READ),
 					ops_arg_dat(dat_a[bat], 1, S1D_1pt, "float", OPS_READ),
 					ops_arg_dat(dat_b[bat], 1, S1D_1pt, "float", OPS_READ),
 					ops_arg_dat(dat_c[bat], 1, S1D_1pt, "float", OPS_READ));
-            ops_par_loop(ops_krnl_copy, "copy_1", grid1D, 1, interior_range,
-                    ops_arg_dat(dat_next[bat], 1, S1D_3pt, "float", OPS_READ),
+            ops_par_loop(ops_krnl_copy, "copy_1", grid1D[bat], 1, interior_range,
+                    ops_arg_dat(dat_next[bat], 1, S1D_1pt, "float", OPS_READ),
                     ops_arg_dat(dat_current[bat], 1, S1D_1pt, "float", OPS_WRITE));
 		}
 // #else
 //         ops_iter_par_loop("ops_iter_par_loop_0", calcParam[bat].N,
-// 			ops_par_loop(ops_krnl_blackscholes, "blackscholes_1", grid1D, 1, interior_range,
+// 			ops_par_loop(ops_krnl_blackscholes, "blackscholes_1", grid1D[bat], 1, interior_range,
 // 					ops_arg_dat(dat_next[bat], 1, S1D_1pt, "float", OPS_WRITE),
 // 					ops_arg_dat(dat_current[bat], 1, S1D_3pt, "float", OPS_READ),
 // 					ops_arg_dat(dat_a[bat], 1, S1D_1pt, "float", OPS_READ),
 // 					ops_arg_dat(dat_b[bat], 1, S1D_1pt, "float", OPS_READ),
 // 					ops_arg_dat(dat_c[bat], 1, S1D_1pt, "float", OPS_READ)),
 //             // ops_par_copy<float>(dat_current[bat], dat_next[bat])
-//             ops_par_loop(ops_krnl_copy, "copy_1", grid1D, 1, interior_range,
+//             ops_par_loop(ops_krnl_copy, "copy_1", grid1D[bat], 1, interior_range,
 //                     ops_arg_dat(dat_next[bat], 1, S1D_3pt, "float", OPS_READ),
 //                     ops_arg_dat(dat_current[bat], 1, S1D_1pt, "float", OPS_WRITE))
 //             );
@@ -389,8 +438,6 @@ gridProp.grid_size_x = gridProp.act_size_x;
      #ifndef OPS_FPGA
 		auto blackscholes_calc_stop_clk_point = std::chrono::high_resolution_clock::now();
 		main_loop_runtime[bat] = std::chrono::duration<double, std::micro>(blackscholes_calc_stop_clk_point - blackscholes_calc_start_clk_point).count();
-    #else
-		main_loop_runtime[bat] = ops_hls_get_execution_runtime<std::chrono::microseconds>(std::string("isl0"));
     #endif
 #endif  
 #ifdef POWER_PROFILE
@@ -422,24 +469,29 @@ gridProp.grid_size_x = gridProp.act_size_x;
 
 	for (unsigned int bat = 0; bat < gridProp.batch; bat++)
 	{
-		//explicit blackscholes test
-    	float direct_calc_value = test_blackscholes_call_option(calcParam[bat]);
-
 		float* current_raw = (float*)ops_dat_get_raw_pointer(dat_current[bat], 0, S1D_1pt, OPS_HOST);
 		float* next_raw = (float*)ops_dat_get_raw_pointer(dat_next[bat], 0, S1D_1pt, OPS_HOST);
 
 	#ifdef DEBUG_VERBOSE
-
+        printGrid2D<float>(current_raw, dat_next[bat].originalProperty, "curr after computation");
 		printGrid2D<float>(next_raw, dat_next[bat].originalProperty, "next after computation");
 		printGrid2D<float>(grid_u2_cpu[bat], dat_next[bat].originalProperty, "next_Acpu after computation");
 	#endif
-        if(verify(next_raw, grid_u2_cpu[bat], size, d_m, d_p, full_range))
+
+        if(verify(next_raw, grid_u2_cpu[bat], size, d_m, d_p, full_range, gridProp.batch_size))
             std::cout << "[BATCH - " << bat << "] verification of current after calculation" << "[PASSED]" << std::endl;
         else
             std::cout << "[BATCH - " << bat << "] verification of current after calculation" << "[FAILED]" << std::endl;
-		std::cout << "[BATCH - " << bat << "] call option price from cpu direct calc method: " << direct_calc_value << std::endl;	
-		std::cout << "[BATCH - " << bat << "] call option price from cpu explicit iter method: " << get_call_option(grid_u2_cpu[bat], calcParam[bat]) << std::endl;
-		std::cout << "[BATCH - " << bat << "] call option price from ops explicit method: " << get_call_option(next_raw, calcParam[bat]) << std::endl;
+
+        for (unsigned int sub_bat = 0; sub_bat < gridProp.batch_size; sub_bat++)
+        {
+            //explicit blackscholes test
+    	    float direct_calc_value = test_blackscholes_call_option(calcParam[bat * gridProp.batch_size + sub_bat], nullptr);
+
+            std::cout <<  "Batch [" << bat << ":" << sub_bat << "] call option price from cpu direct calc method: " << direct_calc_value << std::endl;	
+            std::cout <<  "Batch [" << bat << ":" << sub_bat << "] call option price from cpu explicit iter method: " << get_call_option(grid_u2_cpu[bat], calcParam[bat * gridProp.batch_size + sub_bat], sub_bat, gridProp.grid_size_x) << std::endl;
+            std::cout <<  "Batch [" << bat << ":" << sub_bat << "] call option price from ops explicit method: " << get_call_option(next_raw, calcParam[bat * gridProp.batch_size + sub_bat], sub_bat, gridProp.grid_size_x) << std::endl;
+        }
 	}
 	std::cout << "============================================="  << std::endl << std::endl;
 #endif
@@ -481,6 +533,7 @@ gridProp.grid_size_x = gridProp.act_size_x;
 	double total_std = 0;
 
     fstream << "grid_x," << "grid_y," << "grid_z," << "iters," << "batch_size," << "batch_id," << "init_time," << "main_time," << "total_time" << std::endl; 
+    std::cout << "[WARNING] The runtime is averaged over the batch size of " << gridProp.batch_size << std::endl;
 
 	#ifdef VERIFICATION
 	double cpu_avg_main_loop_runtime = 0;
@@ -496,6 +549,12 @@ gridProp.grid_size_x = gridProp.act_size_x;
 
 	for (unsigned int bat = 0; bat < gridProp.batch; bat++)
 	{
+    #ifdef OPS_FPGA
+        main_loop_runtime[bat] = ops_hls_get_execution_runtime<std::chrono::microseconds>(std::string("isl0"), bat);
+    #endif
+        main_loop_runtime[bat] /= gridProp.batch_size;
+        init_runtime[bat] /= gridProp.batch_size;
+
         fstream << gridProp.logical_size_x << "," << 1 << "," << 1 << "," << calcParam[bat].N << "," << 1 << "," << bat << "," << init_runtime[bat] \
                 << "," << main_loop_runtime[bat] << "," << main_loop_runtime[bat] + init_runtime[bat] << std::endl;
 
@@ -598,6 +657,7 @@ gridProp.grid_size_x = gridProp.act_size_x;
 	#endif
 	std::cout << "======================================================" << std::endl;
 
+    fstream << "args: " << "-sizex=" << gridProp.logical_size_x << " -iters=" << gridProp.num_iter << " -batch=" << gridProp.batch << " -bsize=" << gridProp.batch_size << std::endl;
     fstream.close();
 
     if (fstream.good()) { // Check if operations were successful after closing

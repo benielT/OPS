@@ -49,9 +49,9 @@ float test_blackscholes_call_option(blackscholesParameter calcParam, double * ti
 
 void bs_explicit1(float* current, float *next, GridParameter& gridData, blackscholesParameter& computeParam);
 
-float get_call_option(float* data, blackscholesParameter& computeParam);
+float get_call_option(float* data, blackscholesParameter& computeParam, int sub_batch_id=0, int gridsize_x=1);
 
-float get_call_option_cubic(float* data, blackscholesParameter& computeParam);
+float get_call_option_cubic(float* data, blackscholesParameter& computeParam, int sub_batch_id=0, int gridsize_x=1);
 
 // copy of instvan's implementation explicit1 in BS_1D_CPU
 int bs_explicit2(float* current, float *next, GridParameter gridData, std::vector<blackscholesParameter> & computeParam);
@@ -64,4 +64,4 @@ double square_error(float* current, float* next, GridParameter gridData);
 
 int copy_grid(float* curent, float* next, GridParameter gridData);
 
-bool verify(float * grid_data1, float *  grid_data2, int size[1], int d_m[1], int d_p[1], int range[2]);
+bool verify(float * grid_data1, float *  grid_data2, int size[1], int d_m[1], int d_p[1], int range[2], int batch_size);

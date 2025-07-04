@@ -16,5 +16,6 @@
     "maxi_offset" : "slave",
     "ops_max_dim" : 3,
     "axis_interconnect_buff_size" : 2048,
-    "hls_interconnect_buff_size" : 5
+    "hls_interconnect_buff_size" : 5,
+    "datamover_mode" : 1
 }
