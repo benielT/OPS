@@ -28,12 +28,18 @@ def process_power_profiles(directory, p_batches):
             if "-sizez=" in command_line:
                 sizez = int(command_line.split("-sizez=")[1].split()[0])
             
-            # Extract the batch size from the command
+            # Extract the number of batch from the command
             if "-piter=" in command_line:
-                batch_size = int(command_line.split("-piter=")[1].split()[0])
+                batches = int(command_line.split("-piter=")[1].split()[0])
             else:
                 print(f"Warning: No batch size found in {filename}. Skipping.")
                 continue
+            
+            # Extract the batch size for energy estimation
+            if "-bsize=" in command_line:
+                batch_size = int(command_line.split("-bsize=")[1].split()[0])
+            else:
+                batch_size = 1  # Default to 1 if not specified
             
             # Read the data excluding the last line
             data = pd.read_csv(file_path, skipfooter=1, engine='python')
@@ -53,7 +59,7 @@ def process_power_profiles(directory, p_batches):
             total_energy_kj = total_energy / 1000  # in kJ
             
             # Calculate energy per batch
-            energy_per_batch_kj = total_energy_kj / batch_size
+            energy_per_batch_kj = total_energy_kj / batches
             
             # Calculate estimated energy for p batches
             estimated_energy_kj = energy_per_batch_kj * p_batches
@@ -65,6 +71,7 @@ def process_power_profiles(directory, p_batches):
                 "Grid Size Y": sizey,
                 "Grid Size Z": sizez,
                 "Batch Size": batch_size,
+                "Tot Batches": batches,
                 "Average Power (W)": avg_power,
                 "Elapsed Time (ms)": elapsed_time,
                 "Total Energy (kJ)": total_energy_kj,
@@ -76,7 +83,7 @@ def process_power_profiles(directory, p_batches):
     summary_df = pd.DataFrame(summary_data)
 
     # Sort the DataFrame by grid sizes
-    summary_df = summary_df.sort_values(by=["Grid Size X", "Grid Size Y", "Grid Size Z"])
+    summary_df = summary_df.sort_values(by=["Grid Size X", "Grid Size Y", "Grid Size Z", "Batch Size"])
 
     # Save the summary to a CSV file
     output_file = os.path.join(directory, "power_profile_summary.csv")
