@@ -60,7 +60,6 @@ extern const unsigned short mem_vector_factor;
 #endif
 
 #ifdef POWER_PROFILE
-    unsigned int power_iter = 1;
     #ifdef PROFILE
     std::cerr << "POWER_PROFILE cannot be enabled with PROFILE" << std::endl;
     exit(-1);
@@ -117,12 +116,6 @@ int main(int argc, const char **argv)
                 std::cerr << "Batch size must be greater than 0" << std::endl;
                 exit(-1);
             }
-            if(batches % batch_size != 0) {
-                std::cerr << "Batch size must divide the number of batches evenly" << std::endl;
-                exit(-1);
-            }
-            batches /= batch_size;
-            std::cout << "Batching enabled, number of batches: " << batches << ", batch size: " << batch_size << std::endl;
             continue;
         }
 #endif
@@ -134,7 +127,28 @@ int main(int argc, const char **argv)
         batches = 1;
 #endif
     }
-
+#ifdef BATCHING
+    #ifndef POWER_PROFILE
+    if(batches % batch_size != 0) {
+        std::cerr << "Batch size must divide the number of batches evenly" << std::endl;
+        exit(-1);
+    }
+    batches /= batch_size;
+    std::cout << "Batching enabled, number of batches: " << batches << ", batch size: " << batch_size << std::endl;
+    #endif
+#endif
+#ifdef POWER_PROFILE
+    #ifdef BATCHING
+            if(power_iter % batch_size != 0) {
+                    std::cerr << "Batch size must divide the number of power batches evenly" << std::endl;
+                    exit(-1);
+            }
+            std::cout << "Total power iterations: " << power_iter << std::endl;
+            std::cout << "Power profiling enabled, number of power iterations per batch: " << power_iter / batch_size << std::endl;
+            power_iter = power_iter / batch_size;
+    #endif 
+            std::cout << "Power profiling enabled, number of power iterations: " << power_iter << std::endl;
+#endif
 #ifdef PROFILE
 	double init_runtime[batches];
 	double main_loop_runtime[batches];
