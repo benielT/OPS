@@ -203,9 +203,9 @@ def main(argv=None) -> None:
 
         if (args.fpga):
             logging.warning("only FPGA vitis HLS mode selected")
-            source = lang.translateProgram(program, include_dirs, defines, app_consts, args.force_soa, True)
+            source = lang.translateProgram(program, include_dirs, defines, app_consts, target.config, args.force_soa, True)
         else:   
-            source = lang.translateProgram(program, include_dirs, defines, app_consts, args.force_soa)
+            source = lang.translateProgram(program, include_dirs, defines, app_consts, target.config, args.force_soa)
 
         if not args.force_soa and program.soa_val:
             args.force_soa = program.soa_val
