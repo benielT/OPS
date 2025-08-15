@@ -90,7 +90,7 @@ void inline kernel_{{lh.kernel}}_core(
     {% endif %}
     {% if lh.arg_idx != -1 %}{% for arg in lh.args|ops_dat %}{% if loop.first %}
         {% if lh.ndim > 2%}
-                    ops::hls::IdxType idx({i - arg{{arg.id}}.originalProperty.d_m[0], j - arg{{arg.id}}.originalProperty.d_m[1], k - arg{{arg.id}}.originalProperty.d_m[2]} - (bat * arg{{arg.id}}.originalProperty.grid_size[2]));
+                    ops::hls::IdxType idx({i - arg{{arg.id}}.originalProperty.d_m[0], j - arg{{arg.id}}.originalProperty.d_m[1], k - arg{{arg.id}}.originalProperty.d_m[2]- (bat * arg{{arg.id}}.originalProperty.grid_size[2])});
         {% elif lh.ndim > 1 %}
                     ops::hls::IdxType idx({i - arg{{arg.id}}.originalProperty.d_m[0], j - arg{{arg.id}}.originalProperty.d_m[1] - (bat * arg{{arg.id}}.originalProperty.grid_size[1]), 0});
         {% else %}
