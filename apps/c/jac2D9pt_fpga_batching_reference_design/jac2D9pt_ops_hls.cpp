@@ -1,3 +1,5 @@
+
+// Auto-generated at 2025-06-04 12:59:58.594723 by ops-translator
 /*
 * Open source copyright declaration based on BSD open source template:
 * http://www.opensource.org/licenses/bsd-license.php
@@ -50,9 +52,21 @@ extern const unsigned short mem_vector_factor;
 // #define OPS_FPGA
 // #define PROFILE
 // #define POWER_PROFILE
+// #define BATCHING
+// #define ASYNC_DISPATCH
 #include "user_types.h"
 #include <ops_seq_v2.h>
+#include <ops_hls_rt_support.h>
+#include <hls_kernels.hpp>
 #include "jac2D9pt_kernel.h"
+/* ops_par_loop declarations */
+
+void ops_par_loop_kernel_populate(ops::hls::Block, int, int*, ops::hls::Grid<float>&);
+
+void ops_par_loop_kernel_initialguess(ops::hls::Block, int, int*, ops::hls::Grid<float>&);
+
+void ops_par_loop_kernel_copy(ops::hls::Block, int, int*, ops::hls::Grid<float>&, ops::hls::Grid<float>&);
+
 #include "jac2D9pt_cpu_verification.hpp"
 
 #ifdef PROFILE
@@ -60,11 +74,17 @@ extern const unsigned short mem_vector_factor;
 #endif
 
 #ifdef POWER_PROFILE
+    unsigned int power_iter = 1;
     #ifdef PROFILE
     std::cerr << "POWER_PROFILE cannot be enabled with PROFILE" << std::endl;
     exit(-1);
     #endif  
 #endif
+
+
+// #ifdef BATCHING
+//     #define ASYNC_DISPATCH
+// #endif
 /******************************************************************************
 * Main program
 *******************************************************************************/
@@ -73,7 +93,8 @@ int main(int argc, const char **argv)
   /**-------------------------- Initialisation --------------------------**/
 
     // OPS initialisation
-    ops_init(argc,argv,1);
+	ops_init_backend(argc, argv);
+
 
 
     //Mesh
@@ -81,10 +102,11 @@ int main(int argc, const char **argv)
     int jmax = 20;
     unsigned int iter_max = 135;
     unsigned int batches = 1;
-    int batch_size = 1;
 #ifdef POWER_PROFILE
     unsigned int power_iter = 1;
 #endif
+    unsigned int batch_size = 1;
+
     const char* pch;
     for ( int n = 1; n < argc; n++ ) 
     {
@@ -112,10 +134,18 @@ int main(int argc, const char **argv)
         pch = strstr(argv[n], "-bsize=");
         if(pch != NULL) {
             batch_size = atoi ( argv[n] + 7 );
+
             if(batch_size < 1) {
                 std::cerr << "Batch size must be greater than 0" << std::endl;
                 exit(-1);
             }
+
+            if(batches % batch_size != 0) {
+                std::cerr << "Batch size must divide the number of batches evenly" << std::endl;
+                exit(-1);
+            }
+            batches /= batch_size;
+            std::cout << "Batching enabled, number of batches: " << batches << ", batch size: " << batch_size << std::endl;
             continue;
         }
 #endif
@@ -127,28 +157,7 @@ int main(int argc, const char **argv)
         batches = 1;
 #endif
     }
-#ifdef BATCHING
-    #ifndef POWER_PROFILE
-    if(batches % batch_size != 0) {
-        std::cerr << "Batch size must divide the number of batches evenly" << std::endl;
-        exit(-1);
-    }
-    batches /= batch_size;
-    std::cout << "Batching enabled, number of batches: " << batches << ", batch size: " << batch_size << std::endl;
-    #endif
-#endif
-#ifdef POWER_PROFILE
-    #ifdef BATCHING
-            if(power_iter % batch_size != 0) {
-                    std::cerr << "Batch size must divide the number of power batches evenly" << std::endl;
-                    exit(-1);
-            }
-            std::cout << "Total power iterations: " << power_iter << std::endl;
-            std::cout << "Power profiling enabled, number of power iterations per batch: " << power_iter / batch_size << std::endl;
-            power_iter = power_iter / batch_size;
-    #endif 
-            std::cout << "Power profiling enabled, number of power iterations: " << power_iter << std::endl;
-#endif
+
 #ifdef PROFILE
 	double init_runtime[batches];
 	double main_loop_runtime[batches];
@@ -165,24 +174,22 @@ int main(int argc, const char **argv)
 #endif
 
     //The 2D block
-    ops_block blocks[batches];
+    ops::hls::Block blocks[batches];
 
     for (unsigned int bat = 0; bat < batches; bat++)
     {
         std::string name = std::string("batch_") + std::to_string(bat);
 #ifndef BATCHING
-        blocks[bat] = ops_decl_block(2, name.c_str());
-#else
-        blocks[bat] = ops_decl_block_batch(2, name.c_str(), batch_size);
+        blocks[bat] = ops_hls_decl_block(2, name.c_str());
+#else 
+        blocks[bat] = ops_hls_decl_block_batch(2, name.c_str(), batch_size);
 #endif
     }
 
 
     //declare stencils
     int s2D_00[] = {0,0};
-    ops_stencil S2D_00 = ops_decl_stencil(2, 1, s2D_00, "00");
     int s2D_9pt[] = {-1,-1, 0,-1, 1,-1, -1,0, 0,0, 1,0, -1,1, 0,1, 1,1};
-    ops_stencil S2D_9PT = ops_decl_stencil(2, 9, s2D_9pt, "00:10:-10:01:0-1");
 
     //declare datasets
     int size[] = {imax, jmax};
@@ -191,10 +198,10 @@ int main(int argc, const char **argv)
     int d_p[] = {1,1};
     float* temp = NULL;
 
-    ops_dat u[batches];
-    ops_dat u2[batches];
-    ops_dat f[batches];
-    ops_dat ref[batches];
+    ops::hls::Grid<stencil_type> u[batches];
+    ops::hls::Grid<stencil_type> u2[batches];
+    ops::hls::Grid<stencil_type> f[batches];
+    ops::hls::Grid<stencil_type> ref[batches];
 #ifdef VERIFICATION
     float* u_cpu[batches];
     float* u2_cpu[batches];
@@ -213,13 +220,13 @@ int main(int argc, const char **argv)
     for (unsigned int bat = 0; bat < batches; bat++)
     {
         std::string name = std::string("u_") + std::to_string(bat);
-        u[bat] = ops_decl_dat(blocks[bat], 1, size, base, d_m, d_p, temp, "float", name.c_str());
+        u[bat] = ops_hls_decl_dat(blocks[bat],  1,  size,  base,  d_m,  d_p,  temp,  "float",  name.c_str(), mem_vector_factor);
         name = std::string("u2_") + std::to_string(bat);
-        u2[bat] = ops_decl_dat(blocks[bat], 1, size, base, d_m, d_p, temp, "float", name.c_str());
+        u2[bat] = ops_hls_decl_dat(blocks[bat],  1,  size,  base,  d_m,  d_p,  temp,  "float",  name.c_str(), mem_vector_factor);
         name = std::string("f_") + std::to_string(bat);
-        f[bat] = ops_decl_dat(blocks[bat], 1, size, base, d_m, d_p, temp, "float", name.c_str());
+        f[bat] = ops_hls_decl_dat(blocks[bat],  1,  size,  base,  d_m,  d_p,  temp,  "float",  name.c_str(), mem_vector_factor);
         name = std::string("ref_") + std::to_string(bat);
-        ref[bat] = ops_decl_dat(blocks[bat], 1, size, base, d_m, d_p, temp, "float", name.c_str());
+        ref[bat] = ops_hls_decl_dat(blocks[bat],  1,  size,  base,  d_m,  d_p,  temp,  "float",  name.c_str(), mem_vector_factor);
 #ifdef VERIFICATION
         u_cpu[bat] = (float*)malloc(sizeof(float) * grid_size_x * grid_size_y * batch_size);
         u2_cpu[bat] = (float*)malloc(sizeof(float) * grid_size_x * grid_size_y * batch_size);
@@ -228,7 +235,6 @@ int main(int argc, const char **argv)
 #endif
     }
 
-    ops_partition("");
 
     int full_range[] = {d_m[0], size[0] + d_p[0], d_m[1], size[1] + d_p[1]};
     int internal_range[] = {0, size[0], 0, size[1]};
@@ -240,24 +246,18 @@ int main(int argc, const char **argv)
 #endif
 #ifdef VERIFICATION
         initialise_grid(u_cpu[bat], size, d_m, d_p, full_range, batch_size);
-        // printGrid2D(u_cpu[bat], u[bat].originalProperty, "u_CPU after init");
+        printGrid2D(u_cpu[bat], u[bat].originalProperty, "u_CPU after init");
         copy_grid(u2_cpu[bat], u_cpu[bat], size, d_m, d_p, full_range, batch_size);
 
         ops_dat_fetch_data(u[bat], 0, (char*)u_cpu[bat]);
 
-        ops_par_loop(kernel_copy, "kernel_update", blocks[bat], 2, full_range, 
-            ops_arg_dat(u[bat], 1, S2D_00, "float", OPS_READ),
-            ops_arg_dat(u2[bat], 1, S2D_00, "float", OPS_WRITE));
+        ops_par_loop_kernel_copy( blocks[bat],  2 ,  full_range, u[bat], u2[bat]);
 #else
-        ops_par_loop(kernel_populate, "kernel_populate", blocks[bat], 2, full_range,
-                ops_arg_dat(u[bat], 1, S2D_00, "float", OPS_WRITE));
+        ops_par_loop_kernel_populate( blocks[bat],  2 ,  full_range, u[bat]);
 
-        ops_par_loop(kernel_initialguess, "kernel_initialguess", blocks[bat], 2, internal_range, 
-                ops_arg_dat(u[bat], 1, S2D_00, "float", OPS_WRITE));
+        ops_par_loop_kernel_initialguess( blocks[bat],  2 ,  internal_range, u[bat]);
 
-        ops_par_loop(kernel_copy, "kernel_update", blocks[bat], 2, full_range, 
-                ops_arg_dat(u[bat], 1, S2D_00, "float", OPS_READ),
-                ops_arg_dat(u2[bat], 1, S2D_00, "float", OPS_WRITE));
+        ops_par_loop_kernel_copy( blocks[bat],  2 ,  full_range, u[bat], u2[bat]);
 #endif
 #ifdef PROFILE
         auto init_end_clk_point = std::chrono::high_resolution_clock::now();
@@ -265,10 +265,11 @@ int main(int argc, const char **argv)
 #endif
 
 #ifdef VERIFICATION
-        auto u_raw = (float*)ops_dat_get_raw_pointer(u[bat], 0, S2D_00, OPS_HOST);
-        auto u2_raw = (float*)ops_dat_get_raw_pointer(u2[bat], 0, S2D_00, OPS_HOST);
+        auto u_raw = (float*)u[bat].get_raw_pointer();
+        auto u2_raw = (float*)u2[bat].get_raw_pointer();
 
-        // printGrid2D(u_raw, u[bat].originalProperty, "test");
+        printGrid2D(u_raw, u[bat].originalProperty, "test init u");
+        printGrid2D(u2_raw, u2[bat].originalProperty, "test init u2");
 
         if(verify(u_raw, u_cpu[bat], size, d_m, d_p, full_range, batch_size))
             std::cout << "[BATCH - " << bat << "] verification of u after initiation" << "[PASSED]" << std::endl;
@@ -289,26 +290,16 @@ int main(int argc, const char **argv)
     //iterative stencil loop
     for (unsigned int bat = 0; bat < batches; bat++)
     {
-        ops_printf("Launching poisson calculation: %d x %d mesh\n", size[0], size[1]);
+        printf("Launching poisson calculation: %d x %d mesh\n", size[0], size[1]);
 #ifdef PROFILE
         auto main_loop_start_clk_point = std::chrono::high_resolution_clock::now();
 #endif
 #ifdef OPS_FPGA
-        #pragma ISL "isl0" iter_max
 #endif
-        for (int iter = 0; iter < iter_max; iter++)
-        {
-            ops_par_loop(jac2D_kernel_stencil, "jac2D_kernel_stencil", blocks[bat], 2, internal_range,
-                    ops_arg_dat(u[bat], 1, S2D_9PT, "float", OPS_READ),
-                    ops_arg_dat(u2[bat], 1, S2D_00, "float", OPS_WRITE));
-            
-            ops_par_loop(kernel_copy, "kernel_update", blocks[bat], 2, internal_range,
-                    ops_arg_dat(u2[bat], 1, S2D_00, "float", OPS_READ),
-                    ops_arg_dat(u[bat], 1, S2D_00, "float", OPS_WRITE));
-        }
+        isl0(iter_max, internal_range, u[bat], u2[bat]);
 #ifdef PROFILE
-    #ifndef OPS_FPGA
         auto main_loop_end_clk_point = std::chrono::high_resolution_clock::now();
+    #ifndef OPS_FPGA
         main_loop_runtime[bat] = std::chrono::duration<double, std::micro>(main_loop_end_clk_point - main_loop_start_clk_point).count();
     #endif
 #endif
@@ -321,8 +312,8 @@ int main(int argc, const char **argv)
 #ifdef VERIFICATION
     for (unsigned int bat = 0; bat < batches; bat++)
     {
-        auto u_raw = (float*)ops_dat_get_raw_pointer(u[bat], 0, S2D_00, OPS_HOST);
-        auto u2_raw = (float*)ops_dat_get_raw_pointer(u2[bat], 0, S2D_00, OPS_HOST);
+        auto u_raw = (float*)u[bat].get_raw_pointer();
+        auto u2_raw = (float*)u2[bat].get_raw_pointer();
 
         for (int iter = 0; iter < iter_max; iter++)
         {
@@ -330,17 +321,16 @@ int main(int argc, const char **argv)
             copy_grid(u_cpu[bat], u2_cpu[bat], size, d_m, d_p, internal_range, batch_size);
         }
 
-		// printGrid2D<float>(u_raw, u[bat].originalProperty, "u after computation");
-		// printGrid2D<float>(u_cpu[bat], u[bat].originalProperty, "u_Acpu after computation");
+		printGrid2D<float>(u_raw, u[bat].originalProperty, "u after computation");
+        printGrid2D<float>(u2_raw, u2[bat].originalProperty, "u2 after computation");
+		printGrid2D<float>(u_cpu[bat], u[bat].originalProperty, "u_Acpu after computation");
 
-        // Uncomment this if datamover_mode == 1
         // if(verify(u_raw, u_cpu[bat], size, d_m, d_p, full_range))
         //     std::cout << "[BATCH - " << bat << "] verification of u after calculation" << "[PASSED]" << std::endl;
         // else
         //     std::cout << "[BATCH - " << bat << "] verification of u after calculation" << "[FAILED]" << std::endl;
 
-        // Uncomment this if datamover_mode == 2
-        if(verify(u2_raw, u2_cpu[bat], size, d_m, d_p, full_range, batch_size))
+        if(verify(u2_raw, u2_cpu[bat], size, d_m, d_p, full_range))
             std::cout << "[BATCH - " << bat << "] verification of u2 after calculation" << "[PASSED]" << std::endl;
         else
             std::cout << "[BATCH - " << bat << "] verification of u2 after calculation" << "[FAILED]" << std::endl;
@@ -380,16 +370,12 @@ int main(int argc, const char **argv)
 	double total_std = 0;
 
     fstream << "grid_x," << "grid_y," << "grid_z," << "iters," << "batch_size," << "batch_id," << "init_time," << "main_time," << "total_time" << std::endl; 
-    std::cout << "[WARNING] The runtime is averaged over the batch size of " << batch_size << std::endl;
 
 	for (unsigned int bat = 0; bat < batches; bat++)
 	{
-    #ifdef OPS_FPGA
+#ifdef OPS_FPGA
         main_loop_runtime[bat] = ops_hls_get_execution_runtime<std::chrono::microseconds>(std::string("isl0"), bat);
-    #endif
-        main_loop_runtime[bat] /= batch_size;
-        init_runtime[bat] /= batch_size;
-    
+#endif
         fstream << imax << "," << jmax << "," << 1 << "," << iter_max << "," << 1 << "," << bat << "," << init_runtime[bat] \
         << "," << main_loop_runtime[bat] << "," << main_loop_runtime[bat] + init_runtime[bat] << std::endl;
 
@@ -415,6 +401,7 @@ int main(int argc, const char **argv)
 		}
 	}
 
+    // This is only valid if the kernel is executed synchronously
 	avg_init_runtime /= batches;
 	avg_main_loop_runtime /= batches;
 
@@ -425,6 +412,12 @@ int main(int argc, const char **argv)
 		total_std += std::pow(main_loop_runtime[bat] + init_runtime[bat] - avg_init_runtime - avg_main_loop_runtime, 2);
 	}
 
+#if defined(OPS_FPGA) && defined(ASYNC_DISPATCH)
+    // For FPGA, we can get the total execution runtime for isl0
+    // This is needed for async dispatch, as the individual kernel runtimes may not be accurate
+    std::cout << "[WARNING] Async dispatch is enabled, using average execution runtime from fpga events for isl0" << std::endl;
+    avg_main_loop_runtime = ops_hls_get_total_execution_runtime<std::chrono::microseconds>(std::string("isl0"))/ batches;
+#endif
 	main_loop_std = std::sqrt(main_loop_std / batches);
 	init_std = std::sqrt(init_std / batches);
 	total_std = std::sqrt(total_std / batches);
@@ -443,9 +436,6 @@ int main(int argc, const char **argv)
 	std::cout << "Standard Deviation total: " << total_std << std::endl;
 	std::cout << "======================================================" << std::endl;
 
-    fstream << "args: " << "-sizex=" << imax << " -sizey=" << jmax << " -iters=" << iter_max << " -batch=" << batches << " -bsize=" << batch_size << std::endl;
-    fstream.close();
-
     fstream.close();
 
     if (fstream.good()) { // Check if operations were successful after closing
@@ -456,7 +446,8 @@ int main(int argc, const char **argv)
     }
 #endif
 
-    ops_exit();
+	ops_exit_backend();
+
 
     std::cout << "Exit properly" << std::endl;
     return 0;

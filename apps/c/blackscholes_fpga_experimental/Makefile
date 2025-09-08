@@ -14,7 +14,7 @@ include $(OPS_INSTALL_PATH)/../makefiles/Makefile.hdf5
 PLATFORM=xilinx_u280_gen3x16_xdma_1_202211_1
 # PLATFORM=xilinx_vck5000_gen4x8_xdma_2_202210_1
 HLS_TARGET_MODE=hw
-HLS_JOBS=64
+HLS_JOBS=128
 include $(OPS_INSTALL_PATH)/../makefiles/Makefile_hls.mk
 
 HEADERS=blackscholes_utils.h blackscholes_cpu.h blackscholes_kernels.h
@@ -50,6 +50,20 @@ CXXFLAGS += -DPOWER_PROFILE
 ########  VERIIFICATION OPTIONS  ######
 #Enable if wanted to verify
 # CXXFLAGS += -DVERIFICATION
+
+######## ASYN_DISPATCH OPTION ########
+#Enable if wanted to use asynchronous dispatch
+# CXXFLAGS += -DASYNC_DISPATCH
+
+######## BATCHING OPTION ########
+# Enable if wanted to use batching
+# CXXFLAGS += -DBATCHING
+
+########  DEBUG OPTIONS  ######
+#Enable if wanted to debug
+# CXXFLAGS += -DDEBUG_LOG
+# CXXFLAGS += -DDEBUG_VERBOSE
+# VPP_FLAGS += -DDEBUG_LOG
 
 #include $(OPS_INSTALL_PATH)/../makefiles/Makefile.c_app_legacy
 include $(OPS_INSTALL_PATH)/../makefiles/Makefile.c_app

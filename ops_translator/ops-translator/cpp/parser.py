@@ -275,6 +275,12 @@ def parseVariableDeclaration(node: Cursor, macros: Dict[Location, str], program:
                 raise ParseError("ops_decl_block has 2 arguments", parseLocation(node))
             parseBlock(node, var_name, args, parseLocation(node), program)
             
+        if name == "ops_decl_block_batch":
+            logging.debug("found ops_decl_block_batch")
+            if len(args) != 3:
+                raise ParseError("ops_decl_block_batch has 3 arguments", parseLocation(node))
+            parseBlock(node, var_name, args, parseLocation(node), program)
+            
         if name == "ops_decl_dat":
             logging.debug("found ops_dec_dat")
             if len(args) != 9:
@@ -677,13 +683,16 @@ def parseArgReduce(loop: ops.Loop, args: List[Cursor], loc: Location, macros: Di
 
 def parseBlock(node: Cursor, ptr: str, args: List[Any], loc: Location, prog: Program) -> ops.Block:
     dim = parseIntExpression(args[0])
+    batch_size = 1
     try:
         prompt = parseStringLit(args[1])
     except ParseError as e:
         logging.warning(f"{e.args[0]}")
         prompt = ""
-        
-    block = ops.Block(loc, ptr, dim, prompt)
+    if len(args) == 3:
+        batch_size = parseIntExpression(args[2])
+    
+    block = ops.Block(loc, ptr, dim, prompt, batch_size)
     
     # if prog.ndim < dim: 
     #     raise ParseError(f"Defining block dim {dim} is not permited inside a {prog.ndim}D program", loc)
@@ -701,6 +710,9 @@ def parseDat(node: Cursor, ptr_raw: str, ptr: str, args: List[Any], loc: Locatio
     multidim_dim = parseIntExpression(args[1])
     typ, soa = parseType(parseStringLit(args[7]), parseLocation(args[7]))
     blk_idx = findIdx(prog.blocks, lambda blk: blk.ptr == block_ptr)
+    
+    if blk_idx is None:
+        raise ParseError(f"Block {block_ptr} is not defined before dat {ptr}", parseLocation(node))
     
     if block_ptr is None:
         raise ParseError(f"Unable to find Block ({block_ptr})", parseLocation(node))

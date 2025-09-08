@@ -49,19 +49,11 @@ void ops_init_backend(int argc, const char** argv, unsigned int devId)
     }
 }
 
-template<typename _Period>
-double ops_hls_get_execution_runtime(const std::string& kernel_name)
+template<typename DurationType>
+double ops_hls_get_execution_runtime(const std::string& kernel_name, const int execId)
 {
-	ops::hls::FPGA * fpga = ops::hls::FPGA::getInstance();
-	return fpga->getExecutionRuntime<_Period>(kernel_name);
-}
-
-
-template<typename _Period>
-double ops_hls_get_execution_runtime(const char* kernel_name)
-{
-	auto name = std::string(kernel_name);
-	return ops_hls_get_execution_runtime<_Period>(name);
+    ops::hls::FPGA * fpga = ops::hls::FPGA::getInstance();
+    return fpga->getExecutionRuntime<DurationType>(kernel_name, execId);
 }
 
 void ops_exit_backend()
@@ -70,7 +62,19 @@ void ops_exit_backend()
 	  fpga_inst->finish();
 }
 
-template double ops_hls_get_execution_runtime<std::chrono::microseconds>(const std::string& kernel_name);
-template double ops_hls_get_execution_runtime<std::chrono::nanoseconds>(const std::string& kernel_name);
-template double ops_hls_get_execution_runtime<std::chrono::milliseconds>(const std::string& kernel_name);
-template double ops_hls_get_execution_runtime<std::chrono::seconds>(const std::string& kernel_name);
+template<typename DurationType>
+double ops_hls_get_total_execution_runtime(const std::string& kernel_name)
+{
+    ops::hls::FPGA * fpga = ops::hls::FPGA::getInstance();
+    return fpga->getTotalExecutionRuntime<DurationType>(kernel_name);
+}
+
+template double ops_hls_get_execution_runtime<std::chrono::microseconds>(const std::string& kernel_name, const int execId);
+template double ops_hls_get_execution_runtime<std::chrono::nanoseconds>(const std::string& kernel_name, const int execId);
+template double ops_hls_get_execution_runtime<std::chrono::milliseconds>(const std::string& kernel_name, const int execId);
+template double ops_hls_get_execution_runtime<std::chrono::seconds>(const std::string& kernel_name, const int execId);
+
+template double ops_hls_get_total_execution_runtime<std::chrono::microseconds>(const std::string& kernel_name);
+template double ops_hls_get_total_execution_runtime<std::chrono::nanoseconds>(const std::string& kernel_name);
+template double ops_hls_get_total_execution_runtime<std::chrono::milliseconds>(const std::string& kernel_name);
+template double ops_hls_get_total_execution_runtime<std::chrono::seconds>(const std::string& kernel_name);

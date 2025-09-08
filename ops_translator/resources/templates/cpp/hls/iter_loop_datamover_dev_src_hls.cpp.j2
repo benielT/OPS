@@ -456,6 +456,8 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
     #pragma HLS INTERFACE s_axilite port = gridSize_{{i}} bundle = control
     {% endfor %}
     #pragma HLS INTERFACE s_axilite port = outer_itr bundle = control
+    #pragma HLS INTERFACE s_axilite port = batch_size bundle = control
+
     {% for arg in ilh.joint_args|ops_dat %} 
     #pragma HLS INTERFACE mode=m_axi bundle=gmem{{arg.id}} depth={{config["maxi_depth"]}} max_read_burst_length={{config["maxi_read_burst_length"]}} max_write_burst_length={{config["maxi_write_burst_length"]}} \
             num_read_outstanding={{config["num_read_outstanding"]}} num_write_outstanding={{config["num_write_outstanding"]}} \
@@ -540,19 +542,24 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
     ops::hls::MemConfig config_d{{m_dim}};
         {% endfor %}
     {% endif %}
-    ops::hls::genMemConfig<mem_data_width, axis_data_width, data_width>(read_gridSize, range, config);
+    ops::hls::genMemConfig<mem_data_width, axis_data_width, data_width>(read_gridSize, range, config, batch_size);
     {% if ilh.isMultiDim() %}
         {% for m_dim in ilh.getMultidimList() %}
     ops::hls::multidimConfigConverter<{{m_dim}}>(config, config_d{{m_dim}});
         {% endfor %}
     {% endif %}
     const unsigned int num_beats = config.total_xblocks;
-    const unsigned int num_pkts = num_of_pkts_per_bytes * config.total_xblocks;
+    const unsigned int num_pkts = num_of_pkts_per_bytes * num_beats;
     {#{% if ilh.isMultiDim() %}
         {% for m_dim in ilh.getMultidimList() %}
     const unsigned int num_pkts_d{{m_dim}} = num_of_pkts_per_bytes_d{{m_dim}} * config_d{{m_dim}}.total_xblocks;
         {% endfor %}
     {% endif %}#}
+
+#ifdef DEBUG_LOG
+    printf("[KERNEL_DEBUG]|%s| REALIZED numbers: batch_size: %d, num_beats: %d, num_pkts: %d,\n", __func__,
+            batch_size, num_beats, num_pkts);
+#endif 
     {% if config["datamover_mode"] == 3 %}
     if (is_loopback)
     {

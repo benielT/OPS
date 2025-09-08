@@ -552,13 +552,15 @@ class Block:
     id: int
     dim: int
     prompt: str
+    batch_size: int
     dats: List[Dat]
 
-    def __init__(self, loc: Location, ptr: str, dim: int, prompt: str = None) -> None:
+    def __init__(self, loc: Location, ptr: str, dim: int, prompt: str = None, batch_size: int = 1) -> None:
         self.loc = loc
         self.ptr = ptr
         self.dim = dim
         self.prompt = prompt
+        self.batch_size = batch_size
         self.dats = []
 
     def __str__(self) -> str:
@@ -567,7 +569,7 @@ class Block:
         if len(self.dats) > 0:
             dat_str = f"\n    {dat_str}\n"
 
-        return f"Block(id={self.id}, loc={self.loc}, ptr='{self.ptr}', dim={self.dim}, dats={dat_str})"
+        return f"Block(id={self.id}, loc={self.loc}, ptr='{self.ptr}', dim={self.dim}, batch_size={self.batch_size}, dats={dat_str})"
 
     def addDat(self, dat: Dat):
         dat_id = findIdx(self.dats, lambda d: d.ptr == dat.ptr)

@@ -21,9 +21,9 @@ void ops_krnl_copy(const ACC<float> &data, ACC<float>& data_new)
 	data_new(0) = data(0);
 }
 
-void ops_krnl_blackscholes(ACC<float> & current, const ACC<float> & next, const ACC<float> & a, const ACC<float> & b, const ACC<float> & c)
+void ops_krnl_blackscholes(ACC<float> & next, const ACC<float> & current, const ACC<float> & a, const ACC<float> & b, const ACC<float> & c)
 {
-	current(0) = a(0) * next (-1) + b(0) * next(0) + c(0) * next(1);
+	next(0) = a(0) * current (-1) + b(0) * current(0) + c(0) * current(1);
 }
 
 void ops_krnl_calc_coefficient(ACC<float> & a, ACC<float> & b, ACC<float> & c, const float * alpha, const float * beta, const int * idx)

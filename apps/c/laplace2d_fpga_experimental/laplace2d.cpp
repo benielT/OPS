@@ -66,6 +66,7 @@ int main(int argc, const char** argv)
     ops_init(argc, argv,1);
 
     unsigned int batches = 1;
+    unsigned int batch_size = 1;
     //Size along y
     jmax = 100;
     //Size along x
@@ -103,6 +104,23 @@ int main(int argc, const char** argv)
         if(pch != NULL) {
             batches = atoi ( argv[n] + 7 ); continue;
         }
+#ifdef BATCHING
+        pch = strstr(argv[n], "-bsize=");
+        if(pch != NULL) {
+            batch_size = atoi ( argv[n] + 7 );
+            if(batch_size < 1) {
+                std::cerr << "Batch size must be greater than 0" << std::endl;
+                exit(-1);
+            }
+            if(batches % batch_size != 0) {
+                std::cerr << "Batch size must divide the number of batches evenly" << std::endl;
+                exit(-1);
+            }
+            batches /= batch_size;
+            std::cout << "Batching enabled, number of batches: " << batches << ", batch size: " << batch_size << std::endl;
+            continue;
+        }
+#endif
 #ifdef POWER_PROFILE
         pch = strstr(argv[n], "-piter=");
         if(pch != NULL) {
@@ -140,7 +158,11 @@ int main(int argc, const char** argv)
         //
         
         //The 2D block
+#ifndef BATCHING
         ops_block block = ops_decl_block(2, "my_grid");
+#else
+        ops_block block = ops_decl_block_batch(2, "my_grid", batch_size);
+#endif
         //The two datasets
         int size[] = {imax, jmax};
         int base[] = {0,0};
@@ -158,8 +180,8 @@ int main(int argc, const char** argv)
 #else
         int grid_size_x = size[0] - d_m[0] + d_p[0];
 #endif
-        Acpu = (float*) malloc(sizeof(float) * grid_size_x * grid_size_y);
-        AnewCpu = (float*) malloc(sizeof(float) * grid_size_x * grid_size_y);
+        Acpu = (float*) malloc(sizeof(float) * grid_size_x * grid_size_y * batch_size);
+        AnewCpu = (float*) malloc(sizeof(float) * grid_size_x * grid_size_y * batch_size);
 #endif
 
         //Two stencils, a 1-point, and a 5-point
@@ -178,9 +200,14 @@ int main(int argc, const char** argv)
 
         ops_partition("");
 
+#ifdef POWER_PROFILE
+    for (unsigned int p = 0; p < power_iter; p++)
+    {
+#endif
 #ifdef PROFILE
 		auto init_start_clk_point = std::chrono::high_resolution_clock::now();
 #endif
+        ops_printf("Laplace 2D Calculation: %d x %d mesh\n", imax+2, jmax+2);
 
         // set boundary conditions
         int bottom_range[] = {-1, imax+1, -1, 0};
@@ -201,20 +228,6 @@ int main(int argc, const char** argv)
             ops_arg_dat(d_A, 1, S2D_00, "float", OPS_WRITE),
             ops_arg_idx());
 
-#ifdef PROFILE
-		auto init_end_clk_point = std::chrono::high_resolution_clock::now();
-		init_runtime[bat] = std::chrono::duration<double, std::micro> (init_end_clk_point - init_start_clk_point).count();
-#endif
-#ifdef POWER_PROFILE
-    for (unsigned int p = 0; p < power_iter; p++)
-    {
-#endif
-        ops_printf("Laplace 2D Calculation: %d x %d mesh\n", imax+2, jmax+2);
-
-#ifdef PROFILE
-		init_start_clk_point = std::chrono::high_resolution_clock::now();
-#endif
-
         ops_par_loop(set_zero, "set_zero", block, 2, bottom_range,
             ops_arg_dat(d_Anew, 1, S2D_00, "float", OPS_WRITE));
 
@@ -230,7 +243,7 @@ int main(int argc, const char** argv)
             ops_arg_idx());
 
 #ifdef PROFILE
-		init_end_clk_point = std::chrono::high_resolution_clock::now();
+		auto init_end_clk_point = std::chrono::high_resolution_clock::now();
 		init_runtime[bat] += std::chrono::duration<double, std::micro> (init_end_clk_point - init_start_clk_point).count();
 #endif
 
@@ -240,20 +253,20 @@ int main(int argc, const char** argv)
         A = (float*)ops_dat_get_raw_pointer(d_A, 0, S2D_5pt, &memspace);
         Anew = (float*)ops_dat_get_raw_pointer(d_Anew, 0, S2D_5pt, &memspace);
 
-        if(verify(A, Anew, size, d_m, d_p))
+        if(verify(A, Anew, size, d_m, d_p, batch_size))
             std::cout << "verification of d_A and d_Anew" << "[PASSED]" << std::endl;
         else
             std::cerr << "verification of d_A and d_Anew" << "[FAILED]" << std::endl;
 
-        initilizeGrid(Acpu, size, d_m, d_p, pi, jmax);
-        copyGrid(AnewCpu, Acpu, size, d_m, d_p);
+        initilizeGrid(Acpu, size, d_m, d_p, pi, jmax, batch_size);
+        copyGrid(AnewCpu, Acpu, size, d_m, d_p, batch_size);
 
-        if (verify(Acpu, A, size, d_m, d_p))
+        if (verify(Acpu, A, size, d_m, d_p, batch_size))
             std::cout << "verification of Acpu and A" << "[PASSED]" << std::endl;
         else
             std::cerr << "verification of Acpu and A" << "[FAILED]" << std::endl;
 
-        if (verify(AnewCpu, Anew, size, d_m, d_p))
+        if (verify(AnewCpu, Anew, size, d_m, d_p, batch_size))
             std::cout << "verification of AnewCpu and Anew" << "[PASSED]" << std::endl;
         else
             std::cerr << "verification of AnewCpu and Anew" << "[FAILED]" << std::endl;
@@ -264,18 +277,21 @@ int main(int argc, const char** argv)
 #endif
 
         int interior_range[] = {0,imax,0,jmax};
-        // ops_par_loop(test_init, "test_init", block, 2, interior_range, 
-        //     ops_arg_dat(d_A, 2, S2D_00, "float", OPS_WRITE),
+        // int outer_range[] = {-1, imax+1, -1, jmax+1};
+        // ops_par_loop(test_init, "test_init", block, 2, outer_range, 
+        //     ops_arg_dat(d_A, 1, S2D_00, "float", OPS_WRITE),
         //     ops_arg_idx());
 
-        // ops_par_loop(test_init, "test_init", block, 2, interior_range, 
-        //     ops_arg_dat(d_Anew, 2, S2D_00, "float", OPS_WRITE),
+        // ops_par_loop(test_init, "test_init", block, 2, outer_range, 
+        //     ops_arg_dat(d_Anew, 1, S2D_00, "float", OPS_WRITE),
         //     ops_arg_idx());
 
-        // testInitGrid(Acpu, size, d_m, d_p);
-        // testInitGrid(AnewCpu, size, d_m, d_p);
+        // A = (float*)d_A.get_raw_pointer();
+        // printGrid2D<float>(A, d_A.originalProperty, "d_A after computation");
 
 #ifdef VERIFICATION
+        // testInitGrid(Acpu, size, d_m, d_p);
+        // testInitGrid(AnewCpu, size, d_m, d_p);
         // printGrid2D<float>(A, d_A.originalProperty, "d_A after computation");
         // printGrid2D<float>(Acpu, d_A.originalProperty, "d_Acpu after computation");
 
@@ -314,11 +330,9 @@ int main(int argc, const char** argv)
 // #endif
 
 #ifdef PROFILE
-		auto main_loop_end_clk_point = std::chrono::high_resolution_clock::now();
     #ifndef OPS_FPGA
+		auto main_loop_end_clk_point = std::chrono::high_resolution_clock::now();
 		main_loop_runtime[bat] = std::chrono::duration<double, std::micro>(main_loop_end_clk_point - main_loop_start_clk_point).count();
-    #else
-        main_loop_runtime[bat] = ops_hls_get_execution_runtime<std::chrono::microseconds>(std::string("isl0"));
     #endif
 #endif
 #ifdef POWER_PROFILE
@@ -330,28 +344,32 @@ int main(int argc, const char** argv)
 
 		for (int iter = 0; iter < iter_max; iter++)
 		{
-			calcGrid(Acpu, AnewCpu, size, d_m, d_p);
-			copyGrid(Acpu, AnewCpu, size, d_m, d_p);
+			calcGrid(Acpu, AnewCpu, size, d_m, d_p, batch_size);
+			copyGrid(Acpu, AnewCpu, size, d_m, d_p, batch_size);
 		}
 
-        // if (verify(A, Acpu, size, d_m, d_p))
-		// 	std::cout << "verification of A and Acpu after calc" << "[PASSED]" << std::endl;
-		// else
-		// 	std::cerr << "verification of A and Acpu after calc" << "[FAILED]" << std::endl;
+        // Uncomment this if datamover_mode == 1
+        if (verify(A, Acpu, size, d_m, d_p, batch_size))
+			std::cout << "verification of A and Acpu after calc" << "[PASSED]" << std::endl;
+		else
+			std::cerr << "verification of A and Acpu after calc" << "[FAILED]" << std::endl;
 
-		// if (verify(Anew, AnewCpu, size, d_m, d_p))
+        // Uncomment this if datamover_mode == 2
+		// if (verify(Anew, AnewCpu, size, d_m, d_p, batch_size))
 		// 	std::cout << "verification of Anew and AnewCpu after calc" << "[PASSED]" << std::endl;
 		// else
 		// 	std::cerr << "verification of Anew and AnewCpu after calc" << "[FAILED]" << std::endl;
-    #ifndef OPS_FPGA
-        ops_dat_release_raw_data(d_A, 0, OPS_READ);
-        ops_dat_release_raw_data(d_Anew, 0, OPS_READ);
-    #endif
-		// printGrid2D<float>(A, d_A.originalProperty, "d_A after computation");
+
+        // printGrid2D<float>(A, d_A.originalProperty, "d_A after computation");
 		// printGrid2D<float>(Acpu, d_A.originalProperty, "d_Acpu after computation");
 
         // printGrid2D<float>(Anew, d_Anew.originalProperty, "d_Anew after computation");
 		// printGrid2D<float>(AnewCpu, d_Anew.originalProperty, "d_AnewCpu after computation");
+
+    #ifndef OPS_FPGA
+        ops_dat_release_raw_data(d_A, 0, OPS_READ);
+        ops_dat_release_raw_data(d_Anew, 0, OPS_READ);
+    #endif
 
 		free(Acpu);
 		free(AnewCpu);
@@ -389,9 +407,16 @@ int main(int argc, const char** argv)
 	double total_std = 0;
 
     fstream << "grid_x," << "grid_y," << "grid_z," << "iters," << "batch_size," << "batch_id," << "init_time," << "main_time," << "total_time" << std::endl; 
+    std::cout << "[WARNING] The runtime is averaged over the batch size of " << batch_size << std::endl;
 
 	for (unsigned int bat = 0; bat < batches; bat++)
 	{
+    #ifdef OPS_FPGA
+        main_loop_runtime[bat] = ops_hls_get_execution_runtime<std::chrono::microseconds>(std::string("isl0"), bat);
+    #endif
+        main_loop_runtime[bat] /= batch_size;
+        init_runtime[bat] /= batch_size;
+
         fstream << imax << "," << jmax << "," << 1 << "," << iter_max << "," << 1 << "," << bat << "," << init_runtime[bat] \
                 << "," << main_loop_runtime[bat] << "," << main_loop_runtime[bat] + init_runtime[bat] << std::endl;
 		std::cout << "run: "<< bat << "| total runtime: " << main_loop_runtime[bat] + init_runtime[bat] << "(us)" << std::endl;
@@ -444,6 +469,7 @@ int main(int argc, const char** argv)
 	std::cout << "Standard Deviation total: " << total_std << std::endl;
 	std::cout << "======================================================" << std::endl;
 
+    fstream << "args: " << "-sizex=" << imax << " -sizey=" << jmax << " -iters=" << iter_max << " -batch=" << batches << " -bsize=" << batch_size << std::endl;
     fstream.close();
 
     if (fstream.good()) { // Check if operations were successful after closing

@@ -115,6 +115,7 @@ DEPRECATED struct GridPropertyCore
     unsigned short xblocks;
     unsigned int total_itr;
     unsigned int outer_loop_limit;
+    unsigned short batch_size;
 };
 
 struct GridPropertyCoreV2
@@ -127,6 +128,7 @@ struct GridPropertyCoreV2
     SizeType offset;
     unsigned short dim;
     unsigned short multidim_dim;
+    unsigned short batch_size;
 };
 
 struct StencilConfigCore
@@ -137,6 +139,7 @@ struct StencilConfigCore
     unsigned short dim;
     unsigned short outer_loop_limit;
     unsigned int total_itr;
+    unsigned short batch_size;
 };
 
 struct AccessRange

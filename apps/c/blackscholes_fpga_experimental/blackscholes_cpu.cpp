@@ -146,9 +146,10 @@ float cubicInterpolate(float p0, float p1, float p2, float p3, float x)
 	return (p1 + 0.5 * x*(p2 - p0 + x*(2.0*p0 - 5.0*p1 + 4.0*p2 - p3 + x*(3.0*(p1 - p2) + p3 - p0))));
 }
 //get the exact call option pricing for given spot price and strike price
-float get_call_option(float* data, blackscholesParameter& computeParam)
+float get_call_option(float* data, blackscholesParameter& computeParam, int sub_batch_id, int grid_size_x)
 {
 	float index 	= (float)computeParam.spot_price / ((float) computeParam.strike_price * computeParam.SMaxFactor) * computeParam.K;
+    index += grid_size_x * sub_batch_id;
 	unsigned int indexLower 	= (int)std::floor(index);
 	unsigned int indexUpper 	= indexLower + 1;
 
@@ -162,9 +163,10 @@ float get_call_option(float* data, blackscholesParameter& computeParam)
 	return option_price;
 }
 
-float get_call_option_cubic(float* data, blackscholesParameter& computeParam)
+float get_call_option_cubic(float* data, blackscholesParameter& computeParam, int sub_batch_id, int grid_size_x)
 {
 	float index 	= (float)computeParam.spot_price / ((float) computeParam.strike_price * computeParam.SMaxFactor) * computeParam.K;
+    index += grid_size_x * sub_batch_id;
 	unsigned int indexLower 	= (int)std::floor(index);
 	unsigned int indexUpper 	= indexLower + 1;
 
@@ -364,7 +366,7 @@ void intialize_grid(float* grid, GridParameter gridProp, blackscholesParameter& 
 
 }
 
-bool verify(float * grid_data1, float *  grid_data2, int size[1], int d_m[1], int d_p[1], int range[2])
+bool verify(float * grid_data1, float *  grid_data2, int size[1], int d_m[1], int d_p[1], int range[2], int batch_size)
 {
     bool passed = true;
 #ifdef OPS_FPGA
@@ -373,17 +375,19 @@ bool verify(float * grid_data1, float *  grid_data2, int size[1], int d_m[1], in
     int grid_size_x = size[0] - d_m[0] + d_p[0];
 #endif
 
-	for (int i = range[0] - d_m[0]; i < range[1] - d_m[0]; i++)
-	{
-		int index = i;
+    for (int bat = 0; bat < batch_size; bat++)
+    {
+        for (int i = range[0] - d_m[0]; i < range[1] - d_m[0]; i++)
+        {
+            int index = bat * grid_size_x + i;
 
-		if (abs(grid_data1[index] - grid_data2[index]) > EPSILON)
-		{
-			std::cerr << "[ERROR] value Mismatch index: (" << i << "), grid_data1: "
-					<< grid_data1[index] << ", and grid_data2: " << grid_data2[index] << std::endl;
-			passed = false;
-		}
-	}
-
+            if (abs(grid_data1[index] - grid_data2[index]) > EPSILON)
+            {
+                std::cerr << "[ERROR] value Mismatch index: (" << i << "), grid_data1: "
+                        << grid_data1[index] << ", and grid_data2: " << grid_data2[index] << std::endl;
+                passed = false;
+            }
+        }
+    }
     return passed;
 }

@@ -401,6 +401,8 @@ ops_block ops_decl_block(int dims, const char *name) {
   return _ops_decl_block(OPS_instance::getOPSInstance(), dims, name);
 }
 
+//TODO: ops_decl_block_batch need to be implemented
+
 void ops_decl_const_core(int dim, char const *type, int typeSize, char *data,
                          char const *name) {
   (void)dim;
