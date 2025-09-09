@@ -21,8 +21,8 @@ class Scheme(Findable):
     target: Target
 
     loop_host_template: Path
-    loop_host_f2c_template: Optional[Path]
-    master_kernel_template: Optional[Path]
+    loop_host_f2c_template: Optional[Path] = None
+    master_kernel_template: Optional[Path] = None
 
     def __str__(self) -> str:
         return f"{self.lang.name}/{self.target.name}: \n \

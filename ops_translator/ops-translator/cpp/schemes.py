@@ -101,7 +101,7 @@ class CppHLS(Scheme):
         app: Application,
         kernel_idx: int,
         force_soa: bool
-    ) -> Tuple[str, str]:
+    ) -> Tuple[str, str, str]:
         
         template = env.get_template(str(self.loop_host_cpu_template))
         kernel_func = self.translateKernel(loop, program, app, kernel_idx)
@@ -130,7 +130,8 @@ class CppHLS(Scheme):
                 kernel_args=kernel_args,
                 consts=kernel_consts
             ),
-            self.loop_kernel_extension
+            self.loop_kernel_extension,
+            kernel_func
         )
     
     def genIterLoopHost(

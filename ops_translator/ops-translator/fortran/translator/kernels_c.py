@@ -1293,7 +1293,7 @@ TRANSLATE_TABLE = {
     # f2003.Case_Construct
     # f2003.Block_Do_Construct
     f2003.Block_Nonlabel_Do_Construct: translateBlockNonlabelDoConstruct,
-    f2008.Block_Nonlabel_Do_Construct: translateBlockNonlabelDoConstruct,
+    # f2008.Block_Nonlabel_Do_Construct: translateBlockNonlabelDoConstruct,
     # f2003.Forall_Construct
     f2003.If_Construct: translateIfConstruct,
     # f2003.Select_Type_Construct
