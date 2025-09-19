@@ -8,7 +8,9 @@ from util import ABDC, findIdx, function_name, find, str_add_prefix
 from functools import cmp_to_key
 import logging
 import rustworkx as rx
-from rustworkx.visualization import graphviz_draw
+if logging.DEBUG >= logging.root.level:
+    from rustworkx.visualization import graphviz_draw
+    
 # import pygraphviz
 if TYPE_CHECKING:
     from store import Location
@@ -913,8 +915,9 @@ class DataflowGraph_v2:
                 return {"label": label}
             return {}
         
-        if not make_dats_node:  
-            graphviz_draw(self.__graph, node_attr_fn=node_attr, edge_attr_fn=edge_attr, filename=f"{filename}.{format}", image_type=f"{format}")
+        if not make_dats_node: 
+            if logging.DEBUG >= logging.root.level: 
+                graphviz_draw(self.__graph, node_attr_fn=node_attr, edge_attr_fn=edge_attr, filename=f"{filename}.{format}", image_type=f"{format}")
         else:
             copy_graph = self.__graph.copy()
             
@@ -953,7 +956,8 @@ class DataflowGraph_v2:
                     sink_dat_node_id = first_dat_id_map[self.__global_dat_swap_map[attr["dat_str"]]]
                     copy_graph.add_edge(first_dat_id_map[attr["dat_str"]], sink_dat_node_id, {"src_id": first_dat_id_map[attr["dat_str"]], "sink_id": sink_dat_node_id, "weight" : 1, "dat_connect" : True, "swap_connect": True, "dat_str": self.__global_dat_swap_map[attr["dat_str"]]})
             
-            graphviz_draw(copy_graph, node_attr_fn=node_attr, edge_attr_fn=edge_attr, filename=f"{filename}.{format}", image_type=f"{format}")
+            if logging.DEBUG >= logging.root.level:
+                graphviz_draw(copy_graph, node_attr_fn=node_attr, edge_attr_fn=edge_attr, filename=f"{filename}.{format}", image_type=f"{format}")
                 # graphviz_obj = rx.visualization.graphviz_graph(self.__graph)
                 # graphviz_obj.layout(prog="dot")
                 # graphviz_obj.draw(f"{filename}.{format}")
