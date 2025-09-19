@@ -13,7 +13,8 @@ import json
 import logging
 import sys
 from rustworkx import PyDiGraph
-from rustworkx.visualization import graphviz_draw 
+if logging.DEBUG >= logging.root.level:
+    from rustworkx.visualization import graphviz_draw 
 
 #Generic type
 T = TypeVar("T")
@@ -117,8 +118,8 @@ def print_rx_graph(filename: str, rx_graph: PyDiGraph, node_attr: Callable = Non
             node_attr = def_node_attr
         if not edge_attr:
             edge_attr = def_edge_attr
-            
-        graphviz_draw(rx_graph, node_attr_fn=node_attr, edge_attr_fn=edge_attr, filename=f"{filename}.{format}", image_type=f"{format}")
+        if logging.DEBUG >= logging.root.level: 
+            graphviz_draw(rx_graph, node_attr_fn=node_attr, edge_attr_fn=edge_attr, filename=f"{filename}.{format}", image_type=f"{format}")
 class Findable(ABC):
     """
     A parent abstact class for findable support
