@@ -14,7 +14,7 @@ constexpr unsigned short iter_par_factor = {{config["iter_par_factor"]}};
 constexpr unsigned short mem_data_width = data_width * mem_vector_factor;
 constexpr unsigned short shift_bits = {{shift_bits(config["mem_data_width"] * config["vector_factor"], config["data_width"])}}; 
 constexpr unsigned short axis_data_width = data_width * vector_factor;
-
+constexpr unsigned short num_of_pkts_per_beat = mem_data_width / axis_data_width;
 #ifdef DEBUG_LOG
     #include <stdio.h>
 #endif

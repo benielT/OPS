@@ -439,8 +439,8 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
     # From output files path
     path = None
     if scheme.lang.kernel_dir:
-        Path(args.out, scheme.target.name, "device", "include").mkdir(parents=True, exist_ok=True)
-        path = Path(args.out, scheme.target.name, "device", "include", f"common_config.{extension}")                
+        Path(args.out, scheme.target.name, "common", "include").mkdir(parents=True, exist_ok=True)
+        path = Path(args.out, scheme.target.name, "common", "include", f"common_config.{extension}")                
     else:
         path = Path(args.out,f"{scheme.target.name}_common_config.{extension}")
 

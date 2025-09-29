@@ -447,7 +447,9 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
 {% endblock %}
 {% block datamover_body %}
 {
+    {% if config["datamover_mode"] == 3 %}
     #pragma HLS INTERFACE s_axilite port = is_loopback bundle = control
+    {% endif %}
     {% for i in range(ndim) %}
     #pragma HLS INTERFACE s_axilite port = range_start_{{i}} bundle = control
     #pragma HLS INTERFACE s_axilite port = range_end_{{i}} bundle = control
@@ -530,7 +532,6 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
     {% endif %}#}
 #endif 
 
-    constexpr unsigned int num_of_pkts_per_bytes = mem_data_width / axis_data_width;
     {#{% if ilh.isMultiDim() %}
         {% for m_dim in ilh.getMultidimList() %}
     constexpr unsigned int num_of_pkts_per_bytes_d{{m_dim}} = mem_data_width / {{config["data_width"] * config["vector_factor"] * m_dim}};
@@ -549,7 +550,7 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
         {% endfor %}
     {% endif %}
     const unsigned int num_beats = config.total_xblocks;
-    const unsigned int num_pkts = num_of_pkts_per_bytes * num_beats;
+    const unsigned int num_pkts = num_of_pkts_per_beat * num_beats;
     {#{% if ilh.isMultiDim() %}
         {% for m_dim in ilh.getMultidimList() %}
     const unsigned int num_pkts_d{{m_dim}} = num_of_pkts_per_bytes_d{{m_dim}} * config_d{{m_dim}}.total_xblocks;

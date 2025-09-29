@@ -2,6 +2,8 @@
 {% block prologue %}
 #pragma once 
 #include <ops_hls_rt_support.h>
+#include "../../common/include/common_config.hpp"
+
 {% endblock %}
 
 {% block loopback_checker %}
@@ -66,7 +68,23 @@ public:
 
 		unsigned int total_iter_par_factor = iter_par_factor * {{config["SLR_count"]}};
 		unsigned int adjusted_outer_iter = (outer_iter + total_iter_par_factor - 1) / total_iter_par_factor;
+        {#
+        ops::hls::MemConfig memconfig;
 
+        {% if ilh.isMultiDim() %} //TODO: need to do multidim
+            {% for m_dim in ilh.getMultidimList() %}
+        ops::hls::MemConfig memconfig_d{{m_dim}};
+            {% endfor %}
+        {% endif %}
+
+        ops::hls::genMemConfig<mem_data_width, axis_data_width, data_width>(read_stencilConfig.grid_size, read_range, memconfig, read_stencilConfig.batch_size);
+
+        {% if ilh.isMultiDim() %}
+            {% for m_dim in ilh.getMultidimList() %}
+        ops::hls::multidimConfigConverter<{{m_dim}}>(memconfig, memconfig_d{{m_dim}});
+            {% endfor %}
+        {% endif %}
+        #}
         int narg = 0;
     {% for slr_id in range(config["SLR_count"]) %}
         {{"narg = 0;" if not loop.first}} 
@@ -99,7 +117,9 @@ public:
         bool loopback_enbl = false;
 #endif 
         narg = 0;
+    {% if config["datamover_mode"] == 3 %}
         OCL_CHECK(err, err = m_datamover.setArg(narg++, loopback_enbl));
+    {% endif %}
     {% for i in range(ndim)%}
         OCL_CHECK(err, err = m_datamover.setArg(narg++, read_range.start[{{i}}]));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, read_range.end[{{i}}]));
@@ -113,6 +133,24 @@ public:
     {% endfor %} 
         OCL_CHECK(err, err = m_datamover.setArg(narg++, adjusted_outer_iter));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.originalProperty.batch_size));    
+        {#OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.start_x));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.end_x));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.start_y));    
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.end_y)); 
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.start_z));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.end_z));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.grid_xblocks));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.grid_size_y));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.grid_size_z));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.num_xblocks));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.x_tile_size));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.x_tile_bytes));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.isContinous));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.start_offset));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.batch_size));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.total_xblocks));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.total_size_bytes));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, adjusted_outer_iter));#}
     {% for arg in ilh.joint_args %}
         {% if arg is ops_dat %}
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.deviceBuffer));
