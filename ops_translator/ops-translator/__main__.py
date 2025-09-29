@@ -21,6 +21,7 @@ from cpp.schemes import CppHLS
 from store import Application, ParseError
 from target import Target
 from util import getVersion, safeFind, isFilePath, isDirPath, jsonReadFile
+from util import create_cpp_main, replace_fortran_program_with_subroutine
 
 def main(argv=None) -> None:
 
@@ -251,6 +252,11 @@ def main(argv=None) -> None:
     if(lang.name == "Fortran"):
         add_offload_directives(app_consts,offload_pragma_flag_dict)
 
+    # Create main.cpp file required for f2c_sycl when building on Nvidia or AMD GPUs
+    if(lang.name == "Fortran"):
+        create_cpp_main()
+        replace_fortran_program_with_subroutine(args.file_paths)
+
 
 def parse(args: Namespace, lang: Lang) -> Application:
     app = Application()
@@ -411,7 +417,7 @@ def codegen(args: Namespace, scheme: Scheme, app: Application, target_config: di
             path = Path(args.out, name)
 
         with open(path, "w") as file:
-            if(scheme.target.name == "f2c_mpi_openmp" or scheme.target.name == "f2c_cuda" or scheme.target.name == "f2c_hip"):
+            if(scheme.target.name == "f2c_mpi_openmp" or scheme.target.name == "f2c_cuda" or scheme.target.name == "f2c_hip" or scheme.target.name == "f2c_sycl"):
                 file.write(f"// Auto-generated at {datetime.now()} by ops-translator\n")
             else:
                 file.write(f"{scheme.lang.com_delim} Auto-generated at {datetime.now()} by ops-translator\n")
@@ -433,8 +439,8 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
     # From output files path
     path = None
     if scheme.lang.kernel_dir:
-        Path(args.out, scheme.target.name, "device", "include").mkdir(parents=True, exist_ok=True)
-        path = Path(args.out, scheme.target.name, "device", "include", f"common_config.{extension}")                
+        Path(args.out, scheme.target.name, "common", "include").mkdir(parents=True, exist_ok=True)
+        path = Path(args.out, scheme.target.name, "common", "include", f"common_config.{extension}")                
     else:
         path = Path(args.out,f"{scheme.target.name}_common_config.{extension}")
 

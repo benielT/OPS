@@ -13,10 +13,11 @@
 #include "../../ext/xcl2/xcl2.hpp"
 
 #include <ap_int.h>
+#include "../../common/include/ops_hls_defs.hpp"
+#include "../../common/include/ops_hls_utils.hpp"
+#include "../../common/include/ops_hls_common_memconfig.hpp"
 #include "../../L1/include/ops_hls_datamover.hpp"
-#include "../../L1/include/ops_hls_defs.hpp"
 #include "../../L1/include/ops_hls_stencil_core_v2.hpp"
-#include "../../L1/include/ops_hls_utils.hpp"
 
 #include "../../L2/include/ops_hls_fpga.hpp"
 #include "../../L2/include/ops_hls_host_utils.hpp"

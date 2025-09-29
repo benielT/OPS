@@ -47,7 +47,7 @@ memconfig
 
 #pragma once
 #include <ops_hls_kernel_support.h>
-#include "common_config.hpp"
+#include "../../common/include/common_config.hpp"
 
 {% if ilh.isMultiDim() %}
     {% for dat, acc_type in ilh.dats %}
@@ -63,7 +63,9 @@ constexpr unsigned short multidim_axis_data_width_{{ilh.id}}_{{dat.ptr}} = data_
 {% endblock %}
 {% block datamover_prototype %}
 extern "C" void datamover_outerloop_{{ilh.id}}(
+    {% if config["datamover_mode"] == 3 %}
         const bool is_loopback,
+    {% endif %}
     {% for i in range(ndim) %}
         const unsigned short range_start_{{i}},
         const unsigned short range_end_{{i}},

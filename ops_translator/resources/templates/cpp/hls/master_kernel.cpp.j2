@@ -22,10 +22,10 @@ extern {{const.typ}} {{const.ptr}};
 {% endblock %}
 
 {% block config %}
-typedef {{target_config["stencil_type"]}} stencil_type;
+{#typedef {{target_config["stencil_type"]}} stencil_type;
 constexpr unsigned short vector_factor = {{target_config['vector_factor']}};
 constexpr unsigned short mem_vector_factor = {{target_config['mem_vector_factor']}};
-constexpr unsigned int iter_par_factor = {{target_config["iter_par_factor"]}};
+constexpr unsigned int iter_par_factor = {{target_config["iter_par_factor"]}};#}
 {% endblock%}
 
 {% block header_includes %}
