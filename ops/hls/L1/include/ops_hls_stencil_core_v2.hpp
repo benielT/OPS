@@ -14,8 +14,8 @@
 #include <hls_stream.h>
 #include <cstdarg>
 #include <math.h>
-#include "ops_hls_defs.hpp"
-#include "ops_hls_utils.hpp"
+#include "../../common/include/ops_hls_defs.hpp"
+#include "../../common/include/ops_hls_utils.hpp"
 #include <stdio.h>
 
 /**

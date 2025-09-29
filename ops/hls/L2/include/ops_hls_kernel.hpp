@@ -33,7 +33,7 @@
 #include <string>
 #include <cassert>
 #include <unordered_map>
-#include "../../L1/include/ops_hls_defs.hpp"
+#include "../../common/include/ops_hls_defs.hpp"
 #include "ops_hls_fpga.hpp"
 // This extension file is required for stream APIs
 // #include "CL/cl_ext_xilinx.h"
