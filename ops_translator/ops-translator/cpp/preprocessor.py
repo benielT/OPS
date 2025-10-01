@@ -78,3 +78,16 @@ class Preprocessor(pcpp.Preprocessor):
     
     def get_isl_directives(self) -> Any:
         return self.__iter_parloop_directives
+    
+    def is_ops_tiled(self)-> bool:
+        for name, macro in self.macros.items():
+            if name == "OPS_TILING":
+                return True
+            
+        return False
+    
+    def list_defines(self) -> List[str]:
+        """
+        List all defines after preprocessing.
+        """
+        return [f"{name}={macro.value}" for name, macro in self.macros.items()]
