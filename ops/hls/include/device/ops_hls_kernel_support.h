@@ -9,6 +9,7 @@
   */
 
 #include <ap_int.h>
+#include <stdio.h>
 #include "../../common/include/ops_hls_defs.hpp"
 #include "../../common/include/ops_hls_utils.hpp"
 #include "../../common/include/ops_hls_common_memconfig.hpp"
