@@ -13,8 +13,7 @@ import json
 import logging
 import sys
 from rustworkx import PyDiGraph
-if logging.DEBUG >= logging.root.level:
-    from rustworkx.visualization import graphviz_draw 
+from rustworkx.visualization import graphviz_draw 
 
 #Generic type
 T = TypeVar("T")
