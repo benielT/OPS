@@ -114,6 +114,7 @@ class Program:
     soa_val: Optional[bool] = False
     init_flag: Optional[bool] = False
     tiling: Optional[bool] = False
+    tile_sizes: List[int] = field(default_factory=lambda: [-1, -1, -1])  # x,y,z
 
     def findEntities(self, name: str, scope: List[str] = []) -> List[Entity]:
         def in_scope(entity: Entity):
@@ -142,6 +143,8 @@ class Program:
     def __str__(self) -> str:
         outString = "\nprogram path=" + str(self.path)  + ",\n"
         outString += "ndim=" + str(self.ndim) + ",\n"
+        outString += "soa=" + str(self.soa_val) + ",\n"
+        outString += "tiling=" + str(self.tiling) + ", tile_sizes=" + str(self.tile_sizes) + "\n"
         outString += "\n---------------------\n"
         outString += "       consts        \n"
         outString += "---------------------\n"
