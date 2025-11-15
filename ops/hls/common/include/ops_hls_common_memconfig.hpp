@@ -26,8 +26,16 @@ namespace hls {
         unsigned short tile_count_x;
         unsigned short tile_count_y;
         unsigned int total_tile_count;
-        unsigned short tile_size;
-        unsigned short overlap_size;
+        unsigned short tile_size_x;
+        unsigned short last_tile_size_x;
+        unsigned short overlap_size_x;
+        unsigned short effective_tile_size_x;
+        unsigned short tile_size_y;
+        unsigned short last_tile_size_y;
+        unsigned short overlap_size_y;
+        unsigned short effective_tile_size_y;
+        unsigned short total_xblocks;
+        unsigned int total_size_bytes;
     };
     struct MemConfig {
         unsigned short start_x;
@@ -50,7 +58,11 @@ namespace hls {
     };
 
     template <unsigned short MEM_DATA_WIDTH, unsigned short AXIS_DATA_WIDTH, unsigned short DATA_WIDTH=32>
-    void genMemConfigTile(SizeType& gridSize, AccessRange& range, unsigned short& tile_size, unsigned short& overlap_size, MemConfigTile& config){
+    void genMemConfigTile(SizeType& gridSize, AccessRange& range, unsigned short& tile_size_x, unsigned short& overlap_size_x, unsigned short& tile_size_y, unsigned short&overlap_size_y, MemConfigTile& config){
+#ifndef __SYTHESIS__
+        static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
+                "MEM_DATA_WIDTH failed limit check");
+#endif
         constexpr unsigned short data_vector_factor = MEM_DATA_WIDTH / DATA_WIDTH;
         unsigned short ShiftBits = (unsigned short)LOG2(data_vector_factor);
         unsigned short DataShiftBits = (unsigned short)LOG2(DATA_WIDTH/8);
@@ -58,7 +70,9 @@ namespace hls {
         unsigned short end_x = (range.end[0] + data_vector_factor - 1) >> ShiftBits;
         unsigned short grid_xblocks = gridSize[0] >> ShiftBits; //GridSize[0] has to be MEM_DATA_WIDTH aligned
         unsigned short num_xblocks = end_x - start_x;
-        unsigned short read_x_size = num_xblocks << ShiftBits;
+        // unsigned short read_x_size = num_xblocks << ShiftBits;
+        unsigned short tile_size_x_beats = tile_size_x >> ShiftBits;
+        unsigned short overlap_size_x_beats = overlap_size_x >> ShiftBits;
         // unsigned int read_x_size_bytes = read_x_size << DataShiftBits;
 
         config.start_x = start_x;
@@ -68,9 +82,17 @@ namespace hls {
         // config.read_x_size = read_x_size;
         // config.read_x_size_bytes = read_x_size_bytes;
         // Calculating tile count in X and Y directions
-        config.tile_size = tile_size;
-        config.overlap_size = overlap_size;
-        unsigned short effective_tile_size = tile_size - overlap_size;
+        config.tile_size_x = tile_size_x_beats;
+        config.overlap_size_x = overlap_size_x_beats;
+        unsigned short effective_tile_size_x = tile_size_x - overlap_size_x;
+        unsigned short effective_tile_size_x_beats = effective_tile_size_x >> ShiftBits;
+
+        config.effective_tile_size_x = effective_tile_size_x_beats;
+        config.tile_size_y = tile_size_y;
+        config.overlap_size_y = overlap_size_y;
+        unsigned short effective_tile_size_y = tile_size_y - overlap_size_y;
+        config.effective_tile_size_y = effective_tile_size_y;
+
         unsigned short tile_count_x = 1; 
         unsigned short tile_count_y = 1;
         unsigned short diff_y = 1;
@@ -82,7 +104,7 @@ namespace hls {
             config.end_y = range.end[1];
             diff_y = range.end[1] - range.start[1];
             config.grid_size_y = gridSize[1];
-            tile_count_x = read_x_size <= tile_size ? 1 : ((read_x_size - tile_size) + effective_tile_size - 1) / effective_tile_size + 1;
+            tile_count_x = num_xblocks <= tile_size_x_beats ? 1 : ((num_xblocks - tile_size_x_beats) + effective_tile_size_x_beats - 1) / effective_tile_size_x_beats + 1;
         }
         else
         {
@@ -96,7 +118,7 @@ namespace hls {
             config.end_z = range.end[2];
             diff_z = range.end[2] - range.start[2];
             config.grid_size_z = gridSize[2];
-            tile_count_y = diff_y <= tile_size ? 1 : ((diff_y - tile_size) + effective_tile_size - 1) / effective_tile_size + 1;
+            tile_count_y = diff_y <= tile_size_y ? 1 : ((diff_y - tile_size_y ) + effective_tile_size_y - 1) / effective_tile_size_y + 1;
         }
         else
         {
@@ -105,25 +127,34 @@ namespace hls {
             config.grid_size_z = 1;
         }
 
+        unsigned short last_xblock_start_x = (tile_count_x - 1) * effective_tile_size_x_beats; 
+        unsigned short last_tile_size_x = grid_xblocks - 2 * last_xblock_start_x - 1;
+        config.last_tile_size_x = last_tile_size_x;
+        unsigned short last_yblock_start_y = (tile_count_y - 1) * effective_tile_size_y; 
+        unsigned short last_tile_size_y = diff_y - 2 * last_yblock_start_y - 1;
+        config.last_tile_size_y = last_tile_size_y;
+
         unsigned int total_tiles = tile_count_x * tile_count_y;
         config.total_tile_count = total_tiles;
         config.isContinous = total_tiles == 1 and (grid_xblocks == num_xblocks or range.dim == 1) and (diff_y == gridSize[1] or range.dim != 3);
         config.start_offset = start_x + config.start_y * grid_xblocks + config.start_z * gridSize[1] * grid_xblocks;
-        // config.batch_size = batch_size;
-        // config.total_xblocks = num_xblocks * diff_y * diff_z * batch_size;
-        // config.total_size_bytes = config.total_xblocks << ShiftBits << DataShiftBits;
+        config.total_xblocks = total_tiles * diff_z * tile_size_x_beats;
+        config.total_size_bytes = config.total_xblocks << ShiftBits << DataShiftBits;
 
 #ifndef __SYTHESIS__
 #ifdef DEBUG_LOG
         printf("|HLS DEBUG LOG|%s| Input -> range_dim: % d, range: (%d, %d, %d) -> (%d, %d, %d), gridSize: (%d, %d, %d), Shiftbits: %d, DataShiftBits: %d\n",__func__, range.dim, range.start[0],
                 range.start[1], range.start[2], range.end[0], range.end[1], range.end[2], gridSize[0], gridSize[1], gridSize[2], ShiftBits, DataShiftBits);
-        printf("|HLS DEBUG_LOG|%s| memconfig tile generated -> range: (%d(xblocks), %d, %d) --> (%d(xblocks), %d, %d), grid_size: (%d(xblocks), %d, %d), diff_x: %d, diff_y: %d,\n\
-                tile_count_x: %d, tile_count_y: %d, total_tile_count: %d, tile_size: %d, overlap_size: %d, isContinous: %d, start_offset: %d(xblocks)\n", __func__, config.start_x, config.start_y, config.start_z,
-                config.end_x, config.end_y, config.end_z, config.grid_xblocks, config.grid_size_y, config.grid_size_z, diff_y, diff_z, tile_count_x, tile_count_y, total_tiles, config.tile_size, config.overlap_size, config.isContinous, config.start_offset);
-        printf("|HLS DEBUG_LOG|%s| memconfig generated -> range: (%d(xblocks), %d, %d) --> (%d(xblocks), %d, %d), grid_size: (%d(xblocks), %d, %d), diff_x: %d, diff_y: %d,\n\
-                num_xblocks: %d, x_tile_size: %d, x_tile_bytes: %d, isContinous: %d, start_offset: %d(xblocks), total_xblocks: %d, total_size_bytes: %d\n", __func__, config.start_x, config.start_y, config.start_z,
-                config.end_x, config.end_y, config.end_z, config.grid_xblocks, config.grid_size_y, config.grid_size_z, diff_y, diff_z, config.num_xblocks, config.x_tile_size, config.x_tile_bytes, config.isContinous, config.start_offset,
-                config.total_xblocks, config.total_size_bytes);
+        printf("|HLS DEBUG_LOG|%s| memconfig tile generated -> range: (%d(xblocks), %d, %d) --> (%d(xblocks), %d, %d), grid_size: (%d(xblocks), %d, %d), diff_y: %d, diff_z: %d,\n\
+            tile_count_x: %d, tile_count_y: %d, total_tile_count: %u, tile_size_x: %d, last_tile_size_x: %d, overlap_size_x: %d, effective_tile_size_x: %d,\n\
+            tile_size_y: %d, last_tile_size_y: %d, overlap_size_y: %d, effective_tile_size_y: %d, total_xblocks: %u, total_size_bytes: %u, isContinous: %d, start_offset: %u\n", __func__,
+            config.start_x, config.start_y, config.start_z,
+            config.end_x, config.end_y, config.end_z,
+            config.grid_xblocks, config.grid_size_y, config.grid_size_z, diff_y, diff_z,
+            tile_count_x, tile_count_y, config.total_tile_count,
+            config.tile_size_x, config.last_tile_size_x, config.overlap_size_x, config.effective_tile_size_x,
+            config.tile_size_y, config.last_tile_size_y, config.overlap_size_y, config.effective_tile_size_y,
+            config.total_xblocks, config.total_size_bytes, config.isContinous, config.start_offset);
 #endif
 #endif
     }

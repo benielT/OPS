@@ -57,11 +57,12 @@ bool  verify_memconfig_tile(ops::hls::MemConfigTile& memconfig, unsigned int til
         unsigned int tile_count_y, 
         unsigned int grid_x_size, 
         unsigned int grid_y_size, 
-        unsigned short overlap_size)
+        unsigned short overlap_size_x,
+        unsigned short overlap_size_y)
 {
     bool status = true;
-    unsigned short expected_tile_size = memconfig.tile_size;
-    unsigned short expected_overlap_size = overlap_size;
+    unsigned short expected_tile_size = memconfig.tile_size_x;
+    unsigned short expected_overlap_size = overlap_size_x;
     unsigned int expected_total_tile_count = tile_count_x * tile_count_y;
 
     if (memconfig.total_tile_count != expected_total_tile_count){
@@ -69,13 +70,23 @@ bool  verify_memconfig_tile(ops::hls::MemConfigTile& memconfig, unsigned int til
         status = false;
     }
 
-    if (memconfig.tile_size != TILE_SIZE_X){
-        std::cout << "[ERROR] Tile size mismatch. Expected: " << TILE_SIZE_X << " Got: " << memconfig.tile_size << std::endl;
+    if (memconfig.tile_size_x != TILE_SIZE_X / MEM_VECTOR_SIZE){
+        std::cout << "[ERROR] Tile size mismatch. Expected: " << TILE_SIZE_X / MEM_VECTOR_SIZE << " Got: " << memconfig.tile_size_x << std::endl;
         status = false;
     }
 
-    if (memconfig.overlap_size != expected_overlap_size){
-        std::cout << "[ERROR] Overlap size mismatch. Expected: " << expected_overlap_size << " Got: " << memconfig.overlap_size << std::endl;
+    if (memconfig.tile_size_y != TILE_SIZE_Y){
+        std::cout << "[ERROR] Tile size Y mismatch. Expected: " << TILE_SIZE_Y << " Got: " << memconfig.tile_size_y << std::endl;
+        status = false;
+    }
+
+    if (memconfig.overlap_size_x != overlap_size_x / MEM_VECTOR_SIZE){
+        std::cout << "[ERROR] Overlap size mismatch. Expected: " << overlap_size_x / MEM_VECTOR_SIZE << " Got: " << memconfig.overlap_size_x << std::endl;
+        status = false;
+    }
+
+    if (memconfig.overlap_size_y != overlap_size_y ){
+        std::cout << "[ERROR] Overlap size mismatch. Expected: " << overlap_size_y << " Got: " << memconfig.overlap_size_y << std::endl;
         status = false;
     }
 
@@ -130,21 +141,22 @@ int main()
         const int grid_y_size = actual_y_size;
         const int grid_z_size = actual_z_size;
 
-        int overlap_size = get_overlap_size(num_slr, p_slr, STENCIL_SIZE, MEM_VECTOR_SIZE);
-        int tile_count_x = get_tile_count(grid_x_size, TILE_SIZE_X, overlap_size);
-        int tile_count_y = get_tile_count(grid_y_size, TILE_SIZE_Y, overlap_size);
+        int overlap_size_x = get_overlap_size(num_slr, p_slr, STENCIL_SIZE, MEM_VECTOR_SIZE);
+        int overlap_size_y = get_overlap_size(num_slr, p_slr, STENCIL_SIZE, 1);
+        int tile_count_x = get_tile_count(grid_x_size, TILE_SIZE_X, overlap_size_x);
+        int tile_count_y = get_tile_count(grid_y_size, TILE_SIZE_Y, overlap_size_y);
         std::cout << "Logincal grid size: (" << logical_x_size << ", " << logical_y_size << ", " << logical_z_size << ")" << std::endl;
         std::cout << "Actual grid size: (" << actual_x_size << ", " << actual_y_size << ", " << actual_z_size << ")" << std::endl;
         std::cout << "Grid size (mem aligned): (" << grid_x_size << ", " << grid_y_size << ", " << grid_z_size << ")" << std::endl;
 
         std::cout << "num_slr: " << num_slr << " p_slr: " << p_slr << " total_p: " << num_slr * p_slr << std::endl;
-        std::cout << "overlap_size: " << overlap_size << std::endl;
+        std::cout << "overlap_size_x: " << overlap_size_x << std::endl;
         std::cout << "tile_count_x: " << tile_count_x << " tile_count_y: " << tile_count_y << std::endl;
         
         // for (int tile_x = 0; tile_x < tile_count_x; tile_x++){
-        //     Tile_descriptor tile_desc_x = get_tile_desc(tile_x, grid_x_size, TILE_SIZE_X, overlap_size);
+        //     Tile_descriptor tile_desc_x = get_tile_desc(tile_x, grid_x_size, TILE_SIZE_X, overlap_size_x);
         //     for (int tile_y = 0; tile_y < tile_count_y; tile_y++){
-        //         Tile_descriptor tile_desc_y = get_tile_desc(tile_y, grid_y_size, TILE_SIZE_Y, overlap_size);
+        //         Tile_descriptor tile_desc_y = get_tile_desc(tile_y, grid_y_size, TILE_SIZE_Y, overlap_size_x);
         //         std::cout << "Tile (" << tile_x << ", " << tile_y << "): ";
         //         std::cout << " X[" << tile_desc_x.start << ", " << tile_desc_x.end << "] Size: " << tile_desc_x.size;
         //         std::cout << " Y[" << tile_desc_y.start << ", " << tile_desc_y.end << "] Size: " << tile_desc_y.size;
@@ -157,8 +169,8 @@ int main()
         short d_m[] = {-(STENCIL_SIZE -1)/2, -(STENCIL_SIZE -1)/2, -(STENCIL_SIZE -1)/2};
         ops::hls::AccessRange range = {{ 1 + d_m[0] , 1 + d_m[1], 1 + d_m[2] }, { grid_x_size - 2 + d_p[0], grid_y_size - 2 + d_p[1], grid_z_size - 2 + d_p[2]}, 3};
         ops::hls::MemConfigTile memconfig;
-        dut(gridSize, range, TILE_SIZE_X, overlap_size, memconfig);
-        if(verify_memconfig_tile(memconfig, tile_count_x, tile_count_y, grid_x_size, grid_y_size, overlap_size))
+        dut(gridSize, range, TILE_SIZE_X, TILE_SIZE_Y, overlap_size_x, overlap_size_y, memconfig);
+        if(verify_memconfig_tile(memconfig, tile_count_x, tile_count_y, grid_x_size, grid_y_size, overlap_size_x, overlap_size_y))
         {
             std::cout << "TEST PASSED." << std::endl;
             test_summary[test_itr] = true;

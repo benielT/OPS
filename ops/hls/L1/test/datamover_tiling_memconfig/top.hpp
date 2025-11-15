@@ -13,6 +13,8 @@
 //template <unsigned int MEM_DATA_WIDTH, unsigned int STREAM_DATA_WIDTH, unsigned int BURST_SIZE=32>
 void dut(ops::hls::SizeType& gridSize,
 		ops::hls::AccessRange& range,
-    unsigned short tile_size,
-    unsigned short overlap_size,
-    ops::hls::MemConfigTile& memconfig);
+        unsigned short tile_size_x,
+        unsigned short tile_size_y,
+        unsigned short overlap_size_x,
+        unsigned short overlap_size_y,
+        ops::hls::MemConfigTile& memconfig);
