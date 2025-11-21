@@ -80,13 +80,13 @@ bool  verify_memconfig_tile(ops::hls::MemConfigTile& memconfig, unsigned int til
         status = false;
     }
 
-    if (memconfig.overlap_size_x != overlap_size_x / MEM_VECTOR_SIZE){
-        std::cout << "[ERROR] Overlap size mismatch. Expected: " << overlap_size_x / MEM_VECTOR_SIZE << " Got: " << memconfig.overlap_size_x << std::endl;
+    if (memconfig.tile_overlap_size_x != overlap_size_x / MEM_VECTOR_SIZE){
+        std::cout << "[ERROR] Overlap size mismatch. Expected: " << overlap_size_x / MEM_VECTOR_SIZE << " Got: " << memconfig.tile_overlap_size_x << std::endl;
         status = false;
     }
 
-    if (memconfig.overlap_size_y != overlap_size_y ){
-        std::cout << "[ERROR] Overlap size mismatch. Expected: " << overlap_size_y << " Got: " << memconfig.overlap_size_y << std::endl;
+    if (memconfig.tile_overlap_size_y != overlap_size_y ){
+        std::cout << "[ERROR] Overlap size mismatch. Expected: " << overlap_size_y << " Got: " << memconfig.tile_overlap_size_y << std::endl;
         status = false;
     }
 
