@@ -548,10 +548,18 @@ void stream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out,
     #pragma HLS PIPELINE II=ii
 
         ap_uint<MEM_DATA_WIDTH> tmp = strm_in.read();
-        mem_out[index] = tmp;
+        mem_out[index] = tmp;		
 #ifdef DEBUG_LOG
-        printf("|HLS DEBUG_LOG| %s | writing index: %d\n", __func__, index);
-#endif			
+        printf("|HLS DEBUG_LOG| %s | writing index: %d, val=(\n", __func__, index);
+
+        for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
+        {
+            DataConv conv;
+            conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+            printf("%f,", conv.f);
+        }
+        printf(")\n");
+#endif
         index++;
 		
 	}
@@ -562,7 +570,15 @@ void stream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out,
 		ap_uint<MEM_DATA_WIDTH> tmp = strm_in.read();
 		mem_out[index] = tmp;
 #ifdef DEBUG_LOG
-		printf("|HLS DEBUG_LOG| %s | reading index: %d\n", __func__, index);
+        printf("|HLS DEBUG_LOG| %s | writing index: %d, val=(\n", __func__, index);
+
+        for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
+        {
+            DataConv conv;
+            conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+            printf("%f,", conv.f);
+        }
+        printf(")\n");
 #endif
         index++;
 	}
@@ -2186,7 +2202,7 @@ void memReadGridV2(ap_uint<MEM_DATA_WIDTH>* mem_in,
 		unsigned int  size_bytes = x_tile_size_bytes * size_y * size_z;
 
 #ifdef DEBUG_LOG
-		printf("|HLS DEBUG_LOG|%s| init offset:%d, size_y:%d, size_z:%d\, size_bytes:%d\n", __func__, offset, size_y, size_z, size_bytes);
+		printf("|HLS DEBUG_LOG|%s| init offset:%d, size_y:%d, size_z:%d, size_bytes:%d\n", __func__, offset, size_y, size_z, size_bytes);
 #endif
 		mem2axisV2<MEM_DATA_WIDTH, AXIS_DATA_WIDTH>((ap_uint<MEM_DATA_WIDTH>* )(mem_in + offset), strm_out, size_bytes);
 	}
@@ -2457,7 +2473,7 @@ void memWriteGridSimpleV2(ap_uint<MEM_DATA_WIDTH>* mem_out,
 		unsigned int  size_bytes = x_tile_size_bytes * size_y * size_z;
 
 #ifdef DEBUG_LOG
-		printf("|HLS DEBUG_LOG|%s| init offset:%d, size_y:%d, size_z:%d\, size_bytes:%d\n", __func__, offset, size_y, size_z, size_bytes);
+		printf("|HLS DEBUG_LOG|%s| init offset:%d, size_y:%d, size_z:%d, size_bytes:%d\n", __func__, offset, size_y, size_z, size_bytes);
 #endif
 		axis2memV2<MEM_DATA_WIDTH, AXIS_DATA_WIDTH>((ap_uint<MEM_DATA_WIDTH>*)(mem_out + offset), strm_in, size_bytes);
 	}

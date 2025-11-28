@@ -80,16 +80,10 @@ namespace hls {
         config.end_x = end_x;
         config.grid_xblocks = grid_xblocks;
 
-        config.tile_size_x = tile_size_x_beats;
-        config.tile_overlap_size_x = overlap_size_x_beats;
         unsigned short effective_tile_size_x = tile_size_x - overlap_size_x;
         unsigned short effective_tile_size_x_beats = effective_tile_size_x >> ShiftBits;
 
-        config.effective_tile_size_x = effective_tile_size_x_beats;
-        config.tile_size_y = tile_size_y;
-        config.tile_overlap_size_y = overlap_size_y;
         unsigned short effective_tile_size_y = tile_size_y - overlap_size_y;
-        config.effective_tile_size_y = effective_tile_size_y;
 
         unsigned short tile_count_x = 1; 
         unsigned short tile_count_y = 1;
@@ -135,12 +129,44 @@ namespace hls {
         }
 
         unsigned short last_xblock_start_x = (tile_count_x - 1) * effective_tile_size_x_beats; 
-        unsigned short last_tile_size_x = grid_xblocks - 2 * last_xblock_start_x - 1;
+        unsigned short last_tile_size_x = grid_xblocks - last_xblock_start_x - 1;
+
+        if (tile_count_x > 1) 
+        {
+            last_xblock_start_x = (tile_count_x - 1) * effective_tile_size_x_beats; 
+            last_tile_size_x = grid_xblocks - last_xblock_start_x;
+        }
+        else 
+        {
+            tile_size_x_beats = num_xblocks;
+            last_tile_size_x = num_xblocks;
+            effective_tile_size_x_beats = num_xblocks;
+        }
+
+        config.effective_tile_size_x = effective_tile_size_x_beats;
+        config.tile_size_x = tile_size_x_beats;
+        config.tile_overlap_size_x = overlap_size_x_beats;
         config.last_tile_size_x = last_tile_size_x;
         config.tile_count_x = tile_count_x;
 
-        unsigned short last_yblock_start_y = (tile_count_y - 1) * effective_tile_size_y; 
-        unsigned short last_tile_size_y = diff_y - 2 * last_yblock_start_y - 1;
+        unsigned short last_yblock_start_y; 
+        unsigned short last_tile_size_y;
+
+        if (tile_count_y > 1)
+        {
+            last_yblock_start_y = (tile_count_y - 1) * effective_tile_size_y; 
+            last_tile_size_y = diff_y - last_yblock_start_y;
+        }
+        else
+        {
+            tile_size_y = diff_y;
+            last_tile_size_y = diff_y;
+            effective_tile_size_y = diff_y;
+        }
+
+        config.tile_size_y = tile_size_y;
+        config.tile_overlap_size_y = overlap_size_y;
+        config.effective_tile_size_y = effective_tile_size_y;
         config.tile_count_y = tile_count_y;
         config.last_tile_size_y = last_tile_size_y;
 
