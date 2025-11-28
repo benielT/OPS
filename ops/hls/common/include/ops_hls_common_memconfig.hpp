@@ -23,7 +23,6 @@ namespace hls {
         unsigned short grid_size_z;
         unsigned short tile_count_x;
         unsigned short tile_count_y;
-        unsigned short tile_count_z;
         unsigned int total_tile_count;
         unsigned short tile_size_x;
         unsigned short tile_size_y;
@@ -59,112 +58,62 @@ namespace hls {
     };
 
     template <unsigned short MEM_DATA_WIDTH, unsigned short AXIS_DATA_WIDTH, unsigned short DATA_WIDTH=32>
-    void genMemConfigTile(SizeType& gridSize, AccessRange& range, unsigned short& tile_size_x, unsigned short& overlap_size_x, unsigned short& tile_size_y, unsigned short&overlap_size_y, MemConfigTile& config){
+    void genMemConfigTile(
+            SizeType& gridSize, 
+            AccessRange& range, 
+            unsigned short& tile_size_x, 
+            unsigned short& overlap_size_x, 
+            unsigned short& tile_size_y, 
+            unsigned short&overlap_size_y, 
+            MemConfigTile& config)
+    {
 #ifndef __SYTHESIS__
         static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
                 "MEM_DATA_WIDTH failed limit check");
 #endif
         constexpr unsigned short data_vector_factor = MEM_DATA_WIDTH / DATA_WIDTH;
-        unsigned short ShiftBits = (unsigned short)LOG2(data_vector_factor);
-        unsigned short DataShiftBits = (unsigned short)LOG2(DATA_WIDTH/8);
-        unsigned short start_x = range.start[0] >> ShiftBits;
-        unsigned short end_x = (range.end[0] + data_vector_factor - 1) >> ShiftBits;
-        unsigned short grid_xblocks = gridSize[0] >> ShiftBits; //GridSize[0] has to be MEM_DATA_WIDTH aligned
-        unsigned short num_xblocks = end_x - start_x;
+        const unsigned short ShiftBits = (unsigned short)LOG2(data_vector_factor);
+        const unsigned short DataShiftBits = (unsigned short)LOG2(DATA_WIDTH/8);
+        const unsigned short start_x = range.start[0] >> ShiftBits;
+        const unsigned short end_x = (range.end[0] + data_vector_factor - 1) >> ShiftBits;
+        const unsigned short grid_xblocks = gridSize[0] >> ShiftBits; //GridSize[0] has to be MEM_DATA_WIDTH aligned
+        const unsigned short num_xblocks = end_x - start_x;
 
-        unsigned short tile_size_x_beats = tile_size_x >> ShiftBits;
-        unsigned short overlap_size_x_beats = overlap_size_x >> ShiftBits;
+        const unsigned short tile_size_x_beats = tile_size_x >> ShiftBits;
+        const unsigned short overlap_size_x_beats = overlap_size_x >> ShiftBits;
 
+        const unsigned short effective_tile_size_x_beats = tile_size_x_beats - overlap_size_x_beats;
+        const unsigned short effective_tile_size_y = tile_size_y - overlap_size_y;
 
+        const unsigned short diff_y = range.end[1] - range.start[1];
+        const unsigned short diff_z = range.end[2] - range.start[2];
+
+        // Initial values for config
         config.start_x = start_x;
+        config.start_y = range.start[1];
+        config.start_z = range.start[2];
         config.end_x = end_x;
+        config.end_y = range.end[1];
+        config.end_z = range.end[2];
         config.grid_xblocks = grid_xblocks;
+        config.grid_size_y = gridSize[1];
+        config.grid_size_z = gridSize[2];
 
-        unsigned short effective_tile_size_x = tile_size_x - overlap_size_x;
-        unsigned short effective_tile_size_x_beats = effective_tile_size_x >> ShiftBits;
+        const unsigned short realized_tile_size_x_beats = tile_size_x_beats > grid_xblocks? grid_xblocks : tile_size_x_beats;
+        const unsigned short tile_count_x = ((grid_xblocks - realized_tile_size_x_beats) + effective_tile_size_x_beats - 1) / effective_tile_size_x_beats + 1;
+        const unsigned short last_tile_size_x_beats = tile_count_x > 1 ? grid_xblocks - (tile_count_x - 1) * effective_tile_size_x_beats : realized_tile_size_x_beats;
 
-        unsigned short effective_tile_size_y = tile_size_y - overlap_size_y;
-
-        unsigned short tile_count_x = 1; 
-        unsigned short tile_count_y = 1;
-        unsigned short tile_count_z = 1;
-        unsigned short diff_y = 1;
-        unsigned short diff_z = 1;
-
-        if (range.dim == 1)
-        {
-            config.start_y = 0;
-            config.start_z = 0;
-            config.end_y = 1;
-            config.end_z = 1;
-            config.grid_size_y = 1;
-            config.grid_size_z = 1;
-            config.tile_count_x = 1;
-        }
-        else if (range.dim == 2)
-        {
-            config.start_y = range.start[1];
-            config.end_y = range.end[1];
-            diff_y = range.end[1] - range.start[1];
-            config.grid_size_y = gridSize[1];
-            tile_count_x = num_xblocks <= tile_size_x_beats ? 1 : ((num_xblocks - tile_size_x_beats) + effective_tile_size_x_beats - 1) / effective_tile_size_x_beats + 1;
-
-            config.start_z = 0;
-            config.end_z = 1;
-        }
-        else 
-        {
-            // y
-            config.start_y = range.start[1];
-            config.end_y = range.end[1];
-            diff_y = range.end[1] - range.start[1];
-            config.grid_size_y = gridSize[1];
-            tile_count_x = num_xblocks <= tile_size_x_beats ? 1 : ((num_xblocks - tile_size_x_beats) + effective_tile_size_x_beats - 1) / effective_tile_size_x_beats + 1;
-            // z
-            config.start_z = range.start[2];
-            config.end_z = range.end[2];
-            diff_z = range.end[2] - range.start[2];
-            config.grid_size_z = gridSize[2];
-            tile_count_y = diff_y <= tile_size_y ? 1 : ((diff_y - tile_size_y ) + effective_tile_size_y - 1) / effective_tile_size_y + 1;
-        }
-
-        unsigned short last_xblock_start_x = (tile_count_x - 1) * effective_tile_size_x_beats; 
-        unsigned short last_tile_size_x = grid_xblocks - last_xblock_start_x - 1;
-
-        if (tile_count_x > 1) 
-        {
-            last_xblock_start_x = (tile_count_x - 1) * effective_tile_size_x_beats; 
-            last_tile_size_x = grid_xblocks - last_xblock_start_x;
-        }
-        else 
-        {
-            tile_size_x_beats = num_xblocks;
-            last_tile_size_x = num_xblocks;
-            effective_tile_size_x_beats = num_xblocks;
-        }
-
+        const unsigned short realized_tile_size_y = tile_size_y > diff_y ? diff_y : tile_size_y;
+        const unsigned short tile_count_y = ((diff_y - realized_tile_size_y) + effective_tile_size_y - 1) / effective_tile_size_y + 1;
+        const unsigned short last_tile_size_y = tile_count_y > 1 ? diff_y - (tile_count_y - 1) * effective_tile_size_y : realized_tile_size_y;
+        
         config.effective_tile_size_x = effective_tile_size_x_beats;
-        config.tile_size_x = tile_size_x_beats;
+        config.tile_size_x = realized_tile_size_x_beats;
         config.tile_overlap_size_x = overlap_size_x_beats;
-        config.last_tile_size_x = last_tile_size_x;
+        config.last_tile_size_x = last_tile_size_x_beats;
         config.tile_count_x = tile_count_x;
 
-        unsigned short last_yblock_start_y; 
-        unsigned short last_tile_size_y;
-
-        if (tile_count_y > 1)
-        {
-            last_yblock_start_y = (tile_count_y - 1) * effective_tile_size_y; 
-            last_tile_size_y = diff_y - last_yblock_start_y;
-        }
-        else
-        {
-            tile_size_y = diff_y;
-            last_tile_size_y = diff_y;
-            effective_tile_size_y = diff_y;
-        }
-
-        config.tile_size_y = tile_size_y;
+        config.tile_size_y = realized_tile_size_y;
         config.tile_overlap_size_y = overlap_size_y;
         config.effective_tile_size_y = effective_tile_size_y;
         config.tile_count_y = tile_count_y;
