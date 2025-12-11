@@ -27,7 +27,7 @@ namespace hls
 {
 
 template <typename T, unsigned short NUM_POINTS, unsigned short VEC_FACTOR, CoefTypes COEF_TYPE,
-        unsigned short STENCIL_SIZE_X, unsigned short STENCIL_DIM>
+        unsigned short STENCIL_SIZE_X, unsigned short STENCIL_DIM, bool TILED=false>
 class StencilCoreV2
 {
     public:
@@ -40,28 +40,23 @@ class StencilCoreV2
         typedef ap_uint<s_mask_width> mask_dt;
         typedef ::hls::stream<widen_dt> widen_stream_dt;
         typedef ::hls::stream<mask_dt> mask_stream_dt;
+        // using configType = std::conditional_t<TILED, StencilConfigCoreTiled, StencilConfigCore>;
+        typedef typename TypeSelector<TILED, StencilConfigCoreTiled, StencilConfigCore>::Result configType;
 
         StencilCoreV2()
         {
-//		#pragma HLS ARRAY_PARTITION variable = m_sizes complete
-
 #ifndef __SYTHESIS__
             static_assert(s_dim <= ops_max_dim, "Stencil cannot have more than maximum dimention supported by OPS_MAX_s_dim");
             static_assert(s_axis_width >= min_axis_data_width && s_axis_width <= max_axis_data_width,
 			        "axis_width failed limit check. VEC_FACTOR and T should be within limits");
 #endif        
-//            __init();
         }
 
-        void setConfig(const short& PEId, const StencilConfigCore& stencilConfig)
+        void setConfig(const short& PEId, const configType& stencilConfig)
         {
-        	m_PEId = PEId;
+        	// setConfigImpl(PEId, stencilConfig, BoolType<TILED>{});
+            m_PEId = PEId;
             m_stencilConfig = stencilConfig;
-
-//#ifdef DEBUG_LOG
-//            printf("[KERNEL_DEBUG]|%s| s_dim: %d, s_size_x: %d, s_stencil_span_x: %d, s_stencil_half_span_x: %d \n"
-//            		,__func__, s_dim, s_size_x, s_stencil_span_x, s_stencil_half_span_x);
-//#endif
         }
 
         // void setPoints(const unsigned short * stencilPoints)
@@ -83,7 +78,7 @@ class StencilCoreV2
         //     }
         // }
 
-        void getCofig(StencilConfigCore& stencilConfig)
+        void getConfig(StencilConfigCore& stencilConfig)
         {
             stencilConfig = m_stencilConfig;
         }
@@ -91,13 +86,17 @@ class StencilCoreV2
 
     private:
 
-//        inline void __init()
-//        {
-//            for (unsigned short i = 0; i < s_dim; i++)
-//            {
-//                m_sizes[i] = s_size_x;
-//            }
-//        }
+        // void setConfigImpl(const short& PEId, const StencilConfigCore& stencilConfig, TrueTag)
+        // {
+        // 	m_PEId = PEId;
+        //     m_stencilConfig = stencilConfig;
+        // }
+
+        // void setConfigImpl(const short& PEId, const StencilConfigCoreTiled& stencilConfig, FalseTag)
+        // {
+        // 	m_PEId = PEId;
+        //     m_stencilConfig = stencilConfig;
+        // }
 
     protected:
         static const unsigned short s_dim = STENCIL_DIM;
@@ -105,7 +104,7 @@ class StencilCoreV2
         // static const unsigned short s_stencil_span_x = s_size_x - 1;
         // static const unsigned short s_stencil_half_span_x = s_stencil_span_x / 2;
 
-        StencilConfigCore m_stencilConfig;
+        configType m_stencilConfig;
         // unsigned short m_stencilPoints[NUM_POINTS * 2];
         // unsigned short m_sizes[s_dim];
         short m_PEId;

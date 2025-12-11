@@ -155,6 +155,24 @@ enum CoefTypes
     DYNAMIC_COEF=1
 };
 
+// Custom tags for template specialization
+//1. Define BoolType tag
+template<bool v>
+struct BoolType {};
+
+typedef BoolType<true> TrueTag;
+typedef BoolType<false> FalseTag;
+
+//2. Define a tyoe selector
+template<bool flag, typename T, typename F>
+struct TypeSelector {
+    typedef T Result;
+};
+
+template<typename T, typename F>
+struct TypeSelector<false, T, F> {
+    typedef F Result;
+};
 
 }
 }
