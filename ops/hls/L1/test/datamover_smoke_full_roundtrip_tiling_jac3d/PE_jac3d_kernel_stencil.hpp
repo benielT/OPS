@@ -1,8 +1,8 @@
 // Auto-generated at 2025-09-06 21:18:49.758949 by ops-translator
 
 #pragma once
-#include <ops_hls_kernel_support.h>
-#include "common_config.hpp"
+#include "../../../include/device/ops_hls_kernel_support.h"
+// #include "common_config.hpp"
 
 static constexpr unsigned short read_num_points_jac3D_kernel_stencil = 7;
 static constexpr unsigned short read_stencil_size_jac3D_kernel_stencil = 3;
@@ -75,7 +75,7 @@ class Stencil_jac3D_kernel_stencil : public ops::hls::StencilCoreV2<stencil_type
         read_stencil_size_jac3D_kernel_stencil, read_stencil_dim_jac3D_kernel_stencil, true> // TILED = true
 {
     using ops::hls::StencilCoreV2<stencil_type, read_num_points_jac3D_kernel_stencil, vector_factor, ops::hls::CoefTypes::CONST_COEF,
-            read_stencil_size_jac3D_kernel_stencil, read_stencil_dim_jac3D_kernel_stencil>::m_stencilConfig;
+            read_stencil_size_jac3D_kernel_stencil, read_stencil_dim_jac3D_kernel_stencil, true>::m_stencilConfig;
 public:
 
     void stencilRun(
@@ -83,23 +83,33 @@ public:
             widen_stream_jac3D_kernel_stencil_1_dt& arg1_wr_buffer
         )
     {
+        ::ops::hls::StencilConfigCoreTiled stencilConfig = m_stencilConfig;
+        const unsigned short pID = m_PEId;
+
         const unsigned short span_x = 2;
         const unsigned short half_span_x = 1;
+        const unsigned short adj_half_span_x = half_span_x * (pID + 1);
 
-        ::ops::hls::StencilConfigCoreTiled stencilConfig = m_stencilConfig;
+        
 
         for (unsigned short tile_x = 0; tile_x < stencilConfig.tile_count[0]; tile_x++)
         {
-            for(unsigned short tile_y = 0; tile_y < stecilConfig.tile_count[1]; tile_y++)
+            for(unsigned short tile_y = 0; tile_y < stencilConfig.tile_count[1]; tile_y++)
             {   
-                #pragma HLS LOOP_FLATTEN on  
+                #pragma HLS LOOP_FLATTEN
+
+                const unsigned short tile_size_x = tile_x == stencilConfig.tile_count[0] - 1 ?
+                    stencilConfig.last_tile_size[0] : stencilConfig.tile_size[0];
+                const unsigned short tile_size_y = tile_y == stencilConfig.tile_count[1] - 1 ?
+                    stencilConfig.last_tile_size[1] : stencilConfig.tile_size[1];
+                const unsigned short true_tile_size_x = tile_size_x << shift_bits;
             //read_origin_wide_diff_x: 0, read_origin_wide_diff: (0,0,1)
 
             //  *** counters definitions ****
                 short i = -1;
                 short j = 0; 
                 short k = -1;
-                unsigned short plane_diff = stencilConfig.tile_size[0] * stencilConfig.tile_size[1] - 1;
+                unsigned short plane_diff = tile_size_x * tile_size_y - 1;
 
             //  *** stencil description and read & write point definitions  ****
                 /*
@@ -115,15 +125,15 @@ public:
                 //      `- point: (1,1,2)
                 unsigned short S3D_7PT_buf_p0_1_rd;
 
-                if (-1 * stencilConfig.grid_size[0] + 0 > 0)
-                    S3D_7PT_buf_p0_1_rd = -1 * stencilConfig.grid_size[0] + 0;
+                if (-1 * tile_size_x + 0 > 0)
+                    S3D_7PT_buf_p0_1_rd = -1 * tile_size_x + 0;
                 else
                     S3D_7PT_buf_p0_1_rd = 0;
 
                 unsigned short S3D_7PT_buf_p0_1_wr;
 
-                if (1 * stencilConfig.grid_size[0] + 0 > 0)
-                    S3D_7PT_buf_p0_1_wr = 1 * stencilConfig.grid_size[0] + 0;
+                if (1 * tile_size_x + 0 > 0)
+                    S3D_7PT_buf_p0_1_wr = 1 * tile_size_x + 0;
                 else
                     S3D_7PT_buf_p0_1_wr = 0;
                 // read point: (0,1,1), write point: (1,0,1)
@@ -134,32 +144,43 @@ public:
                 unsigned short S3D_7PT_buf_r1_2_p1_wr = 1;
                 unsigned short S3D_7PT_buf_p1_2_rd;
 
-                if (-1 * stencilConfig.grid_size[0] + 0 > 0)
-                    S3D_7PT_buf_p1_2_rd = -1 * stencilConfig.grid_size[0] + 0;
+                if (-1 * tile_size_x + 0 > 0)
+                    S3D_7PT_buf_p1_2_rd = -1 * tile_size_x + 0;
                 else
                     S3D_7PT_buf_p1_2_rd = 0;
 
                 unsigned short S3D_7PT_buf_p1_2_wr;
 
-                if (1 * stencilConfig.grid_size[0] + 0 > 0)
-                    S3D_7PT_buf_p1_2_wr = 1 * stencilConfig.grid_size[0] + 0;
+                if (1 * tile_size_x + 0 > 0)
+                    S3D_7PT_buf_p1_2_wr = 1 * tile_size_x + 0;
                 else
                     S3D_7PT_buf_p1_2_wr = 0;
 
-                #pragma HLS ARRAY_PARTITION variable = stencilConfig.lower_limit dim = 1 complete
-                #pragma HLS ARRAY_PARTITION variable = stencilConfig.upper_limit dim = 1 complete
+                // const unsigned short tile_overlap_x = stencil_config.tile_overlap[0] << shiftBits;
+                // const unsigned short init_addjusted_lower_limit_x = tile_x == 0 ? half_span_x : half_span_x + tile_overlap_x;
+                // const unsigned short init_addjusted_upper_limit_y = tile_y == 0 ? half_span_x : half_span_x + stencil_config.tile_overlap[1];
+                
+                const unsigned short lower_limit_x = adj_half_span_x;
+                const unsigned short lower_limit_y = adj_half_span_x;
+                const unsigned short lower_limit_z = half_span_x;
+                const unsigned short upper_limit_x = true_tile_size_x - adj_half_span_x;
+                const unsigned short upper_limit_y = tile_size_y - adj_half_span_x;
+                const unsigned short upper_limit_z = stencilConfig.outer_loop_limit - half_span_x;
+                // SizeType lower_limit = {half_span_x * (m_pid + 1), half_span_x, half_span_x};
+                // #pragma HLS ARRAY_PARTITION variable = stencilConfig.lower_limit dim = 1 complete
+                // #pragma HLS ARRAY_PARTITION variable = stencilConfig.upper_limit dim = 1 complete
 
             //  *** iteration limit definition ****
                 unsigned int iter_limit = stencilConfig.outer_loop_limit * 
-                        stencilConfig.grid_size[1] * stencilConfig.grid_size[0] ;
+                        tile_size_y * tile_size_x ;
 
             //  *** data read write boundary definitions ****
-                unsigned int S3D_7PT_read_lb_itr = 0 * stencilConfig.grid_size[0] * stencilConfig.grid_size[1];
-                unsigned int S3D_7PT_read_ub_itr = (0 + stencilConfig.grid_size[2]) * stencilConfig.grid_size[1] * stencilConfig.grid_size[0];
+                unsigned int S3D_7PT_read_lb_itr = 0 * tile_size_x * tile_size_y;
+                unsigned int S3D_7PT_read_ub_itr = (0 + stencilConfig.grid_size[2]) * tile_size_y * tile_size_x;
 
             /*
                 unsigned int read_lb_itr = 0;
-                unsigned int read_ub_itr = stencilConfig.grid_size[2] * stencilConfig.grid_size[1] * stencilConfig.grid_size[0];
+                unsigned int read_ub_itr = stencilConfig.grid_size[2] * tile_size_y * tile_size_x;
             */
             //  *** Read & write widen temporaries ****
             // arg0(u)
@@ -170,8 +191,14 @@ public:
             //  *** widen stencil values holder & window buffers ****
 
                 // arg0(u)
-                widen_jac3D_kernel_stencil_0_dt arg0_widenStencilValues[read_num_points_jac3D_kernel_stencil];
-                #pragma HLS ARRAY_PARTITION variable = arg0_widenStencilValues dim = 1 complete
+                widen_jac3D_kernel_stencil_0_dt arg0_widenStencilValues_0; //[read_num_points_jac3D_kernel_stencil];
+                widen_jac3D_kernel_stencil_0_dt arg0_widenStencilValues_1;
+                widen_jac3D_kernel_stencil_0_dt arg0_widenStencilValues_2;
+                widen_jac3D_kernel_stencil_0_dt arg0_widenStencilValues_3;
+                widen_jac3D_kernel_stencil_0_dt arg0_widenStencilValues_4;
+                widen_jac3D_kernel_stencil_0_dt arg0_widenStencilValues_5;
+                widen_jac3D_kernel_stencil_0_dt arg0_widenStencilValues_6;
+                //#pragma HLS ARRAY_PARTITION variable = arg0_widenStencilValues dim = 1 complete
 
                 widen_jac3D_kernel_stencil_0_dt arg0_buf_p0_1[max_depth];
                 #pragma HLS BIND_STORAGE variable = arg0_buf_p0_1 type = ram_s2p impl = URAM latency=2
@@ -201,8 +228,8 @@ public:
                 stencil_type arg0_rowArr_1_2[vector_factor + span_x];
                 #pragma HLS ARRAY_PARTITION variable = arg0_rowArr_1_2 dim=1 complete
 
-                const short cond_x_val = stencilConfig.grid_size[0] - 1; 
-                const short cond_y_val = stencilConfig.grid_size[1] - 1;
+                const short cond_x_val = tile_size_x - 1; 
+                const short cond_y_val = tile_size_y - 1;
                 const short cond_z_val = stencilConfig.outer_loop_limit - 1;
 
                 for (unsigned int itr = 0; itr < iter_limit; itr++)
@@ -268,17 +295,17 @@ public:
                             arg0_read_val = arg0_rd_buffer.read();
                         }*/
 
-                        arg0_widenStencilValues[0] = arg0_buf_p0_1[S3D_7PT_buf_p0_1_wr];                
-                        arg0_widenStencilValues[1] = arg0_buf_r0_1_p1[S3D_7PT_buf_r0_1_p1_wr];                
-                        arg0_buf_p0_1[S3D_7PT_buf_p0_1_rd] = arg0_widenStencilValues[1];                
-                        arg0_widenStencilValues[2] = arg0_widenStencilValues[3];                
-                        arg0_widenStencilValues[3] = arg0_widenStencilValues[4];                
-                        arg0_widenStencilValues[4] = arg0_buf_r1_2_p1[S3D_7PT_buf_r1_2_p1_wr];                
-                        arg0_buf_r0_1_p1[S3D_7PT_buf_r0_1_p1_rd] = arg0_widenStencilValues[2];                
-                        arg0_widenStencilValues[5] = arg0_buf_p1_2[S3D_7PT_buf_p1_2_wr];                
-                        arg0_buf_r1_2_p1[S3D_7PT_buf_r1_2_p1_rd] = arg0_widenStencilValues[5];                
-                        arg0_widenStencilValues[6] = arg0_read_val;                
-                        arg0_buf_p1_2[S3D_7PT_buf_p1_2_rd] = arg0_widenStencilValues[6];
+                        arg0_widenStencilValues_0 = arg0_buf_p0_1[S3D_7PT_buf_p0_1_wr];
+                        arg0_widenStencilValues_1 = arg0_buf_r0_1_p1[S3D_7PT_buf_r0_1_p1_wr];
+                        arg0_buf_p0_1[S3D_7PT_buf_p0_1_rd] = arg0_widenStencilValues_1;
+                        arg0_widenStencilValues_2 = arg0_widenStencilValues_3;
+                        arg0_widenStencilValues_3 = arg0_widenStencilValues_4;
+                        arg0_widenStencilValues_4 = arg0_buf_r1_2_p1[S3D_7PT_buf_r1_2_p1_wr];
+                        arg0_buf_r0_1_p1[S3D_7PT_buf_r0_1_p1_rd] = arg0_widenStencilValues_2;
+                        arg0_widenStencilValues_5 = arg0_buf_p1_2[S3D_7PT_buf_p1_2_wr];
+                        arg0_buf_r1_2_p1[S3D_7PT_buf_r1_2_p1_rd] = arg0_widenStencilValues_5;
+                        arg0_widenStencilValues_6 = arg0_read_val;
+                        arg0_buf_p1_2[S3D_7PT_buf_p1_2_rd] = arg0_widenStencilValues_6;
 
                         bool cond_end_of_line_buff_S3D_7PT_buf_p0_1_rd = S3D_7PT_buf_p0_1_rd >= (plane_diff);
                         bool cond_end_of_line_buff_S3D_7PT_buf_p0_1_wr = S3D_7PT_buf_p0_1_wr >= (plane_diff);
@@ -292,8 +319,8 @@ public:
                             S3D_7PT_buf_p0_1_wr = 0;
                         else
                             S3D_7PT_buf_p0_1_wr++;
-                        bool cond_end_of_line_buff_S3D_7PT_buf_r0_1_p1_rd = S3D_7PT_buf_r0_1_p1_rd >= (stencilConfig.grid_size[0] - 1);
-                        bool cond_end_of_line_buff_S3D_7PT_buf_r0_1_p1_wr = S3D_7PT_buf_r0_1_p1_wr >= (stencilConfig.grid_size[0] - 1);
+                        bool cond_end_of_line_buff_S3D_7PT_buf_r0_1_p1_rd = S3D_7PT_buf_r0_1_p1_rd >= (tile_size_x - 1);
+                        bool cond_end_of_line_buff_S3D_7PT_buf_r0_1_p1_wr = S3D_7PT_buf_r0_1_p1_wr >= (tile_size_x - 1);
 
                         if (cond_end_of_line_buff_S3D_7PT_buf_r0_1_p1_rd)
                             S3D_7PT_buf_r0_1_p1_rd = 0;
@@ -304,8 +331,8 @@ public:
                             S3D_7PT_buf_r0_1_p1_wr = 0;
                         else
                             S3D_7PT_buf_r0_1_p1_wr++;
-                        bool cond_end_of_line_buff_S3D_7PT_buf_r1_2_p1_rd = S3D_7PT_buf_r1_2_p1_rd >= (stencilConfig.grid_size[0] - 1);
-                        bool cond_end_of_line_buff_S3D_7PT_buf_r1_2_p1_wr = S3D_7PT_buf_r1_2_p1_wr >= (stencilConfig.grid_size[0] - 1);
+                        bool cond_end_of_line_buff_S3D_7PT_buf_r1_2_p1_rd = S3D_7PT_buf_r1_2_p1_rd >= (tile_size_x - 1);
+                        bool cond_end_of_line_buff_S3D_7PT_buf_r1_2_p1_wr = S3D_7PT_buf_r1_2_p1_wr >= (tile_size_x - 1);
 
                         if (cond_end_of_line_buff_S3D_7PT_buf_r1_2_p1_rd)
                             S3D_7PT_buf_r1_2_p1_rd = 0;
@@ -372,19 +399,19 @@ public:
                     {
         #pragma HLS UNROLL factor=vector_factor
                         ops::hls::DataConv arg0_tmpConverter_1_0;
-                        arg0_tmpConverter_1_0.i = arg0_widenStencilValues[0].range(s_datatype_size * (x + 1) - 1, x * s_datatype_size);
+                        arg0_tmpConverter_1_0.i = arg0_widenStencilValues_0.range(s_datatype_size * (x + 1) - 1, x * s_datatype_size);
                         arg0_rowArr_1_0[x + half_span_x] = arg0_tmpConverter_1_0.f; 
                         ops::hls::DataConv arg0_tmpConverter_0_1;
-                        arg0_tmpConverter_0_1.i = arg0_widenStencilValues[1].range(s_datatype_size * (x + 1) - 1, x * s_datatype_size);
+                        arg0_tmpConverter_0_1.i = arg0_widenStencilValues_1.range(s_datatype_size * (x + 1) - 1, x * s_datatype_size);
                         arg0_rowArr_0_1[x + half_span_x] = arg0_tmpConverter_0_1.f; 
                         ops::hls::DataConv arg0_tmpConverter_1_1;
-                        arg0_tmpConverter_1_1.i = arg0_widenStencilValues[3].range(s_datatype_size * (x + 1) - 1, x * s_datatype_size);
+                        arg0_tmpConverter_1_1.i = arg0_widenStencilValues_3.range(s_datatype_size * (x + 1) - 1, x * s_datatype_size);
                         arg0_rowArr_1_1[x + half_span_x] = arg0_tmpConverter_1_1.f; 
                         ops::hls::DataConv arg0_tmpConverter_2_1;
-                        arg0_tmpConverter_2_1.i = arg0_widenStencilValues[5].range(s_datatype_size * (x + 1) - 1, x * s_datatype_size);
+                        arg0_tmpConverter_2_1.i = arg0_widenStencilValues_5.range(s_datatype_size * (x + 1) - 1, x * s_datatype_size);
                         arg0_rowArr_2_1[x + half_span_x] = arg0_tmpConverter_2_1.f; 
                         ops::hls::DataConv arg0_tmpConverter_1_2;
-                        arg0_tmpConverter_1_2.i = arg0_widenStencilValues[6].range(s_datatype_size * (x + 1) - 1, x * s_datatype_size);
+                        arg0_tmpConverter_1_2.i = arg0_widenStencilValues_6.range(s_datatype_size * (x + 1) - 1, x * s_datatype_size);
                         arg0_rowArr_1_2[x + half_span_x] = arg0_tmpConverter_1_2.f; 
 
                     }
@@ -393,12 +420,12 @@ public:
                         //diff = -1
                         // access_idx = 0
                         ops::hls::DataConv arg0_tmpConverter_0_1_1_7;
-                        arg0_tmpConverter_0_1_1_7.i = arg0_widenStencilValues[2].range(s_datatype_size * (7 + 1) - 1, s_datatype_size * 7);
+                        arg0_tmpConverter_0_1_1_7.i = arg0_widenStencilValues_2.range(s_datatype_size * (3 + 1) - 1, s_datatype_size * 3);
                         arg0_rowArr_1_1[0] = arg0_tmpConverter_0_1_1_7.f;
                         //diff = 1
                         // access_idx = 9
                         ops::hls::DataConv arg0_tmpConverter_2_1_1_0;
-                        arg0_tmpConverter_2_1_1_0.i = arg0_widenStencilValues[4].range(s_datatype_size * (0 + 1) - 1, s_datatype_size * 0);
+                        arg0_tmpConverter_2_1_1_0.i = arg0_widenStencilValues_4.range(s_datatype_size * (0 + 1) - 1, s_datatype_size * 0);
                         arg0_rowArr_1_1[9] = arg0_tmpConverter_2_1_1_0.f;
                     }
 
@@ -407,18 +434,18 @@ public:
         #pragma HLS UNROLL factor=vector_factor
                         short index = (i << shift_bits) + x;
                         bool neg_cond = register_it(             
-                                (index < stencilConfig.lower_limit[0]) 
-                                || (index >= stencilConfig.upper_limit[0])
-                                || (j < stencilConfig.lower_limit[1]) 
-                                || (j >= stencilConfig.upper_limit[1])
-                                || (k < stencilConfig.lower_limit[2]) 
-                                || (k >= stencilConfig.upper_limit[2])
+                                (index < lower_limit_x) 
+                                || (index >= upper_limit_x)
+                                || (j < lower_limit_y) 
+                                || (j >= upper_limit_y)
+                                || (k < lower_limit_z) 
+                                || (k >= upper_limit_z)
                         );
 
         #ifdef DEBUG_LOG
                         printf("[DEBUG][INTERNAL][jac3D_kernel_stencil_PE_%d] index=(%d, %d, %d), lowerbound=(%d, %d, %d), upperbound=(%d, %d, %d), neg_cond=%d\n", m_PEId, index, j, k,
-                                    stencilConfig.lower_limit[0], stencilConfig.lower_limit[1], stencilConfig.lower_limit[2], 
-                                    stencilConfig.upper_limit[0], stencilConfig.upper_limit[1], stencilConfig.upper_limit[2], neg_cond);
+                                    lower_limit_x, lower_limit_y, lower_limit_z, 
+                                    upper_limit_z, upper_limit_y, upper_limit_z, neg_cond);
 
         #endif
 

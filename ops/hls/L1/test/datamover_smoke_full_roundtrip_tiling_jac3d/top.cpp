@@ -1,6 +1,6 @@
 
 #include "top.hpp"
-
+#include "PE_jac3d_kernel_stencil.hpp"
 // #define DEBUG_LOG
 
 template <unsigned short MEM_DATA_WIDTH, unsigned short IN_ITR=2, unsigned short BURST_SIZE=32>
@@ -9,7 +9,7 @@ static void stridedTileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, hls::stream<a
     // #pragma HLS INLINE off
     #ifdef DEBUG_LOG
         printf("|HLS DEBUG_LOG|%s| reading tile. tile_start:%d, tile_size:%d, stride_start:%d\n", __func__, config.start_offset, config.total_size_bytes, stride_start);
-        #endif
+     #endif
 
     const unsigned short z_diff = config.end_z - config.start_z;
     const unsigned short tile_size_y_mul_z_diff = config.tile_size_y * z_diff;
@@ -492,6 +492,36 @@ void stream2memTiled(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
 #endif
 }
 
+static void joint_PE_outerloop_0(const unsigned short PEId, const ops::hls::StencilConfigCoreTiled& stencilConfig, 
+        ::hls::stream<ap_uint<axis_data_width>>& arg0_hls_stream_in, 
+        ::hls::stream<ap_uint<axis_data_width>>& arg1_hls_stream_out
+)
+{
+    // ::hls::stream<ap_uint<axis_data_width>> node2_1_to_node3_0;
+    // #pragma HLS STREAM variable = node2_1_to_node3_0 depth = 10
+
+    kernel_jac3D_kernel_stencil_PE(PEId, stencilConfig,
+            arg0_hls_stream_in,
+            arg1_hls_stream_out
+    );
+}
+
+static void kernel_outerloop_0_dataflow_region_cascaded(const ops::hls::StencilConfigCoreTiled& stencilConfig,
+    ::hls::stream<ap_uint<axis_data_width>> arg0_arg1_streams[iter_par_factor + 1]
+)
+{
+#pragma HLS INLINE 
+
+    for (int i = 0; i < iter_par_factor; i++)
+    {
+#pragma HLS UNROLL factor=iter_par_factor
+        joint_PE_outerloop_0(i, stencilConfig,
+                arg0_arg1_streams[i],
+                arg0_arg1_streams[i+1]
+        );
+    }
+}
+
 /**
  * @brief 	readWriteTiledDataflow orchestrates the dataflow for tiled read and write operations.
  *
@@ -511,19 +541,21 @@ static void readWriteTiledDataflow(
     ap_uint<MEM_DATA_WIDTH>* mem_in_b2,
     ap_uint<MEM_DATA_WIDTH>* mem_out_b1,
     ap_uint<MEM_DATA_WIDTH>* mem_out_b2,
-    const ops::hls::MemConfigTile& config)
+    const ops::hls::MemConfigTile& config,
+    const ops::hls::StencilConfigCoreTiled& stencilConfig)
 {
     #pragma HLS DATAFLOW
 
     // Internal stream connecting read and write paths
-    static hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_data;
-    #pragma HLS STREAM variable = strm_data
+    static hls::stream<ap_uint<MEM_DATA_WIDTH>> hls_streams[iter_par_factor + 1];
+    #pragma HLS STREAM variable = hls_streams depth = 10
 
     // Read from memory banks into stream
-    mem2streamTiled<MEM_DATA_WIDTH, IN_ITR, BURST_SIZE>(mem_in_b1, mem_in_b2, strm_data, config);
+    mem2streamTiled<MEM_DATA_WIDTH, IN_ITR, BURST_SIZE>(mem_in_b1, mem_in_b2, hls_streams[0], config);
 
+    kernel_outerloop_0_dataflow_region_cascaded(stencilConfig, hls_streams);
     // Write from stream to memory banks
-    stream2memTiled<MEM_DATA_WIDTH, IN_ITR, BURST_SIZE>(strm_data, mem_out_b1, mem_out_b2, config);
+    stream2memTiled<MEM_DATA_WIDTH, IN_ITR, BURST_SIZE>(hls_streams[iter_par_factor], mem_out_b1, mem_out_b2, config);
 }
 
 void dut(ap_uint<AXI_M_WIDTH>* mem_in_b1,
@@ -594,6 +626,7 @@ void dut(ap_uint<AXI_M_WIDTH>* mem_in_b1,
     #pragma HLS INTERFACE s_axilite port = tile_count_y bundle = control
     #pragma HLS INTERFACE s_axilite port = return bundle = control
 
+    // printf("|HLS DEBUG_LOG|%s| started.\n", __func__);
     ops::hls::SizeType gridSize = {grid_x_size, grid_y_size, grid_z_size};
     ops::hls::AccessRange range = {{range_start_0, range_start_1, range_start_2},
                                    {range_end_0, range_end_1, range_end_2},
@@ -604,32 +637,71 @@ void dut(ap_uint<AXI_M_WIDTH>* mem_in_b1,
     ops::hls::SizeType lastTileSize = {last_tile_size_x, last_tile_size_y, 1};
     ops::hls::SizeType tileCount = {tile_count_x, tile_count_y, 1};
     ops::hls::MemConfigTile memconfig;
-    
+    ops::hls::StencilConfigCoreTiled stencilConfig;
+    // printf("|HLS DEBUG_LOG|%s| generating memconfig and stencilConfig\n", __func__);
     ops::hls::genMemConfigTileV2<AXI_M_WIDTH, 32>(gridSize, range, tileSize, tileCount, overlapSize, effectiveTileSize, lastTileSize, memconfig);   
-#ifdef DEBUG_LOG
-    // print generated memconfig
-    printf("|HLS memconfig| start_offset:%u total_size_bytes:%u total_xblocks:%u isContinous:%d\n",
-        (unsigned int)memconfig.start_offset,
-        (unsigned int)memconfig.total_size_bytes,
-        (unsigned int)memconfig.total_xblocks,
-        (int)memconfig.isContinous);
-    printf("|HLS memconfig| tile_count_x:%u tile_size_x:%u last_tile_size_x:%u effective_tile_size_x:%u\n",
-        (unsigned int)memconfig.tile_count_x,
-        (unsigned int)memconfig.tile_size_x,
-        (unsigned int)memconfig.last_tile_size_x,
-        (unsigned int)memconfig.effective_tile_size_x);
-    printf("|HLS memconfig| tile_count_y:%u tile_size_y:%u last_tile_size_y:%u effective_tile_size_y:%u grid_xblocks:%u grid_size_y:%u\n",
-        (unsigned int)memconfig.tile_count_y,
-        (unsigned int)memconfig.tile_size_y,
-        (unsigned int)memconfig.last_tile_size_y,
-        (unsigned int)memconfig.effective_tile_size_y,
-        (unsigned int)memconfig.grid_xblocks,
-        (unsigned int)memconfig.grid_size_y);
-    printf("|HLS memconfig| start_z:%u end_z:%u z_diff:%u\n",
-        (unsigned int)memconfig.start_z,
-        (unsigned int)memconfig.end_z,
-        (unsigned int)(memconfig.end_z - memconfig.start_z));
-    // Call the dataflow function for tiled read and write operations
-#endif
-    readWriteTiledDataflow<AXI_M_WIDTH, 1, 32>(mem_in_b1, mem_in_b2, mem_out_b1, mem_out_b2, memconfig);
+    // SizeType grid_size; //{xblocks, y, z, ...}
+    // unsigned short dim;
+    // unsigned short tiling_dim; //number of tiled dimensions
+    // unsigned short outer_loop_limit;
+    // SizeType2d tile_size; //{xblocks, y}
+    // SizeType2d last_tile_size; //{xblocks, y}
+    // // SizeType2d tile_overlap_size; //{xblocks, y}
+    // // SizeType2d effective_tile_size; //{xblocks, y}
+    // SizeType2d tile_count; //{xblocks, y}   
+    // printf("|HLS DEBUG_LOG|%s| generated memconfig and stencilConfig\n", __func__);
+    stencilConfig.grid_size[0] = grid_x_size;
+        stencilConfig.grid_size[1] = grid_y_size;
+        stencilConfig.grid_size[2] = grid_z_size;
+        stencilConfig.dim = dim;
+        stencilConfig.tiling_dim = 2; //fixed to 2D tiling
+        stencilConfig.outer_loop_limit = grid_z_size + 1; //fixed to outer loop on z
+        stencilConfig.tile_size[0] = tile_size_x;
+        stencilConfig.tile_size[1] = tile_size_y;
+        stencilConfig.last_tile_size[0] = last_tile_size_x;
+        stencilConfig.last_tile_size[1] = last_tile_size_y;
+        stencilConfig.tile_count[0] = tile_count_x;
+        stencilConfig.tile_count[1] = tile_count_y;
+    #ifdef DEBUG_LOG
+        // print generated memconfig
+        printf("|HLS memconfig| start_offset:%u total_size_bytes:%u total_xblocks:%u isContinous:%d\n",
+            (unsigned int)memconfig.start_offset,
+            (unsigned int)memconfig.total_size_bytes,
+            (unsigned int)memconfig.total_xblocks,
+            (int)memconfig.isContinous);
+        printf("|HLS memconfig| tile_count_x:%u tile_size_x:%u last_tile_size_x:%u effective_tile_size_x:%u\n",
+            (unsigned int)memconfig.tile_count_x,
+            (unsigned int)memconfig.tile_size_x,
+            (unsigned int)memconfig.last_tile_size_x,
+            (unsigned int)memconfig.effective_tile_size_x);
+        printf("|HLS memconfig| tile_count_y:%u tile_size_y:%u last_tile_size_y:%u effective_tile_size_y:%u grid_xblocks:%u grid_size_y:%u\n",
+            (unsigned int)memconfig.tile_count_y,
+            (unsigned int)memconfig.tile_size_y,
+            (unsigned int)memconfig.last_tile_size_y,
+            (unsigned int)memconfig.effective_tile_size_y,
+            (unsigned int)memconfig.grid_xblocks,
+            (unsigned int)memconfig.grid_size_y);
+        printf("|HLS memconfig| start_z:%u end_z:%u z_diff:%u\n",
+            (unsigned int)memconfig.start_z,
+            (unsigned int)memconfig.end_z,
+            (unsigned int)(memconfig.end_z - memconfig.start_z));
+        // print generated stencilConfig
+        printf("|HLS stencilConfig| grid_size:%u %u %u dim:%u tiling_dim:%u outer_loop_limit:%u\n",
+            (unsigned int)stencilConfig.grid_size[0],
+            (unsigned int)stencilConfig.grid_size[1],
+            (unsigned int)stencilConfig.grid_size[2],
+            (unsigned int)stencilConfig.dim,
+            (unsigned int)stencilConfig.tiling_dim,
+            (unsigned int)stencilConfig.outer_loop_limit);
+        printf("|HLS stencilConfig| tile_size:%u %u last_tile_size:%u %u tile_count:%u %u\n",
+            (unsigned int)stencilConfig.tile_size[0],
+            (unsigned int)stencilConfig.tile_size[1],
+            (unsigned int)stencilConfig.last_tile_size[0],
+            (unsigned int)stencilConfig.last_tile_size[1],
+            (unsigned int)stencilConfig.tile_count[0],
+            (unsigned int)stencilConfig.tile_count[1]);
+        // Call the dataflow function for tiled read and write operations
+    #endif
+
+    readWriteTiledDataflow<AXI_M_WIDTH, 1, 32>(mem_in_b1, mem_in_b2, mem_out_b1, mem_out_b2, memconfig, stencilConfig);
 }

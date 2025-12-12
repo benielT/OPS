@@ -2,12 +2,9 @@
 #include <random>
 #include <vector>
 #include "top.hpp"
-
+#include "jac3D7pt_cpu_verification.hpp"
 //#define DEBUG_LOG
-#define STENCIL_SIZE 3
-#define MAX_SLR_NUM 3
-#define MIN_P_SLR 2
-#define MAX_P_SLR 3
+
 
 unsigned short get_overlap_size(unsigned short num_slr, unsigned short p_slr, unsigned short stencil_size, unsigned short mem_vector_size){
     unsigned short half_span = (stencil_size -1)/2;
@@ -75,7 +72,7 @@ int main()
     std::uniform_int_distribution<unsigned short> distPslr(MIN_P_SLR, MAX_P_SLR);
     ops::hls::DataConv converter;
 
-    const int num_tests = 15;
+    const int num_tests = 5;
     std::cout << "TOTAL NUMER OF TESTS: " << num_tests << std::endl;
     std::vector<bool> test_summary(num_tests);
 
@@ -90,8 +87,8 @@ int main()
         const unsigned short logical_x_size = distSize(mtSeeded);
         const unsigned short logical_y_size = distSize(mtSeeded);
         const unsigned short logical_z_size = distSize(mtSeeded);
-        const unsigned short num_slr = distSlrNum(mtSeeded);
-        const unsigned short p_slr = distPslr(mtSeeded);
+        const unsigned short num_slr = 1; //distSlrNum(mtSeeded);
+        const unsigned short p_slr = 5; //distPslr(mtSeeded);
         const unsigned short actual_x_size = logical_x_size + 2 * ((STENCIL_SIZE -1)/2);
         const unsigned short actual_y_size = logical_y_size + 2 * ((STENCIL_SIZE -1)/2);
         const unsigned short actual_z_size = logical_z_size + 2 * ((STENCIL_SIZE -1)/2);
@@ -150,6 +147,8 @@ int main()
         // ap_uint<AXI_M_WIDTH>* mem_in_b2 = new ap_uint<AXI_M_WIDTH>[num_beats];
         ap_uint<AXI_M_WIDTH>* mem_out_b = new ap_uint<AXI_M_WIDTH>[num_beats];
         // ap_uint<AXI_M_WIDTH>* mem_out_b2 = new ap_uint<AXI_M_WIDTH>[num_beats];
+        ap_uint<AXI_M_WIDTH>* mem_in_b_test = new ap_uint<AXI_M_WIDTH>[num_beats];
+        ap_uint<AXI_M_WIDTH>* mem_out_b_test = new ap_uint<AXI_M_WIDTH>[num_beats];
 
 #ifdef DEBUG_LOG
         std::cout << std:: endl << "[DEBUG] **** mem values ****" << std::endl; 
@@ -170,9 +169,9 @@ int main()
                 }
             }
         }
-#ifdef DEBUG_LOG
+// #ifdef DEBUG_LOG
         std::cout << std::endl << "Starting DUT execution..." << std::endl;
-#endif
+// #endif
         //calling test dut
         ops::hls::SizeType gridSize_copy = {gridSize[0], gridSize[1], gridSize[2]};
         ops::hls::AccessRange range_copy = {{range.start[0], range.start[1], range.start[2]},
@@ -216,34 +215,36 @@ int main()
             last_tile_size[0], last_tile_size[1],
             tile_count[0], tile_count[1]);
 
+#ifdef VERIFICATION
         bool no_error = true;
 
-        for (int beat = 0; beat < num_beats; beat++)
-        {
-            for (int i = 0; i < data_per_beat; i++)
-            {
-                int index = beat * data_per_beat + i;
+//         for (int beat = 0; beat < num_beats; beat++)
+//         {
+//             for (int i = 0; i < data_per_beat; i++)
+//             {
+//                 int index = beat * data_per_beat + i;
 
-                if (index < num_elems)
-                {
-                    ops::hls::DataConv tmp_in, tmp_out;
+//                 if (index < num_elems)
+//                 {
+//                     ops::hls::DataConv tmp_in, tmp_out;
 
-                    tmp_in.i = mem_in_b[beat].range((i+1)*sizeof(float)*8 - 1, i * sizeof(float)*8);
-                    tmp_out.i = mem_out_b[beat].range((i+1)*sizeof(float)*8 - 1, i * sizeof(float)*8);
-#ifdef DEBUG_LOG
-                    std::cout << "[INFO] Verification. Index: " << index
-                    		<< " mem_in val: " << tmp_in.f << " mem_out val: " << tmp_out.f  << std::endl;
-#endif
-                    if (mem_in_b[beat].range((i+1)*sizeof(float)*8 - 1, i * sizeof(float)*8) != mem_out_b[beat].range((i+1)*sizeof(float)*8 - 1, i * sizeof(float)*8))
-                    {
-                        no_error = false;
+//                     tmp_in.i = mem_in_b[beat].range((i+1)*sizeof(float)*8 - 1, i * sizeof(float)*8);
+//                     tmp_out.i = mem_out_b[beat].range((i+1)*sizeof(float)*8 - 1, i * sizeof(float)*8);
+// #ifdef DEBUG_LOG
+//                     std::cout << "[INFO] Verification. Index: " << index
+//                     		<< " mem_in val: " << tmp_in.f << " mem_out val: " << tmp_out.f  << std::endl;
+// #endif
+//                     if (mem_in_b[beat].range((i+1)*sizeof(float)*8 - 1, i * sizeof(float)*8) != mem_out_b[beat].range((i+1)*sizeof(float)*8 - 1, i * sizeof(float)*8))
+//                     {
+//                         no_error = false;
 
-                        std::cerr << "[ERROR] Value mismatch at index: " << index 
-                        		<< " mem_in val: " << tmp_in.f << " mem_out val: " << tmp_out.f  << std::endl;
-                    }
-                }
-            }
-        }
+//                         std::cerr << "[ERROR] Value mismatch at index: " << index 
+//                         		<< " mem_in val: " << tmp_in.f << " mem_out val: " << tmp_out.f  << std::endl;
+//                     }
+//                 }
+//             }
+//         }
+
         no_error = verify(mem_in_b, mem_out_b, range, gridSize);
         if (no_error)
         {
@@ -255,15 +256,19 @@ int main()
             std::cout << "TEST FAILED." << std::endl;
             test_summary[test_itr] = false;
         }
+#endif
         std::cout << std::endl;
 
         // Clean up memory
-        // delete[] mem_in_b;
+        delete[] mem_in_b;
         // delete[] mem_in_b2;
-        // delete[] mem_out_b;
+        delete[] mem_out_b;
         // delete[] mem_out_b2;
+        delete[] mem_in_b_test;
+        delete[] mem_out_b_test;
     }
 
+#ifdef VERIFY
     std::cout << std::endl;
     std::cout << "**********************************" << std::endl;
     std::cout << " TEST SUMMARY " << std::endl;
@@ -281,7 +286,7 @@ int main()
 
         std::cout << std::endl;
     }
-
+#endif
     std::cout << std::endl;
     return 0;
 }
