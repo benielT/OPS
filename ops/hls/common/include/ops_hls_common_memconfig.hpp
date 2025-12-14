@@ -84,11 +84,11 @@ namespace hls {
     void genTileMetadata(
             SizeType& grid_size, 
             AccessRange& range, 
-            SizeType& tile_size,
-            SizeType& overlap_size,
-            SizeType& effective_tile_size,
-            SizeType& last_tile_size,
-            SizeType& tile_count,
+            SizeType2d& tile_size,
+            SizeType2d& overlap_size,
+            SizeType2d& effective_tile_size,
+            SizeType2d& last_tile_size,
+            SizeType2d& tile_count,
             bool isWidMem = true)
     {
 #ifndef __SYTHESIS__
@@ -174,11 +174,11 @@ namespace hls {
     void genMemConfigTileV2(
             SizeType& gridSize, 
             AccessRange& range, 
-            SizeType& tile_size,
-            SizeType& tile_count,
-            SizeType& overlap_size,
-            SizeType& effective_tile_size,
-            SizeType& last_tile_size,
+            SizeType2d& tile_size,
+            SizeType2d& tile_count,
+            SizeType2d& overlap_size,
+            SizeType2d& effective_tile_size,
+            SizeType2d& last_tile_size,
             MemConfigTile& config)
     {
 #ifndef __SYTHESIS__
