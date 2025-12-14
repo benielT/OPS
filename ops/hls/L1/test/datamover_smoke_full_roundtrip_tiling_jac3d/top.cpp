@@ -631,11 +631,11 @@ void dut(ap_uint<AXI_M_WIDTH>* mem_in_b1,
     ops::hls::AccessRange range = {{range_start_0, range_start_1, range_start_2},
                                    {range_end_0, range_end_1, range_end_2},
                                    dim};
-    ops::hls::SizeType tileSize = {tile_size_x, tile_size_y, 1};
-    ops::hls::SizeType overlapSize = {overlap_size_x, overlap_size_y, 0};
-    ops::hls::SizeType effectiveTileSize = {effective_tile_size_x, effective_tile_size_y, 1};
-    ops::hls::SizeType lastTileSize = {last_tile_size_x, last_tile_size_y, 1};
-    ops::hls::SizeType tileCount = {tile_count_x, tile_count_y, 1};
+    ops::hls::SizeType2d tileSize = {tile_size_x, tile_size_y};
+    ops::hls::SizeType2d overlapSize = {overlap_size_x, overlap_size_y};
+    ops::hls::SizeType2d effectiveTileSize = {effective_tile_size_x, effective_tile_size_y};
+    ops::hls::SizeType2d lastTileSize = {last_tile_size_x, last_tile_size_y};
+    ops::hls::SizeType2d tileCount = {tile_count_x, tile_count_y};
     ops::hls::MemConfigTile memconfig;
     ops::hls::StencilConfigCoreTiled stencilConfig;
     // printf("|HLS DEBUG_LOG|%s| generating memconfig and stencilConfig\n", __func__);

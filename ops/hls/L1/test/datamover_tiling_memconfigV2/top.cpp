@@ -4,11 +4,11 @@
 //template <unsigned int MEM_DATA_WIDTH, unsigned int STREAM_DATA_WIDTH, unsigned int BURST_SIZE>
 void dut(ops::hls::SizeType& gridSize,
 		ops::hls::AccessRange& range,
-        ops::hls::SizeType& tile_size,
-        ops::hls::SizeType& tile_count,
-        ops::hls::SizeType& overlap_size,
-        ops::hls::SizeType& effective_tile_size,
-        ops::hls::SizeType& last_tile_size,
+        ops::hls::SizeType2d& tile_size,
+        ops::hls::SizeType2d& tile_count,
+        ops::hls::SizeType2d& overlap_size,
+        ops::hls::SizeType2d& effective_tile_size,
+        ops::hls::SizeType2d& last_tile_size,
         ops::hls::MemConfigTile& memconfig)
 {
 #pragma HLS TOP

@@ -112,7 +112,7 @@ int main()
     std::uniform_int_distribution<> distPslr(MIN_P_SLR, MAX_P_SLR);
     ops::hls::DataConv converter;
 
-    const int num_tests  = 1;
+    const int num_tests  = 15;
     std::cout << "TOTAL NUMER OF TESTS: " << num_tests << std::endl;
     std::vector<bool> test_summary(num_tests);
 
@@ -172,23 +172,23 @@ int main()
         ops::hls::MemConfigTile memconfig;
 
         //initializing tile meta to use with ops::hls::genTileMetaData
-        ops::hls::SizeType tile_size = {(unsigned short)TILE_SIZE_X, (unsigned short)TILE_SIZE_Y, (unsigned short)1};
-        ops::hls::SizeType tile_count = {(unsigned short)tile_count_x, (unsigned short)tile_count_y, (unsigned short)1};
-        ops::hls::SizeType overlap_size = {(unsigned short)overlap_size_x, (unsigned short)overlap_size_y, (unsigned short)0};
-        ops::hls::SizeType effective_tile_size = {(unsigned short)(TILE_SIZE_X - overlap_size_x), (unsigned short)(TILE_SIZE_Y - overlap_size_y), (unsigned short)1};
-        ops::hls::SizeType last_tile_size = {(unsigned short)0, (unsigned short)0, (unsigned short)0};
+        ops::hls::SizeType2d tile_size = {(unsigned short)TILE_SIZE_X, (unsigned short)TILE_SIZE_Y};
+        ops::hls::SizeType2d tile_count = {(unsigned short)tile_count_x, (unsigned short)tile_count_y};
+        ops::hls::SizeType2d overlap_size = {(unsigned short)overlap_size_x, (unsigned short)overlap_size_y};
+        ops::hls::SizeType2d effective_tile_size = {(unsigned short)(TILE_SIZE_X - overlap_size_x), (unsigned short)(TILE_SIZE_Y - overlap_size_y)};
+        ops::hls::SizeType2d last_tile_size = {(unsigned short)0, (unsigned short)0};
         
     #ifdef DEBUG_LOG
-        std::cout << "[DEBUG] tile_size: (" << tile_size[0] << ", " << tile_size[1] << ", " << tile_size[2] << ")" << std::endl;
-        std::cout << "[DEBUG] tile_count: (" << tile_count[0] << ", " << tile_count[1] << ", " << tile_count[2] << ")" << std::endl;
-        std::cout << "[DEBUG] overlap_size: (" << overlap_size[0] << ", " << overlap_size[1] << ", " << overlap_size[2] << ")" << std::endl;
-        std::cout << "[DEBUG] effective_tile_size: (" << effective_tile_size[0] << ", " << effective_tile_size[1] << ", " << effective_tile_size[2] << ")" << std::endl;
+        std::cout << "[DEBUG] tile_size: (" << tile_size[0] << ", " << tile_size[1] << ")" << std::endl;
+        std::cout << "[DEBUG] tile_count: (" << tile_count[0] << ", " << tile_count[1] << ")" << std::endl;
+        std::cout << "[DEBUG] overlap_size: (" << overlap_size[0] << ", " << overlap_size[1] << ")" << std::endl;
+        std::cout << "[DEBUG] effective_tile_size: (" << effective_tile_size[0] << ", " << effective_tile_size[1] << ")" << std::endl;
     #endif
         ops::hls::SizeType gridSize_copy = {gridSize[0], gridSize[1], gridSize[2]};
         ops::hls::AccessRange range_copy = {{range.start[0], range.start[1], range.start[2]},
                                                 {range.end[0], range.end[1], range.end[2]}, range.dim};
-        ops::hls::SizeType tile_size_copy = {tile_size[0], tile_size[1], tile_size[2]};
-        ops::hls::SizeType overlap_size_copy = {overlap_size[0], overlap_size[1], overlap_size[2]};
+        ops::hls::SizeType2d tile_size_copy = {tile_size[0], tile_size[1]};
+        ops::hls::SizeType2d overlap_size_copy = {overlap_size[0], overlap_size[1]};
 
         // SizeType& gridSize, 
         //     AccessRange& range, 

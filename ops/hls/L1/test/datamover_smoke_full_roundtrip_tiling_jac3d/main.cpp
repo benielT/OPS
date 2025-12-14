@@ -2,7 +2,7 @@
 #include <random>
 #include <vector>
 #include "top.hpp"
-#include "jac3D7pt_cpu_verification.hpp"
+// #include "jac3D7pt_cpu_verification.hpp"
 //#define DEBUG_LOG
 
 
@@ -176,11 +176,11 @@ int main()
         ops::hls::SizeType gridSize_copy = {gridSize[0], gridSize[1], gridSize[2]};
         ops::hls::AccessRange range_copy = {{range.start[0], range.start[1], range.start[2]},
                                                 {range.end[0], range.end[1], range.end[2]}, range.dim};
-        ops::hls::SizeType tile_size_copy = {(unsigned short)tile_size_x, (unsigned short) tile_size_y, 1};
-        ops::hls::SizeType overlap_size_copy = {(unsigned short)overlap_size_x, (unsigned short)overlap_size_y, 1};
-        ops::hls::SizeType tile_count;
-        ops::hls::SizeType effective_tile_size;
-        ops::hls::SizeType last_tile_size;
+        ops::hls::SizeType2d tile_size_copy = {(unsigned short)tile_size_x, (unsigned short) tile_size_y};
+        ops::hls::SizeType2d overlap_size_copy = {(unsigned short)overlap_size_x, (unsigned short)overlap_size_y};
+        ops::hls::SizeType2d tile_count;
+        ops::hls::SizeType2d effective_tile_size;
+        ops::hls::SizeType2d last_tile_size;
 
 #ifdef DEBUG_LOG
         // Input to the tile metadata generator
@@ -188,8 +188,8 @@ int main()
         std::cout << "Grid Size: (" << gridSize_copy[0] << ", " << gridSize_copy[1] << ", " << gridSize_copy[2] << ")" << std::endl;
         std::cout << "Range: (" << range_copy.start[0] << ", " << range_copy.start[1] << ", " << range_copy.start[2] << ") -> (" 
                   << range_copy.end[0] << ", " << range_copy.end[1] << ", " << range_copy.end[2] << ")" << std::endl;
-        std::cout << "Tile Size: (" << tile_size_copy[0] << ", " << tile_size_copy[1] << ", " << tile_size_copy[2] << ")" << std::endl;
-        std::cout << "Overlap Size: (" << overlap_size_copy[0] << ", " << overlap_size_copy[1] << ", " << overlap_size_copy[2] << ")" << std::endl;
+        std::cout << "Tile Size: (" << tile_size_copy[0] << ", " << tile_size_copy[1]  << ")" << std::endl;
+        std::cout << "Overlap Size: (" << overlap_size_copy[0] << ", " << overlap_size_copy[1] << ")" << std::endl;
 #endif
         // Generate Tile Metadata
         ops::hls::genTileMetadata<AXI_M_WIDTH, 32>(gridSize_copy, range_copy, tile_size_copy, 
@@ -200,8 +200,8 @@ int main()
             std::cout << "Grid Size: (" << gridSize_copy[0] << ", " << gridSize_copy[1] << ", " << gridSize_copy[2] << ")" << std::endl;
             std::cout << "Range: (" << range_copy.start[0] << ", " << range_copy.start[1] << ", " << range_copy.start[2] << ") -> (" 
                   << range_copy.end[0] << ", " << range_copy.end[1] << ", " << range_copy.end[2] << ")" << std::endl;
-            std::cout << "Tile Size: (" << tile_size_copy[0] << ", " << tile_size_copy[1] << ", " << tile_size_copy[2] << ")" << std::endl;
-            std::cout << "Overlap Size: (" << overlap_size_copy[0] << ", " << overlap_size_copy[1] << ", " << overlap_size_copy[2] << ")" << std::endl;
+            std::cout << "Tile Size: (" << tile_size_copy[0] << ", " << tile_size_copy[1]  << ")" << std::endl;
+            std::cout << "Overlap Size: (" << overlap_size_copy[0] << ", " << overlap_size_copy[1]  << ")" << std::endl;
             std::cout << "Tile Count: (" << tile_count[0] << ", " << tile_count[1] << ")" << std::endl;
             std::cout << "Effective Tile Size: (" << effective_tile_size[0] << ", " << effective_tile_size[1] << ")" << std::endl;
             std::cout << "Last Tile Size: (" << last_tile_size[0] << ", " << last_tile_size[1] << ")" << std::endl;
