@@ -37,6 +37,31 @@ class ParseError(Exception):
             logging.error(f"[PARSE_ERROR]: {self.message}")
             return f"Parse error: {self.message}"
 
+@dataclass
+class CodegenError(Exception):
+    message: str
+    loc: Optional[Location] = None
+
+    def __str__(self) -> str:
+        if self.loc:
+            logging.error(f"[CODEGEN_ERROR] at {self.loc}: {self.message}")
+            return f"Codegen error at {self.loc}: {self.message}"
+        else:
+            logging.error(f"[CODEGEN_ERROR]: {self.message}")
+            return f"Codegen error: {self.message}"
+
+@dataclass
+class CodeGenWarning(Warning):
+    message: str
+    loc: Optional[Location] = None
+
+    def __str__(self) -> str:
+        if self.loc:
+            logging.warning(f"[CODEGEN_WARNING] at {self.loc}: {self.message}")
+            return f"Codegen warning at {self.loc}: {self.message}"
+        else:
+            logging.warning(f"[CODEGEN_WARNING]: {self.message}")
+            return f"Codegen warning: {self.message}"
 
 @dataclass
 class Entity:
@@ -116,6 +141,12 @@ class Program:
     tiling: Optional[bool] = False
     tile_sizes: List[int] = field(default_factory=lambda: [-1, -1, -1])  # x,y,z
 
+    def getTileSizes(self) -> Union[List[int], None]:
+        if self.tiling:
+            return self.tile_sizes[:self.ndim]
+        else:
+            return None
+        
     def findEntities(self, name: str, scope: List[str] = []) -> List[Entity]:
         def in_scope(entity: Entity):
             return len(entity.scope) <= len(scope) and all(map(lambda s1, s2: s1 == s2, zip(entity.scope, scope)))

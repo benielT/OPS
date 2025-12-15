@@ -201,9 +201,14 @@ def main(argv=None) -> None:
             
         #Calling Optimizer for FPGA
         if target.name == "hls": 
+            logging.info("Code-gen : Starting optimization phase for target: " + target.name)
             for program in app.programs:
+                logging.info("Optimizing program: %s", str(program.path))
                 scheme.optimize(program, app)
 
+        # Check config and apply contrains and overides if any conflicts
+        target.verify_config(app)
+        
         logging.info("Code-gen : Generating target specific template, scheme - " + scheme.target.name)
         codegen(args, scheme, app, target.config, args.force_soa)
         
