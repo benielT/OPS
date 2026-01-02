@@ -426,7 +426,7 @@ public:
                         // access_idx = 9
                         ops::hls::DataConv arg0_tmpConverter_2_1_1_0;
                         arg0_tmpConverter_2_1_1_0.i = arg0_widenStencilValues_4.range(s_datatype_size * (0 + 1) - 1, s_datatype_size * 0);
-                        arg0_rowArr_1_1[9] = arg0_tmpConverter_2_1_1_0.f;
+                        arg0_rowArr_1_1[vector_factor] = arg0_tmpConverter_2_1_1_0.f;
                     }
 
                     process: for (unsigned short x = 0; x < vector_factor; x++)
