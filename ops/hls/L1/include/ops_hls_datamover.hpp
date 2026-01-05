@@ -639,6 +639,406 @@ void stream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out,
 			, __func__);
 #endif
 }
+
+/**************************** TILED ops  ****************************/
+
+template <unsigned short MEM_DATA_WIDTH, unsigned short IN_ITR=2, unsigned short BURST_SIZE=32>
+static void stridedTileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, const ops::hls::MemConfigTile& config, unsigned short stride_start = 0)
+{
+    // #pragma HLS INLINE off
+    #ifdef DEBUG_LOG
+        printf("|HLS DEBUG_LOG|%s| reading tile. tile_start:%d, tile_size:%d, stride_start:%d\n", __func__, config.start_offset, config.total_size_bytes, stride_start);
+     #endif
+
+    const unsigned short z_diff = config.end_z - config.start_z;
+    const unsigned short tile_size_y_mul_z_diff = config.tile_size_y * z_diff;
+    const unsigned short last_tile_size_y_mul_z_diff = config.last_tile_size_y * z_diff;
+
+    for (unsigned short tile_y = 0; tile_y < config.tile_count_y; tile_y++)
+    {
+        const unsigned short tile_size_y = tile_y == (config.tile_count_y -1) ? config.last_tile_size_y : config.tile_size_y;
+        const unsigned short realized_tile_size_y_mul_z_diff = tile_y == (config.tile_count_y -1) ? last_tile_size_y_mul_z_diff : tile_size_y_mul_z_diff;
+        const unsigned int tile_y_offset = tile_y * config.effective_tile_size_y * config.grid_xblocks;
+        // const unsigned int abs_row_id_y_offset = config.tile_count_x * tile_y * tile_size_y_mul_z_diff;
+
+        for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++)
+        {
+            const unsigned int abs_row_id_x_offset = tile_x * realized_tile_size_y_mul_z_diff;
+            const unsigned int tile_x_offset = tile_x * config.effective_tile_size_x; 
+
+            for (unsigned short k = 0; k < z_diff; k++)
+            {
+                // const unsigned int abs_row_id_y_offset_k = k * realized_tile_size_y_mul_z_diff;
+                const unsigned int k_offset = k * config.grid_xblocks * config.grid_size_y;
+
+                for (unsigned short j = stride_start; j < tile_size_y; j+=2)
+                {
+                    // #pragma HLS PIPELINE //TODO: do we need this?
+                    const unsigned short tile_size_x = tile_x == (config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
+                    
+                    unsigned int offset_1 = config.start_offset + tile_x_offset;
+                    unsigned int offset_2 = k_offset + tile_y_offset;
+                    unsigned int offset_3 = offset_1 + offset_2;
+                    unsigned int j_offset  = j * config.grid_xblocks;
+                    unsigned int offset = offset_3 + j_offset;
+
+                    #ifdef DEBUG_LOG
+                        printf("|HLS DEBUG_LOG|%s| offset:%u tile_y:%u tile_x:%u k:%u j:%u tile_size_x:%u\n",
+                               __func__,
+                               (unsigned int)offset,
+                               (unsigned int)tile_y,
+                               (unsigned int)tile_x,
+                               (unsigned int)k,
+                               (unsigned int)j,
+                               (unsigned int)tile_size_x);
+                    #endif
+                    mem2stream<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>((ap_uint<MEM_DATA_WIDTH>* )(mem_in + offset), strm_out, tile_size_x);
+
+                }
+            }
+        }
+    }
+}
+
+
+template <unsigned short MEM_DATA_WIDTH, unsigned short IN_ITR=2, unsigned short BURST_SIZE=32>
+static void stridedTileStream2mem(hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, ap_uint<MEM_DATA_WIDTH>* mem_out, const ops::hls::MemConfigTile& config, unsigned short stride_start = 0)
+{
+    // #pragma HLS INLINE off
+    #ifdef DEBUG_LOG
+        printf("|HLS DEBUG_LOG|%s| writing tile. tile_start:%d, tile_size:%d\n", __func__, config.start_offset, config.total_size_bytes);
+    #endif
+
+    const unsigned short z_diff = config.end_z - config.start_z;
+    const unsigned short tile_size_y_mul_z_diff = config.tile_size_y * z_diff;
+    const unsigned short last_tile_size_y_mul_z_diff = config.last_tile_size_y * z_diff;
+
+    for (unsigned short tile_y = 0; tile_y < config.tile_count_y; tile_y++)
+    {
+        const unsigned short tile_size_y = tile_y == (config.tile_count_y -1) ? config.last_tile_size_y : config.tile_size_y;
+        const unsigned short realized_tile_size_y_mul_z_diff = tile_y == (config.tile_count_y -1) ? last_tile_size_y_mul_z_diff : tile_size_y_mul_z_diff;
+        const unsigned int tile_y_offset = tile_y * config.effective_tile_size_y * config.grid_xblocks;
+
+        for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++)
+        {
+            const unsigned int abs_row_id_x_offset = tile_x * realized_tile_size_y_mul_z_diff;
+            const unsigned int tile_x_offset = tile_x * config.effective_tile_size_x; 
+
+            for (unsigned short k = 0; k < z_diff; k++)
+            {
+                const unsigned int k_offset = k * config.grid_xblocks * config.grid_size_y;
+
+                for (unsigned short j = stride_start; j < tile_size_y; j+=2)
+                {
+                    // #pragma HLS PIPELINE //TODO: Need to check whether this is needed
+                    const unsigned short tile_size_x = tile_x == (config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
+                    
+                    unsigned int offset_1 = config.start_offset + tile_x_offset;
+                    unsigned int offset_2 = k_offset + tile_y_offset;
+                    unsigned int offset_3 = offset_1 + offset_2;
+                    unsigned int j_offset  = j * config.grid_xblocks;
+                    unsigned int offset = offset_3 + j_offset;
+                    #ifdef DEBUG_LOG
+                        printf("|HLS DEBUG_LOG|%s| offset:%u tile_y:%u tile_x:%u k:%u j:%u tile_size_x:%u\n",
+                               __func__,
+                               (unsigned int)offset,
+                               (unsigned int)tile_y,
+                               (unsigned int)tile_x,
+                               (unsigned int)k,
+                               (unsigned int)j,
+                               (unsigned int)tile_size_x);
+                    #endif
+                    stream2mem<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>((ap_uint<MEM_DATA_WIDTH>* )(mem_out + offset), strm_in, tile_size_x);
+                }
+            }
+        }
+    }
+}
+
+template <unsigned short MEM_DATA_WIDTH,  unsigned short IN_ITR=2>
+static void combineSteams(
+    hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in_b1,
+    hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in_b2,
+    hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out,
+    const ops::hls::MemConfigTile& config)
+{
+    // #pragma HLS INLINE off
+    const unsigned short z_diff = config.end_z - config.start_z;
+    const unsigned short tile_size_y_mul_z_diff = config.tile_size_y * z_diff;
+    const unsigned short last_tile_size_y_mul_z_diff = config.last_tile_size_y * z_diff;
+
+    for (unsigned short tile_y = 0; tile_y < config.tile_count_y; tile_y++)
+    {
+        const unsigned short tile_size_y = tile_y == (config.tile_count_y -1) ? config.last_tile_size_y : config.tile_size_y;
+        // const unsigned short realized_tile_size_y_mul_z_diff = tile_y == (config.tile_count_y -1) ? last_tile_size_y_mul_z_diff : tile_size_y_mul_z_diff;
+        // const unsigned int tile_y_offset = tile_y * config.effective_tile_size_y * config.grid_xblocks;
+
+        for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++)
+        {
+            // const unsigned int abs_row_id_x_offset = tile_x * realized_tile_size_y_mul_z_diff;
+            // const unsigned int tile_x_offset = tile_x * config.effective_tile_size_x;
+
+            for (unsigned short k = 0; k < z_diff; k++)
+            {
+                // const unsigned int abs_row_id_y_offset_k = k * realized_tile_size_y_mul_z_diff;
+
+                for (unsigned short j = 0; j < tile_size_y; j++)
+                {
+                    const unsigned short tile_size_x = tile_x == (config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
+                    
+                    // unsigned int abs_x_row_id = j + abs_row_id_y_offset_k + abs_row_id_x_offset + abs_row_id_y_offset;
+                    unsigned int local_tile_row_id = j;
+
+                    for (unsigned short i = 0; i < tile_size_x; i++)
+                    {
+#pragma HLS PIPELINE II=IN_ITR
+                        if (local_tile_row_id % 2 == 0)
+                        {
+                            #ifdef DEBUG_LOG
+                                printf("|HLS DEBUG_LOG|%s| reading from bank 1. tile_y:%u tile_x:%u k:%u j:%u i:%u local_tile_row_id:%u\n",
+                                       __func__,
+                                       (unsigned int)tile_y,
+                                       (unsigned int)tile_x,
+                                       (unsigned int)k,
+                                       (unsigned int)j,
+                                       (unsigned int)i,
+                                       (unsigned int)local_tile_row_id);
+                            #endif
+                            ap_uint<MEM_DATA_WIDTH> data_b1 = strm_in_b1.read();
+                            #ifdef DEBUG_LOG
+                                #ifndef __SYNTHESIS__
+                                    printf("   |HLS DEBUG_LOG||%s| read data_b1 val=(", __func__);
+                                    ops::hls::DataConv tmp;
+                                    for (unsigned n = 0; n < MEM_DATA_WIDTH; n+=32)
+                                    {
+                                        tmp.i = data_b1.range(n + 32 - 1, n);
+                                        printf("%f,", tmp.f);
+                                    }
+                                    printf(")\n");
+                                #endif
+                            #endif
+                            strm_out.write(data_b1);
+                        }
+                        else
+                        {
+                            #ifdef DEBUG_LOG
+                                printf("|HLS DEBUG_LOG|%s| reading from bank 2. tile_y:%u tile_x:%u k:%u j:%u i:%u local_tile_row_id:%u\n",
+                                        __func__,
+                                        (unsigned int)tile_y,
+                                        (unsigned int)tile_x,
+                                        (unsigned int)k,
+                                        (unsigned int)j,
+                                        (unsigned int)i,
+                                        (unsigned int)local_tile_row_id);
+                            #endif
+                            ap_uint<MEM_DATA_WIDTH> data_b2 = strm_in_b2.read();
+                            #ifdef DEBUG_LOG
+                                #ifndef __SYNTHESIS__
+                                    printf("   |HLS DEBUG_LOG||%s| read data_b2 val=(", __func__);
+                                    ops::hls::DataConv tmp;
+                                    for (unsigned n = 0; n < MEM_DATA_WIDTH; n+=32)
+                                    {
+                                        tmp.i = data_b2.range(n + 32 - 1, n);
+                                        printf("%f,", tmp.f);
+                                    }
+                                    printf(")\n");
+                                #endif
+                            #endif
+                            strm_out.write(data_b2);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+template <unsigned short MEM_DATA_WIDTH, unsigned short IN_ITR=2>
+static void splitStream(
+    hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
+    hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out_b1,
+    hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out_b2,
+    const ops::hls::MemConfigTile& config)
+{
+    // #pragma HLS INLINE off
+    const unsigned short z_diff = config.end_z - config.start_z;
+    const unsigned short tile_size_y_mul_z_diff = config.tile_size_y * z_diff;
+    const unsigned short last_tile_size_y_mul_z_diff = config.last_tile_size_y * z_diff;
+
+    for (unsigned short tile_y = 0; tile_y < config.tile_count_y; tile_y++)
+    {
+        const unsigned short tile_size_y = tile_y == (config.tile_count_y -1) ? config.last_tile_size_y : config.tile_size_y;
+        // const unsigned short realized_tile_size_y_mul_z_diff = tile_y == (config.tile_count_y -1) ? last_tile_size_y_mul_z_diff : tile_size_y_mul_z_diff;
+
+        for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++)
+        {
+            // const unsigned int abs_row_id_x_offset = tile_x * realized_tile_size_y_mul_z_diff;
+
+            for (unsigned short k = 0; k < z_diff; k++)
+            {
+                // const unsigned int abs_row_id_y_offset_k = k * realized_tile_size_y_mul_z_diff;
+
+                for (unsigned short j = 0; j < tile_size_y; j++)
+                {
+                    const unsigned short tile_size_x = tile_x == (config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
+                    
+                    unsigned int local_tile_row_id = j;// + abs_row_id_y_offset_k;
+                    for (unsigned short i = 0; i < tile_size_x; i++)
+                    {
+#pragma HLS PIPELINE II=IN_ITR
+                        ap_uint<MEM_DATA_WIDTH> data = strm_in.read();
+                        #ifdef DEBUG_LOG
+                            #ifndef __SYNTHESIS__
+                                printf("   |HLS DEBUG_LOG||%s| read data val=(", __func__);
+                                ops::hls::DataConv tmp;
+                                for (unsigned n = 0; n < MEM_DATA_WIDTH; n+=32)
+                                {
+                                    tmp.i = data.range(n + 32 - 1, n);
+                                    printf("%f,", tmp.f);
+                                }
+                                printf(")\n");
+                            #endif
+                        #endif
+                        if (local_tile_row_id % 2 == 0)
+                        {
+                            #ifdef DEBUG_LOG
+                                printf("|HLS DEBUG_LOG|%s| writing to bank 1. tile_y:%u tile_x:%u k:%u j:%u i:%u local_tile_row_id:%u\n",
+                                       __func__,
+                                       (unsigned int)tile_y,
+                                       (unsigned int)tile_x,
+                                       (unsigned int)k,
+                                       (unsigned int)j,
+                                       (unsigned int)i,
+                                       (unsigned int)local_tile_row_id);
+                                printf("|HLS DEBUG_LOG|%s| writing data to bank 1\n", __func__);
+                            #endif
+                            strm_out_b1.write(data);
+                        }
+                        else
+                        {
+                            #ifdef DEBUG_LOG
+                                printf("|HLS DEBUG_LOG|%s| writing to bank 2. tile_y:%u tile_x:%u k:%u j:%u i:%u local_tile_row_id:%u\n",
+                                       __func__,
+                                       (unsigned int)tile_y,
+                                       (unsigned int)tile_x,
+                                       (unsigned int)k,
+                                       (unsigned int)j,
+                                       (unsigned int)i,
+                                       (unsigned int)local_tile_row_id);
+                                printf("|HLS DEBUG_LOG|%s| writing data to bank 2\n", __func__);
+                            #endif
+                            strm_out_b2.write(data);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * @brief 	mem2streamTiled reads from a memory location in tiled manner to an hls stream.
+ *  		This is optimized to read from AXI4 with burst and to utilize width maximum througput
+ *          by utilizing two banks to read from.
+ *
+ * @tparam MEM_DATA_WIDTH : Data width of the AXI4 port and the hls stream port
+ * @tparam IN_ITR: II of the mem read
+ * @tparam BURST_SIZE : Burst length of the AXI4 (max beats < 256)
+ * 
+ *
+ * @param mem_in : input memory port
+ * @param stream_out : output hls-stream
+ * @param config : MemconfigTile to guide reading
+ */
+template <unsigned short MEM_DATA_WIDTH,  unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
+void mem2streamTiled(ap_uint<MEM_DATA_WIDTH>* mem_in_b1,
+                ap_uint<MEM_DATA_WIDTH>* mem_in_b2,
+				::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out,
+				const ops::hls::MemConfigTile& config)
+{
+#ifdef DEBUG_LOG
+	printf("|HLS DEBUG_LOG|%s| starting\n", __func__);
+#endif
+	if (config.isContinous)
+	{
+#ifdef DEBUG_LOG
+	printf("|HLS DEBUG_LOG|%s| continuous read\n", __func__);
+#endif
+
+#ifdef DEBUG_LOG
+	printf("|HLS DEBUG_LOG|%s| init offset:%d, size_bytes:%d\n", __func__, config.start_offset, config.total_size_bytes);
+#endif
+	ops::hls::mem2stream<MEM_DATA_WIDTH>((ap_uint<MEM_DATA_WIDTH>* )(mem_in_b1 + config.start_offset), strm_out, config.total_xblocks);
+	}
+	else
+	{
+        static hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in_b1;
+        #pragma HLS STREAM variable = strm_in_b1
+        static hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in_b2;
+        #pragma HLS STREAM variable = strm_in_b2
+        #pragma HLS DATAFLOW
+        stridedTileMem2stream<MEM_DATA_WIDTH, IN_ITR, BURST_SIZE>(mem_in_b1, strm_in_b1, config, 0);
+        stridedTileMem2stream<MEM_DATA_WIDTH, IN_ITR, BURST_SIZE>(mem_in_b2, strm_in_b2, config, 1);
+        combineSteams<MEM_DATA_WIDTH, IN_ITR>(strm_in_b1, strm_in_b2, strm_out, config);
+	}
+#ifdef DEBUG_LOG
+	printf("|HLS DEBUG_LOG|%s| exiting.\n"
+			, __func__);
+#endif
+}
+
+/**
+ * @brief 	stream2memTiled writes from a stream to memory in tiled manner.
+ *  		This is optimized to write to AXI4 with burst and to utilize maximum throughput
+ *          by utilizing two banks to write to.
+ *
+ * @tparam MEM_DATA_WIDTH : Data width of the AXI4 port and the hls stream port
+ * @tparam IN_ITR: II of the mem write
+ * @tparam BURST_SIZE : Burst length of the AXI4 (max beats < 256)
+ *
+ * @param stream_in : input hls-stream
+ * @param mem_out_b1 : output memory port for bank 1
+ * @param mem_out_b2 : output memory port for bank 2
+ * @param config : MemConfigTile to guide writing
+ */
+template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
+void stream2memTiled(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
+                ap_uint<MEM_DATA_WIDTH>* mem_out_b1,
+                ap_uint<MEM_DATA_WIDTH>* mem_out_b2,
+				const ops::hls::MemConfigTile& config)
+{
+#ifdef DEBUG_LOG
+	printf("|HLS DEBUG_LOG|%s| starting\n", __func__);
+#endif
+	if (config.isContinous)
+	{
+#ifdef DEBUG_LOG
+		printf("|HLS DEBUG_LOG|%s| continuous write\n", __func__);
+#endif
+
+#ifdef DEBUG_LOG
+		printf("|HLS DEBUG_LOG|%s| init offset:%d, size_bytes:%d\n", __func__, config.start_offset, config.total_size_bytes);
+#endif
+		ops::hls::stream2mem<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>((ap_uint<MEM_DATA_WIDTH>* )(mem_out_b1 + config.start_offset), strm_in, config.total_xblocks);
+	}
+	else
+	{
+        static hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out_b1;
+        #pragma HLS STREAM variable = strm_out_b1
+        static hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out_b2;
+        #pragma HLS STREAM variable = strm_out_b2
+        #pragma HLS DATAFLOW
+        splitStream<MEM_DATA_WIDTH, IN_ITR>(strm_in, strm_out_b1, strm_out_b2, config);
+        stridedTileStream2mem<MEM_DATA_WIDTH, IN_ITR, BURST_SIZE>(strm_out_b1, mem_out_b1,  config, 0);
+        stridedTileStream2mem<MEM_DATA_WIDTH, IN_ITR, BURST_SIZE>(strm_out_b2, mem_out_b2,  config, 1);
+	}
+#ifdef DEBUG_LOG
+	printf("|HLS DEBUG_LOG|%s| exiting.\n"
+			, __func__);
+#endif
+}
+/****************************** END of TILED ops *******************************/
+
 /**
  * @brief stream2stream Converts from one hls-stream to another with different size.
  *
