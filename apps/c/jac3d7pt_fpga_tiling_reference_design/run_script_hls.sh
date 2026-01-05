@@ -95,13 +95,13 @@ else
     else
         if [[ "${PLATFORM}" == *"u280"* ]]; then
             parameter_sets=(
-                "10,10,10,108,1,1"
-                "10,10,10,108,4,2"
+                "60,60,1,108,1,200,100"
+                # "100,100,10,108,1,10,10"
                 # Add more parameter sets here as needed
             )
         else
             parameter_sets=(
-                "30,30,30,132,1,1"
+                "30,30,30,132,1,10,100"
                 # Add more parameter sets here as needed
             )
         fi
@@ -111,9 +111,9 @@ fi
 echo "Running application '${APP_NAME}' in '${TARGET_MODE}' mode with hardcoded parameters:"
 
 for params in "${parameter_sets[@]}"; do
-    IFS=',' read -r sizex sizey sizez iters batch bsize<<< "$params"
+    IFS=',' read -r sizex sizey sizez iters batch tilex tiley<<< "$params"
 
-    if [[ -z "$sizex" || -z "$sizey" || -z "$sizez" || -z "$iters" || -z "$batch" || -z "$bsize" ]]; then
+    if [[ -z "$sizex" || -z "$sizey" || -z "$sizez" || -z "$iters" || -z "$batch" || -z "$tilex" || -z "$tiley" ]]; then
         echo "Warning: Skipping invalid parameter set: $params"
         continue
     fi
@@ -128,21 +128,21 @@ for params in "${parameter_sets[@]}"; do
 
 
     echo "-----------------------------------------------------------------"
-    echo "Running with sizex=${sizex}, sizey=${sizey}, sizez=${sizez}, iters=${iters}, batch=${batch} b_size=${bsize}"
+    echo "Running with sizex=${sizex}, sizey=${sizey}, sizez=${sizez}, iters=${iters}, batch=${batch} tilex=${tilex} tiley=${tiley}"
     echo "-----------------------------------------------------------------"
 
 
     if [[ "${CXXFLAGS}" == *"-DPOWER_PROFILE"* ]]; then
         echo "Running HW mode with power profiling"
-            ${OPS_INSTALL_PATH}/../scripts/power_profile_hls.sh ${DEVICE_BDF} ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}_host ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}.xclbin -sizex="${sizex}" -sizey="${sizey}" -sizez="${sizez}" -iters="${iters}" -piter="${batch}" -bsize="${bsize}"
+            ${OPS_INSTALL_PATH}/../scripts/power_profile_hls.sh ${DEVICE_BDF} ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}_host ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}.xclbin -sizex="${sizex}" -sizey="${sizey}" -sizez="${sizez}" -iters="${iters}" -piter="${batch}" -bsize="${bsize}" OPS_TILING OPS_TILESIZE_X="${tilex}" OPS_TILESIZE_Y="${tiley}"
 
     else
         if [[ $TARGET_MODE == sw_emu || $TARGET_MODE == hw_emu ]]; then
             echo "Running in emulation mode with ${TARGET_MODE}"
-            XCL_EMULATION_MODE=${TARGET_MODE} ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}_host ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}.xclbin -sizex="${sizex}" -sizey="${sizey}" -sizez="${sizez}" -iters="${iters}" -batch="${batch}" -bsize="${bsize}"
+            XCL_EMULATION_MODE=${TARGET_MODE} ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}_host ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}.xclbin -sizex="${sizex}" -sizey="${sizey}" -sizez="${sizez}" -iters="${iters}" -batch="${batch}" OPS_TILING OPS_TILESIZE_X="${tilex}" OPS_TILESIZE_Y="${tiley}"
         else
             echo "Running HW mode"
-            ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}_host ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}.xclbin -sizex="${sizex}" -sizey="${sizey}" -sizez="${sizez}" -iters="${iters}" -batch="${batch}" -bsize="${bsize}"
+            ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}_host ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}.xclbin -sizex="${sizex}" -sizey="${sizey}" -sizez="${sizez}" -iters="${iters}" -batch="${batch}" OPS_TILING OPS_TILESIZE_X="${tilex}" OPS_TILESIZE_Y="${tiley}"
         fi
     fi
 
@@ -152,7 +152,7 @@ for params in "${parameter_sets[@]}"; do
     fi
     if [ -f "${PROFILE_FILE}" ]; then
         # Construct the new filename for the profile directory
-        new_filename="${PROFILE_DIR}/${sizex}_${sizey}_${sizez}_${bsize}_${PROFILE_FILE}"
+        new_filename="${PROFILE_DIR}/${sizex}_${sizey}_${sizez}_${bsize}_tx${tilex}_ty${tiley}_${PROFILE_FILE}"
         echo "Moving '${PROFILE_FILE}' to '${new_filename}'"
         mv "${PROFILE_FILE}" "${new_filename}"
     else
@@ -160,7 +160,7 @@ for params in "${parameter_sets[@]}"; do
     fi
     if [ -f "${POWER_PROFILE_FILE}" ]; then
         # Construct the new filename for the profile directory
-        new_filename="${PROFILE_DIR}/${sizex}_${sizey}_${sizez}_${bsize}_${POWER_PROFILE_FILE}"
+        new_filename="${PROFILE_DIR}/${sizex}_${sizey}_${sizez}_${bsize}_tx${tilex}_ty${tiley}_${POWER_PROFILE_FILE}"
         echo "Moving '${POWER_PROFILE_FILE}' to '${new_filename}'"
         mv "${POWER_PROFILE_FILE}" "${new_filename}"
     else

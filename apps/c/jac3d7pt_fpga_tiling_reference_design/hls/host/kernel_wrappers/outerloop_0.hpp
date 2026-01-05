@@ -34,11 +34,16 @@ public:
         getAdjustedRange(arg0.originalProperty, range, read_range, read_stencil_d_m, read_stencil_d_p);
 
 #ifdef OPS_TILING
-        ops::hls::SizeType gridSize_copy = {read_stencilConfig.grid_size[0], read_stencilConfig.grid_size[1], read_stencilConfig.grid_size[2]};
+        ops::hls::SizeType gridSize_copy = {read_stencilConfig.grid_size[0] * vector_factor, read_stencilConfig.grid_size[1], read_stencilConfig.grid_size[2]};
         ops::hls::AccessRange read_range_copy = {{read_range.start[0], read_range.start[1], read_range.start[2]},
                                                  {read_range.end[0], read_range.end[1], read_range.end[2]},
                                                  read_range.dim};
         ops::hls::SizeType2d tile_size = {m_fpga->getOPSTileSizeX(), m_fpga->getOPSTileSizeY()};
+        std::cout << "Tile Size: " << tile_size[0] << " x " << tile_size[1] << std::endl;
+        std::cout << "gridSize_copy: " << gridSize_copy[0] << " x " << gridSize_copy[1] << " x " << gridSize_copy[2] << std::endl;
+        std::cout << "read_range_copy start: [" << read_range_copy.start[0] << ", " << read_range_copy.start[1] << ", " << read_range_copy.start[2] << "]" << std::endl;
+        std::cout << "read_range_copy end: [" << read_range_copy.end[0] << ", " << read_range_copy.end[1] << ", " << read_range_copy.end[2] << "]" << std::endl;
+        std::cout << "read_range_copy dim: " << read_range_copy.dim << std::endl;
         // template<unsigned short N_SLR, unsigned short P_SLR, unsigned short HALF_SPAN, unsigned short MEM_VECTOR_SIZE>
         ops::hls::SizeType2d overlap_size = {get_overlap_size<3, 9, 1, mem_vector_factor>(), get_overlap_size<3, 9, 1, 1>()};
         ops::hls::SizeType2d tile_count;
@@ -46,6 +51,7 @@ public:
         ops::hls::SizeType2d last_tile_size;
 
         ops::hls::genTileMetadata<512, 32>(gridSize_copy, read_range_copy, tile_size, overlap_size, effective_tile_size, last_tile_size, tile_count);
+        std::cout << "Adjusted tile Tile Size: " << tile_size[0] << " x " << tile_size[1] << std::endl;
 #endif
 #ifdef DEBUG_LOG
         printAccessRange(range, "common access range");
@@ -139,6 +145,10 @@ public:
         OCL_CHECK(err, err = m_datamover.setArg(narg++, last_tile_size[1]));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, tile_count[0]));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, tile_count[1]));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.deviceBuffer));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.deviceBuffer));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg1.deviceBuffer));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg1.deviceBuffer));
 #else   
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.deviceBuffer));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg1.deviceBuffer));
