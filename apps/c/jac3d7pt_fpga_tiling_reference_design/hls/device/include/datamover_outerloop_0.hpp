@@ -17,11 +17,25 @@ extern "C" void datamover_outerloop_0(
         const unsigned short gridSize_1,
         const unsigned short gridSize_2,
         const unsigned int outer_itr,
-        const unsigned short batch_size,
-    //u
-        ap_uint<mem_data_width>* arg0,
-    //u2
-        ap_uint<mem_data_width>* arg1,
+        // const unsigned short batch_size,
+        const unsigned short tile_size_x,
+        const unsigned short tile_size_y,
+        const unsigned short overlap_size_x,
+        const unsigned short overlap_size_y,
+        const unsigned short effective_tile_size_x,
+        const unsigned short effective_tile_size_y,
+        const unsigned short last_tile_size_x,
+        const unsigned short last_tile_size_y,
+        const unsigned short tile_count_x,
+        const unsigned short tile_count_y,
+    //u-b1
+        ap_uint<mem_data_width>* arg0_b1,
+    //u-b2
+        ap_uint<mem_data_width>* arg0_b2,
+    //u2-b1
+        ap_uint<mem_data_width>* arg1_b1,
+    //u2-b2
+        ap_uint<mem_data_width>* arg1_b2,
     //u
         hls::stream <ap_axiu<axis_data_width,0,0,0>>& arg0_axis_out,
     //u2

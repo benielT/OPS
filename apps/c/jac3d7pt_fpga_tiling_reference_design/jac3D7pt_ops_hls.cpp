@@ -97,6 +97,10 @@ int main(int argc, const char **argv)
     unsigned int iter_max = 135;
     unsigned int batches = 1;
     int batch_size = 1;
+#ifdef OPS_TILING
+    int tile_size_x = 128;
+    int tile_size_y = 128;
+#endif
 
     const char* pch;
     for ( int n = 1; n < argc; n++ ) 
@@ -137,6 +141,27 @@ int main(int argc, const char **argv)
             continue;
         }
 #endif
+#ifdef OPS_TILING
+        pch = strstr(argv[n], "-tilex=");
+        if(pch != NULL) {
+            tile_size_x = atoi ( argv[n] + 7 );
+            if(tile_size_x < 32) {
+                std::cerr << "tile_size_x (tilex) must be greater than or equal to 32" << std::endl;
+                exit(-1);
+            }
+            continue;
+        }
+        
+        pch = strstr(argv[n], "-tiley=");
+        if(pch != NULL) {
+            tile_size_y = atoi ( argv[n] + 7 );
+            if(tile_size_y < 32) {
+                std::cerr << "tile_size_y (tiley) must be greater than or equal to 32" << std::endl;
+                exit(-1);
+            }
+            continue;
+        }
+#endif
 #ifdef POWER_PROFILE
         pch = strstr(argv[n], "-piter=");
         if(pch != NULL) {
@@ -167,6 +192,9 @@ int main(int argc, const char **argv)
             power_iter = power_iter / batch_size;
     #endif 
             std::cout << "Power profiling enabled, number of power iterations: " << power_iter << std::endl;
+#endif
+#ifdef OPS_TILING
+    std::cout << "Tiling enabled, tile_size_x: " << tile_size_x << ", tile_size_y: " << tile_size_y << std::endl;
 #endif
 #ifdef PROFILE
 	double init_runtime[batches];
