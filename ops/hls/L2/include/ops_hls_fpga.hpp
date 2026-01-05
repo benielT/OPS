@@ -268,6 +268,36 @@ class FPGA {
                                                         m_runtimeEvents.at(kernel_name)[execId].data_HtD_event.getProfilingInfo<CL_PROFILING_COMMAND_START>())).count();
     }
 
+    void setOPSTiling() {
+        OPS_tiling = true;
+    }
+
+    bool isOPSTiling() {
+        return OPS_tiling;
+    }
+
+    void setOPSTileSizeX(unsigned short tile_x) {
+        OPS_tiling_size_x = tile_x;
+    }
+
+    void setOPSTileSizeY(unsigned short tile_y) {
+        OPS_tiling_size_x = tile_y;
+    }
+
+    unsigned short getOPSTileSizeX() {
+        if (isOPSTiling())
+            return OPS_tiling_size_x;
+        else 
+            return 0;
+    }
+
+    unsigned short getOPSTileSizeY() {
+        if (isOPSTiling())
+            return OPS_tiling_size_y;
+        else 
+            return 0;
+    }
+
    protected:
     bool bufferExists(const void* p_ptr) const {
         auto it = m_bufferMaps.find(p_ptr);
@@ -293,16 +323,25 @@ class FPGA {
         getDevices(deviceName);
         m_device = m_Devices[m_id];
         m_id = -1;
+        OPS_tiling = false;
+        OPS_tiling_size_x = 0;
+        OPS_tiling_size_y = 0;
     }
     FPGA(unsigned int p_id = 0, std::string deviceName = "") {
         getDevices(deviceName);
         setID(p_id);
+        OPS_tiling = false;
+        OPS_tiling_size_x = 0;
+        OPS_tiling_size_y = 0;
     }
 
     FPGA(unsigned int p_id, const std::vector<cl::Device>& devices) {
         m_id = p_id;
         m_Devices = devices;
         m_device = m_Devices[m_id];
+        OPS_tiling = false;
+        OPS_tiling_size_x = 0;
+        OPS_tiling_size_y = 0;
     }
 
 
@@ -316,10 +355,15 @@ class FPGA {
     cl::Program m_program;
     std::unordered_map<const void*, cl::Buffer> m_bufferMaps;
     std::unordered_map<std::string, std::vector<RuntimeEventRecords>> m_runtimeEvents;
+    bool OPS_tiling;
+    unsigned short OPS_tiling_size_x;
+    unsigned short OPS_tiling_size_y;
 };
 
 }
 }
+
+void _FPGA_set_args(ops::hls::FPGA *instance, const char *argv);
 
 void ops_init_backend(int argc, const char** argv, unsigned int devId = 0);
 

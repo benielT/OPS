@@ -32,6 +32,30 @@ ops::hls::FPGA* ops::hls::FPGA::getInstance()
     }
     return FPGA_;
 }
+void _FPGA_set_args(ops::hls::FPGA *instance, const char *argv)
+{
+    char temp[64];
+    const char *pch;
+    pch = strstr(argv, "OPS_TILING");
+    if (pch != NULL) {
+        instance->setOPSTiling();
+        std::cout << "OPS_TILING enabled at runtime" << std::endl;
+    }
+
+    pch = strstr(argv, "OPS_TILESIZE_X=");
+    if (pch != NULL) {
+        snprintf(temp, 64, "%s", pch);
+        instance->setOPSTileSizeX((unsigned short)atoi(temp +  strlen("OPS_TILESIZE_X=")));
+        std::cout << "\n OPS Tile size in X = " << instance->getOPSTileSizeX() << '\n';
+    }
+
+    pch = strstr(argv, "OPS_TILESIZE_Y=");
+    if (pch != NULL) {
+        snprintf(temp, 64, "%s", pch);
+        instance->setOPSTileSizeY((unsigned short)atoi(temp +  strlen("OPS_TILESIZE_Y=")));
+        std::cout << "\n OPS Tile size in Y = " << instance->getOPSTileSizeY() << '\n';
+    }
+}
 
 void ops_init_backend(int argc, const char** argv, unsigned int devId)
 {
@@ -46,6 +70,10 @@ void ops_init_backend(int argc, const char** argv, unsigned int devId)
     {
         std::cerr << "[ERROR] Couldn't program fpga. exit" << std::endl;
 		throw;
+    }
+
+    for (int n = 1; n < argc; n++) {
+        _FPGA_set_args(fpga, argv[n]);
     }
 }
 
