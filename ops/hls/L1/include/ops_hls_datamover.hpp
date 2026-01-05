@@ -643,7 +643,7 @@ void stream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out,
 /**************************** TILED ops  ****************************/
 
 template <unsigned short MEM_DATA_WIDTH, unsigned short IN_ITR=2, unsigned short BURST_SIZE=32>
-static void stridedTileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, const ops::hls::MemConfigTile& config, unsigned short stride_start = 0)
+static void stridedTileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, const ops::hls::MemConfigTile& config, unsigned short stride_start = 0)
 {
     // #pragma HLS INLINE off
     #ifdef DEBUG_LOG
@@ -702,7 +702,7 @@ static void stridedTileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, hls::stream<a
 
 
 template <unsigned short MEM_DATA_WIDTH, unsigned short IN_ITR=2, unsigned short BURST_SIZE=32>
-static void stridedTileStream2mem(hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, ap_uint<MEM_DATA_WIDTH>* mem_out, const ops::hls::MemConfigTile& config, unsigned short stride_start = 0)
+static void stridedTileStream2mem(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, ap_uint<MEM_DATA_WIDTH>* mem_out, const ops::hls::MemConfigTile& config, unsigned short stride_start = 0)
 {
     // #pragma HLS INLINE off
     #ifdef DEBUG_LOG
@@ -757,9 +757,9 @@ static void stridedTileStream2mem(hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
 
 template <unsigned short MEM_DATA_WIDTH,  unsigned short IN_ITR=2>
 static void combineSteams(
-    hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in_b1,
-    hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in_b2,
-    hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out,
+    ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in_b1,
+    ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in_b2,
+    ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out,
     const ops::hls::MemConfigTile& config)
 {
     // #pragma HLS INLINE off
@@ -855,9 +855,9 @@ static void combineSteams(
 
 template <unsigned short MEM_DATA_WIDTH, unsigned short IN_ITR=2>
 static void splitStream(
-    hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
-    hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out_b1,
-    hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out_b2,
+    ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
+    ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out_b1,
+    ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out_b2,
     const ops::hls::MemConfigTile& config)
 {
     // #pragma HLS INLINE off
@@ -972,9 +972,9 @@ void mem2streamTiled(ap_uint<MEM_DATA_WIDTH>* mem_in_b1,
 	}
 	else
 	{
-        static hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in_b1;
+        static ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in_b1;
         #pragma HLS STREAM variable = strm_in_b1
-        static hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in_b2;
+        static ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in_b2;
         #pragma HLS STREAM variable = strm_in_b2
         #pragma HLS DATAFLOW
         stridedTileMem2stream<MEM_DATA_WIDTH, IN_ITR, BURST_SIZE>(mem_in_b1, strm_in_b1, config, 0);
@@ -1023,9 +1023,9 @@ void stream2memTiled(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
 	}
 	else
 	{
-        static hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out_b1;
+        static ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out_b1;
         #pragma HLS STREAM variable = strm_out_b1
-        static hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out_b2;
+        static ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out_b2;
         #pragma HLS STREAM variable = strm_out_b2
         #pragma HLS DATAFLOW
         splitStream<MEM_DATA_WIDTH, IN_ITR>(strm_in, strm_out_b1, strm_out_b2, config);
