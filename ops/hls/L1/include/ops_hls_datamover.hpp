@@ -1383,16 +1383,29 @@ void axis2stream(::hls::stream<ap_axiu<STREAM_DATA_WIDTH,0,0,0>>& strm_in,
 		unsigned int pkts)
 {
 #ifndef __SYTHESIS__
-#ifdef DEBUG_LOG
+// #ifdef DEBUG_LOG
 	printf("|HLS DEBUG_LOG| %s | starting. pkts: %d\n"
 			, __func__, pkts);
-#endif
+// #endif
 #endif
 	for (int itr = 0; itr < pkts; itr++){
 		#pragma HLS PIPELINE II=1
 
 		ap_axiu<STREAM_DATA_WIDTH,0,0,0> tmp = strm_in.read();
 		strm_out << tmp.data;
+#ifndef __SYTHESIS__
+#ifdef DEBUG_LOG
+			printf("   |HLS DEBUG_LOG|%s| sending axis pkt: %d, val=(",__func__, itr);
+
+			for (unsigned n = 0; n < STREAM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); n++)
+			{
+				DataConv conv;
+				conv.i = tmp.data.range((n+1) * DEBUG_LOG_SIZE_OF * 8 - 1, n * DEBUG_LOG_SIZE_OF * 8);
+				printf("%f,", conv.f);
+			}
+			printf(")\n");
+#endif
+#endif
 	}
 }
 
@@ -1924,7 +1937,20 @@ void axis2stream(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_in,
 			{
 				axisPkt = axis_in.read();
 			}
-			strm_out << axisPkt.data.range((j+1) * STREAM_DATA_WIDTH - 1, j * STREAM_DATA_WIDTH);
+			strm_out <<  axisPkt.data.range((j+1) * STREAM_DATA_WIDTH - 1, j * STREAM_DATA_WIDTH);
+#ifndef __SYTHESIS__
+#ifdef DEBUG_LOG
+			printf("   |HLS DEBUG_LOG|%s| sending axis pkt: %d, val=(",__func__, itr);
+
+			for (unsigned n = 0; n < STREAM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); n++)
+			{
+				DataConv conv;
+				conv.i = axisPkt.data.range((n+1) * DEBUG_LOG_SIZE_OF * 8 - 1, n * DEBUG_LOG_SIZE_OF * 8);
+				printf("%f,", conv.f);
+			}
+			printf(")\n");
+#endif
+#endif
 #ifdef DEBUG_LOG
 			printf("|HLS DEBUG_LOG|%s| reading axis pkt: %d.\n"
 						, __func__, itr);
