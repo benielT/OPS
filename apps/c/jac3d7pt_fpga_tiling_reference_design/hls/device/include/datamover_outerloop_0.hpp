@@ -28,6 +28,7 @@ extern "C" void datamover_outerloop_0(
         const unsigned short last_tile_size_y,
         const unsigned short tile_count_x,
         const unsigned short tile_count_y,
+        const unsigned int total_xblocks,
     //u-b1
         ap_uint<mem_data_width>* arg0_b1,
     //u-b2

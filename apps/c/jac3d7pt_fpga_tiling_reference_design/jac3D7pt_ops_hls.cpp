@@ -65,6 +65,8 @@ void ops_par_loop_kernel_initialguess(ops::hls::Block, int, int*, ops::hls::Grid
 
 void ops_par_loop_kernel_copy(ops::hls::Block, int, int*, ops::hls::Grid<float>&, ops::hls::Grid<float>&);
 
+void ops_par_loop_kernel_copy(ops::hls::Block, int, int*, ops::hls::Grid<float>&, ops::hls::Grid<float>&);
+
 #include "jac3D7pt_cpu_verification.hpp"
 
 #ifdef PROFILE
@@ -300,9 +302,7 @@ int main(int argc, const char **argv)
 
         ops_dat_fetch_data(u[bat], 0, (char*)u_cpu[bat]);
 
-        ops_par_loop(kernel_copy, "kernel_update", blocks[bat], 3, full_range, 
-            ops_arg_dat(u[bat], 1, S3D_00, "float", OPS_READ),
-            ops_arg_dat(u2[bat], 1, S3D_00, "float", OPS_WRITE));
+        ops_par_loop_kernel_copy( blocks[bat],  3 ,  full_range, u[bat], u2[bat]);
 #else
         ops_par_loop_kernel_populate( blocks[bat],  3 ,  full_range, u[bat]);
 

@@ -163,6 +163,7 @@ extern "C" void datamover_outerloop_0(
         const unsigned short last_tile_size_y,
         const unsigned short tile_count_x,
         const unsigned short tile_count_y,
+        const unsigned int total_xblocks,
     //u-b1
         ap_uint<mem_data_width>* arg0_b1,
     //u-b2
@@ -201,6 +202,7 @@ extern "C" void datamover_outerloop_0(
     #pragma HLS INTERFACE s_axilite port = last_tile_size_y bundle = control
     #pragma HLS INTERFACE s_axilite port = tile_count_x bundle = control
     #pragma HLS INTERFACE s_axilite port = tile_count_y bundle = control
+    #pragma HLS INTERFACE s_axilite port = total_xblocks bundle = control
  
     #pragma HLS INTERFACE mode=m_axi bundle=gmem0 depth=4096 max_read_burst_length=64 max_write_burst_length=64 \
             num_read_outstanding=4 num_write_outstanding=4 \
@@ -257,17 +259,17 @@ extern "C" void datamover_outerloop_0(
 
     ops::hls::MemConfigTile config;
     
-    ops::hls::genMemConfigTileV2<mem_data_width, data_width>(read_gridSize, range, tileSize, tileCount, overlapSize, effectiveTileSize, lastTileSize, config);
+    ops::hls::genMemConfigTileV2<mem_data_width, data_width>(read_gridSize, range, tileSize, tileCount, overlapSize, effectiveTileSize, lastTileSize, total_xblocks, config);
     constexpr unsigned int num_of_pkts_per_bytes = mem_data_width / axis_data_width;
     // ops::hls::MemConfig config;
     // ops::hls::genMemConfig<mem_data_width, axis_data_width, data_width>(read_gridSize, range, config, batch_size);
     const unsigned int num_beats = config.total_xblocks;
     const unsigned int num_pkts = num_of_pkts_per_bytes * num_beats;
 
-#ifdef DEBUG_LOG
-    printf("[KERNEL_DEBUG]|%s| REALIZED numbers: batch_size: %d, num_beats: %d, num_pkts: %d,\n", __func__,
-            batch_size, num_beats, num_pkts);
-#endif 
+// #ifdef DEBUG_LOG
+//     printf("[KERNEL_DEBUG]|%s| REALIZED numbers: batch_size: %d, num_beats: %d, num_pkts: %d,\n", __func__,
+//             batch_size, num_beats, num_pkts);
+// #endif 
         datamover_outerloop_0_dataflow_read_write(
                 outer_itr,
                 num_pkts,
