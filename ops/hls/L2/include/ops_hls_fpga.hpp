@@ -281,7 +281,7 @@ class FPGA {
     }
 
     void setOPSTileSizeY(unsigned short tile_y) {
-        OPS_tiling_size_x = tile_y;
+        OPS_tiling_size_y = tile_y;
     }
 
     unsigned short getOPSTileSizeX() {
