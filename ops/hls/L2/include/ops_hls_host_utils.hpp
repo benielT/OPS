@@ -573,3 +573,8 @@ void ops_dat_fetch_data(ops::hls::Grid<T>& p_grid, int part, char* data)
 	p_grid.isDevBufDirty = false;
 }
 
+template<unsigned short N_SLR, unsigned short P_SLR, unsigned short HALF_SPAN, unsigned short MEM_VECTOR_SIZE>
+constexpr unsigned short get_overlap_size() {
+    return ((N_SLR * P_SLR * HALF_SPAN + MEM_VECTOR_SIZE - 1) / MEM_VECTOR_SIZE) * MEM_VECTOR_SIZE;
+}
+
