@@ -1383,10 +1383,10 @@ void axis2stream(::hls::stream<ap_axiu<STREAM_DATA_WIDTH,0,0,0>>& strm_in,
 		unsigned int pkts)
 {
 #ifndef __SYTHESIS__
-// #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG
 	printf("|HLS DEBUG_LOG| %s | starting. pkts: %d\n"
 			, __func__, pkts);
-// #endif
+#endif
 #endif
 	for (int itr = 0; itr < pkts; itr++){
 		#pragma HLS PIPELINE II=1
