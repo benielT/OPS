@@ -34,7 +34,7 @@ namespace hls {
         unsigned short last_tile_size_y;
         unsigned int start_offset;
         bool isContinous;
-        unsigned short total_xblocks;
+        unsigned int total_xblocks;
         unsigned int total_size_bytes;
     };
     struct MemConfig {
@@ -89,6 +89,7 @@ namespace hls {
             SizeType2d& effective_tile_size,
             SizeType2d& last_tile_size,
             SizeType2d& tile_count,
+            unsigned int& total_xblocks,
             bool isWidMem = true)
     {
 #ifndef __SYTHESIS__
@@ -119,6 +120,17 @@ namespace hls {
         const unsigned short tile_count_y = ((diff_y - realized_tile_size_y) + effective_tile_size_y - 1) / effective_tile_size_y + 1;
         const unsigned short last_tile_size_y = tile_count_y > 1 ? diff_y - (tile_count_y - 1) * effective_tile_size_y : realized_tile_size_y;
         
+        // Total xblocks calculations
+        const unsigned short diff_z = range.end[2] - range.start[2];
+        const unsigned short tile_count_min_1_x = tile_count_x - 1;
+        const unsigned short tile_count_min_1_y = tile_count_y - 1;
+        unsigned int iterior_tile_count = tile_count_min_1_x * tile_count_min_1_y;
+        unsigned int interior_x_blocks = iterior_tile_count * diff_z * realized_tile_size_x_beats * realized_tile_size_y;
+        unsigned int ab_x_blocks = diff_z * last_tile_size_x_beats * realized_tile_size_y * tile_count_min_1_y;
+        unsigned int ba_x_blocks = diff_z * last_tile_size_y * realized_tile_size_x_beats * tile_count_min_1_x;
+        unsigned int last_tile_x_blocks = diff_z * last_tile_size_x_beats * last_tile_size_y;
+        total_xblocks =  interior_x_blocks + ab_x_blocks + ba_x_blocks + last_tile_x_blocks;
+
         grid_size[0] = grid_xblocks;
         range.start[0] = start_x;
         range.end[0] = end_x;
@@ -133,10 +145,12 @@ namespace hls {
         tile_count[0] = tile_count_x;
         tile_count[1] = tile_count_y;
         #ifndef __SYTHESIS__
-        #ifdef DEBUG_LOG
+        // #ifdef DEBUG_LOG
             printf("|HLS DEBUG LOG|%s| genTileMetadata output -> tile_count: (%d, %d), tile_size: (%d, %d), overlap_size: (%d, %d), effective_tile_size: (%d, %d), last_tile_size: (%d, %d)\n",
-                __func__, tile_count[0], tile_count[1], tile_size[0], tile_size[1], overlap_size[0], overlap_size[1], effective_tile_size[0], effective_tile_size[1], last_tile_size[0], last_tile_size[1]);
-        #endif
+            __func__, tile_count[0], tile_count[1], tile_size[0], tile_size[1], overlap_size[0], overlap_size[1], effective_tile_size[0], effective_tile_size[1], last_tile_size[0], last_tile_size[1]);
+            printf("|HLS DEBUG LOG|%s| xblocks breakdown -> total_xblocks: %u, interior: %u, ab: %u, ba: %u, last_tile: %u\n",
+            __func__, total_xblocks, interior_x_blocks, ab_x_blocks, ba_x_blocks, last_tile_x_blocks);
+        // #endif
         #endif
     }
 
@@ -172,13 +186,14 @@ namespace hls {
      */
     template <unsigned short MEM_DATA_WIDTH, unsigned short DATA_WIDTH=32>
     void genMemConfigTileV2(
-            SizeType& gridSize, 
-            AccessRange& range, 
-            SizeType2d& tile_size,
-            SizeType2d& tile_count,
-            SizeType2d& overlap_size,
-            SizeType2d& effective_tile_size,
-            SizeType2d& last_tile_size,
+            const SizeType& gridSize, 
+            const AccessRange& range, 
+            const SizeType2d& tile_size,
+            const SizeType2d& tile_count,
+            const SizeType2d& overlap_size,
+            const SizeType2d& effective_tile_size,
+            const SizeType2d& last_tile_size,
+            const unsigned int& total_xblocks,
             MemConfigTile& config)
     {
 #ifndef __SYTHESIS__
@@ -215,17 +230,25 @@ namespace hls {
         config.tile_count_y = tile_count[1];
         config.last_tile_size_y = last_tile_size[1];
         unsigned int total_tiles = tile_count[0] * tile_count[1];
-        config.total_tile_count = total_tiles;
+        // const unsigned short tile_count_min_1_x = tile_count[0] - 1;
+        // const unsigned short tile_count_min_1_y = tile_count[1] - 1;
         const unsigned short diff_y = range.end[1] - range.start[1];
         const unsigned short diff_z = range.end[2] - range.start[2];
+        // unsigned int iterior_tile_count = tile_count_min_1_x * tile_count_min_1_y;
+        // unsigned int interior_x_blocks = iterior_tile_count * diff_z * tile_size[0] * tile_size[1];
+        // unsigned int ab_x_blocks = diff_z * last_tile_size[0] * tile_size[1] * tile_count_min_1_y;
+        // unsigned int ba_x_blocks = diff_z * last_tile_size[1] * tile_size[0] * tile_count_min_1_x;
+        // unsigned int last_tile_x_blocks = diff_z * last_tile_size[0] * last_tile_size[1];
+        config.total_tile_count = total_tiles;
+        
         config.isContinous = total_tiles == 1 and (gridSize[0] == num_xblocks or range.dim == 1) and (diff_y == gridSize[1] or range.dim != 3);
         config.start_offset = range.start[0] + range.start[1] * gridSize[0] + range.start[2] * gridSize[1] * gridSize[0];
-        config.total_xblocks = total_tiles * diff_z * tile_size[0];
+        config.total_xblocks = total_xblocks;
         config.total_size_bytes = config.total_xblocks <<   ShiftBits << DataShiftBits;
 
 
     #ifndef __SYTHESIS__
-    #ifdef DEBUG_LOG
+    // #ifdef DEBUG_LOG
         printf("|HLS DEBUG LOG|%s| Input -> range_dim: % d, range: (%d, %d, %d) -> (%d, %d, %d), gridSize: (%d, %d, %d), Shiftbits: %d, DataShiftBits: %d\n",__func__, range.dim, range.start[0],
             range.start[1], range.start[2], range.end[0], range.end[1], range.end[2], gridSize[0], gridSize[1], gridSize[2], ShiftBits, DataShiftBits);
         printf("|HLS DEBUG_LOG|%s| memconfig tile generated:\n"
@@ -235,7 +258,7 @@ namespace hls {
                "  tile_count: (%d, %d), total_tile_count: %u\n"
                "  tile_size_x: %d, last_tile_size_x: %d, overlap_x: %d, effective_x: %d\n"
                "  tile_size_y: %d, last_tile_size_y: %d, overlap_y: %d, effective_y: %d\n"
-               "  total_xblocks: %u, total_size_bytes: %u\n"
+               "  total_size_bytes: %u\n"
                "  isContinous: %d, start_offset: %u\n",
                __func__,
                config.start_x, config.start_y, config.start_z,
@@ -245,8 +268,9 @@ namespace hls {
                config.tile_count_x, config.tile_count_y, config.total_tile_count,
                config.tile_size_x, config.last_tile_size_x, config.tile_overlap_size_x, config.effective_tile_size_x,
                config.tile_size_y, config.last_tile_size_y, config.tile_overlap_size_y, config.effective_tile_size_y,
-               config.total_xblocks, config.total_size_bytes, config.isContinous, config.start_offset);
-    #endif
+               config.total_xblocks, 
+               config.total_size_bytes, config.isContinous, config.start_offset);
+    // #endif
     #endif
 
     }
