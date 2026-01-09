@@ -181,6 +181,7 @@ int main()
         ops::hls::SizeType2d tile_count;
         ops::hls::SizeType2d effective_tile_size;
         ops::hls::SizeType2d last_tile_size;
+        unsigned int total_xblocks;
 
 #ifdef DEBUG_LOG
         // Input to the tile metadata generator
@@ -193,7 +194,7 @@ int main()
 #endif
         // Generate Tile Metadata
         ops::hls::genTileMetadata<AXI_M_WIDTH, 32>(gridSize_copy, range_copy, tile_size_copy, 
-                overlap_size_copy, effective_tile_size, last_tile_size, tile_count);
+                overlap_size_copy, effective_tile_size, last_tile_size, tile_count, total_xblocks);
 
 #ifdef DEBUG_LOG
             std::cout << std::endl << "[DEBUG] **** Tile Metadata ****" << std::endl;
@@ -213,7 +214,7 @@ int main()
             overlap_size_copy[0], overlap_size_copy[1],
             effective_tile_size[0], effective_tile_size[1],
             last_tile_size[0], last_tile_size[1],
-            tile_count[0], tile_count[1]);
+            tile_count[0], tile_count[1], total_xblocks);
 
 #ifdef VERIFICATION
         bool no_error = true;

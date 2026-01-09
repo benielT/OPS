@@ -49,5 +49,6 @@ void dut(ap_uint<AXI_M_WIDTH>* mem_in_b1,
         const unsigned short last_tile_size_x,
         const unsigned short last_tile_size_y,
         const unsigned short tile_count_x,
-        const unsigned short tile_count_y);
+        const unsigned short tile_count_y,
+        const unsigned int total_xblocks);
 
