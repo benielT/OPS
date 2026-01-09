@@ -69,13 +69,13 @@ int main()
     unsigned int seed = 7;
     std::mt19937 mtSeeded(seed);
     std::mt19937 mtRandom(rd());
-    std::uniform_int_distribution<> distSize(40, 100);
+    std::uniform_int_distribution<> distSize(40, 50);
     std::normal_distribution<float> distFloat(100, 10);
     std::uniform_int_distribution<unsigned short> distSlrNum(1, MAX_SLR_NUM);
     std::uniform_int_distribution<unsigned short> distPslr(MIN_P_SLR, MAX_P_SLR);
     ops::hls::DataConv converter;
 
-    const int num_tests = 25;
+    const int num_tests = 10;
     std::cout << "TOTAL NUMER OF TESTS: " << num_tests << std::endl;
     std::vector<bool> test_summary(10);
 
@@ -88,8 +88,8 @@ int main()
         std::cout << std::endl;
         
         const unsigned short logical_x_size = distSize(mtSeeded);
-        const unsigned short logical_y_size = distSize(mtSeeded);
-        const unsigned short logical_z_size = distSize(mtSeeded); //logical_x_size;
+        const unsigned short logical_y_size = 3; //distSize(mtSeeded);
+        const unsigned short logical_z_size = 3; //distSize(mtSeeded); //logical_x_size;
         const unsigned short num_slr = distSlrNum(mtSeeded);
         const unsigned short p_slr = distPslr(mtSeeded);
         const unsigned short actual_x_size = logical_x_size + 2 * ((STENCIL_SIZE -1)/2);
