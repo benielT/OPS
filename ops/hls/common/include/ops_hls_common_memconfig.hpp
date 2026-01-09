@@ -248,8 +248,8 @@ namespace hls {
 
 
     #ifndef __SYTHESIS__
-    // #ifdef DEBUG_LOG
-        printf("|HLS DEBUG LOG|%s| Input -> range_dim: % d, range: (%d, %d, %d) -> (%d, %d, %d), gridSize: (%d, %d, %d), Shiftbits: %d, DataShiftBits: %d\n",__func__, range.dim, range.start[0],
+    #ifdef DEBUG_LOG
+        printf("|HLS DEBUG LOG|%s| Input -> range_dim: %d, range: (%d, %d, %d) -> (%d, %d, %d), gridSize: (%d, %d, %d), Shiftbits: %d, DataShiftBits: %d\n",__func__, range.dim, range.start[0],
             range.start[1], range.start[2], range.end[0], range.end[1], range.end[2], gridSize[0], gridSize[1], gridSize[2], ShiftBits, DataShiftBits);
         printf("|HLS DEBUG_LOG|%s| memconfig tile generated:\n"
                "  range: (%d, %d, %d) --> (%d, %d, %d) (xblocks)\n"
@@ -258,7 +258,7 @@ namespace hls {
                "  tile_count: (%d, %d), total_tile_count: %u\n"
                "  tile_size_x: %d, last_tile_size_x: %d, overlap_x: %d, effective_x: %d\n"
                "  tile_size_y: %d, last_tile_size_y: %d, overlap_y: %d, effective_y: %d\n"
-               "  total_size_bytes: %u\n"
+               "  total_xblocks: %u, total_size_bytes: %u\n"
                "  isContinous: %d, start_offset: %u\n",
                __func__,
                config.start_x, config.start_y, config.start_z,
@@ -268,9 +268,8 @@ namespace hls {
                config.tile_count_x, config.tile_count_y, config.total_tile_count,
                config.tile_size_x, config.last_tile_size_x, config.tile_overlap_size_x, config.effective_tile_size_x,
                config.tile_size_y, config.last_tile_size_y, config.tile_overlap_size_y, config.effective_tile_size_y,
-               config.total_xblocks, 
-               config.total_size_bytes, config.isContinous, config.start_offset);
-    // #endif
+               config.total_xblocks, config.total_size_bytes, config.isContinous, config.start_offset);
+    #endif
     #endif
 
     }
