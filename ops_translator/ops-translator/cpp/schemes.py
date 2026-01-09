@@ -4,7 +4,7 @@ import cpp.translator.kernels as ctk
 import ops
 from language import Lang
 from scheme import Scheme
-from store import Application, ParseError, Program
+from store import Application, CodegenError, Program
 from target import Target
 from jinja2 import Environment
 from typing import List, Tuple, Set, Union, Optional
@@ -35,7 +35,7 @@ class CppMPIOpenMP(Scheme):
         kernel_entities = app.findEntities(loop.kernel, program)
 
         if len(kernel_entities) == 0:
-            raise ParseError(f"Unable to find kernel: {loop.kernel}")
+            raise CodegenError(f"Unable to find kernel: {loop.kernel}")
 
         extracted_entities = ctk.extractDependancies(kernel_entities, app)
         return ctk.writeSource(extracted_entities)
@@ -86,7 +86,7 @@ class CppHLS(Scheme):
         kernel_entities = app.findEntities(loop.kernel, program)
 
         if len(kernel_entities) == 0:
-            raise ParseError(f"Unable to find kernel: {loop.kernel}")
+            raise CodegenError(f"Unable to find kernel: {loop.kernel}")
         
         extracted_entities = ctk.extractDependancies(kernel_entities, app)
         return ctk.writeSource(extracted_entities)
@@ -199,19 +199,19 @@ class CppHLS(Scheme):
 
             if not isinstance(loop.args[arg_idx], ops.ArgDat):
                 logging.error("Transltor failed finding matchin argument for: %s in loop: %s data", match.group(0), loop.kernel)
-                raise ParseError(f"Translator failed finding relevent Dat argument of loop{loop.kernel}")
+                raise CodegenError(f"Translator failed finding relevent Dat argument of loop{loop.kernel}")
             
             is_multidim = loop.dats[loop.args[arg_idx].dat_id].isMultiDim()
 
             if is_multidim:
-                raise ParseError(f"Accessing a multidim dat {loop.dats[loop.args[arg_idx].dat_id].ptr} via normal accessing. Please check the matching kernel argument, it's accesses and the ops_arg_dat in the parloop")
+                raise CodegenError(f"Accessing a multidim dat {loop.dats[loop.args[arg_idx].dat_id].ptr} via normal accessing. Please check the matching kernel argument, it's accesses and the ops_arg_dat in the parloop")
             
             stencil_ptr = loop.args[arg_idx].stencil_ptr
             stencil = prog.findStencil(stencil_ptr)
             # logging.debug("Matching stencil: %s", str(stencil))
             
             if not stencil:
-                raise ParseError(f"Translator failed finding relevent stencil: {stencil_ptr} in program: {str(prog.path)}")
+                raise CodegenError(f"Translator failed finding relevent stencil: {stencil_ptr} in program: {str(prog.path)}")
             try:
                 if loop.ndim == 1:
                     access_indices = ops.Point(list([eval(access_raw_indices.group(0))]))
@@ -222,7 +222,7 @@ class CppHLS(Scheme):
                 
             except Exception as e:
                 logging.error(f"Unable to evaluate accessor indices: {access_raw_indices.group(0)}")
-                raise ParseError(f"Transaltor filed with error: {str(e)}")
+                raise CodegenError(f"Transaltor filed with error: {str(e)}")
                 
             if isReplaceWithReg:
                 kernel_body = re.sub(match_string, f"reg_{loop.args[arg_idx].dat_id}_{stencil.points.index(access_indices)}", kernel_body, count = 1)
@@ -249,13 +249,13 @@ class CppHLS(Scheme):
 
             if not isinstance(loop.args[arg_idx], ops.ArgDat):
                 logging.error("Transltor failed finding matchin argument for: %s in loop: %s data", match.group(0), loop.kernel)
-                raise ParseError(f"Translator failed finding relevent Dat argument of loop{loop.kernel}")
+                raise CodegenError(f"Translator failed finding relevent Dat argument of loop{loop.kernel}")
             
             is_multidim = loop.dats[loop.args[arg_idx].dat_id].isMultiDim()
             multidim_dim = loop.dats[loop.args[arg_idx].dat_id].dim
             
             if not is_multidim:
-                raise ParseError(f"Accessing a non multidim dat {loop.dats[loop.args[arg_idx].dat_id].ptr} via multidim accessing. Please check the matching kernel argument, it's accesses and the ops_arg_dat in the parloop")
+                raise CodegenError(f"Accessing a non multidim dat {loop.dats[loop.args[arg_idx].dat_id].ptr} via multidim accessing. Please check the matching kernel argument, it's accesses and the ops_arg_dat in the parloop")
             
             
             stencil_ptr = loop.args[arg_idx].stencil_ptr
@@ -263,7 +263,7 @@ class CppHLS(Scheme):
             logging.debug("Matching stencil: %s", str(stencil))
             
             if not stencil:
-                raise ParseError(f"Translator failed finding relevent stencil: {stencil_ptr} in program: {str(prog.path)}")
+                raise CodegenError(f"Translator failed finding relevent stencil: {stencil_ptr} in program: {str(prog.path)}")
             try:
                 indices = eval(access_raw_indices.group(0))
                 dim_index = indices[0]
@@ -274,7 +274,7 @@ class CppHLS(Scheme):
                 
             except Exception as e:
                 logging.error(f"Unable to evaluate accessor indices: {access_raw_indices.group(0)}")
-                raise ParseError(f"Transaltor filed with error: {str(e)}")
+                raise CodegenError(f"Transaltor filed with error: {str(e)}")
                 
             if isReplaceWithReg:
                 kernel_body = re.sub(match_string, f"reg_{loop.args[arg_idx].dat_id}_{stencil.points.index(access_indices)}_{dim_index}", kernel_body, count = 1)
@@ -321,6 +321,7 @@ class CppHLS(Scheme):
             
             
             logging.debug(f"iterloop after optimization : {iterLoop}")
+            
     def genIterLoopDevice(
         self,
         env: Environment,
@@ -349,8 +350,8 @@ class CppHLS(Scheme):
                 consts_map[kernel_idx] = kernel_consts
                 consts.extend(x for x in kernel_consts if x not in consts)
         
-        return [(iterloop_datamover_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config), self.iterloop_datamover_inc_extension),
-                (iterLoop_datamover_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config), self.iterloop_datamover_src_extension),
+        return [(iterloop_datamover_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, tiles=program.getTileSizes()), self.iterloop_datamover_inc_extension),
+                (iterLoop_datamover_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, tiles=program.getTileSizes()), self.iterloop_datamover_src_extension),
                 (iterLoop_kernel_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts), self.iterloop_device_inc_extension),
                 (iterLoop_kernel_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, consts_map = consts_map), self.iterloop_device_src_extension)]
     
@@ -363,9 +364,9 @@ class CppHLS(Scheme):
             other_dat_idx = findIdx(node.loop.dats, lambda dat: dat.ptr == internal_dat_swap_map[dat_name])
             
             if dat_idx is None:
-                raise ParseError(f"{dat_name} is not found in {node.node_uid}:{node.loop.kernel}")
+                raise CodegenError(f"{dat_name} is not found in {node.node_uid}:{node.loop.kernel}")
             if other_dat_idx is None:
-                raise ParseError(f"{internal_dat_swap_map[dat_name]} is not found in {node.node_uid}:{node.loop.kernel}")
+                raise CodegenError(f"{internal_dat_swap_map[dat_name]} is not found in {node.node_uid}:{node.loop.kernel}")
             datMap[dat_idx] = other_dat_idx
             
         return datMap
@@ -400,7 +401,7 @@ class CppHLS(Scheme):
             stencil = program.findStencil(stencil_ptr)
             
             if not stencil:
-                raise ParseError("Failed to find stencil of a loop in the program")
+                raise CodegenError("Failed to find stencil of a loop in the program")
             
             widen_stencil_desc = self.generateWidenStencilandBufferDiscriptor(stencil, config["vector_factor"])
             widen_stencil_desc_map[stencil.stencil_ptr] = widen_stencil_desc
@@ -436,7 +437,7 @@ class CppHLS(Scheme):
     def genConfigDevice(
         self,
         env: Environment,
-        config: dict,
+        config: dict
     ) -> Tuple[str, str]:
         
         template = env.get_template(str(self.common_config_template))     
@@ -496,7 +497,7 @@ class CppCuda(Scheme):
         kernel_entities = app.findEntities(loop.kernel, program)
 
         if len(kernel_entities) == 0:
-            raise ParseError(f"Unable to find kernel: {loop.kernel}")
+            raise CodegenError(f"Unable to find kernel: {loop.kernel}")
 
         extracted_entities = ctk.extractDependancies(kernel_entities, app)
         return ctk.writeSource(extracted_entities)
@@ -525,7 +526,7 @@ class CppHip(Scheme):
         kernel_entities = app.findEntities(loop.kernel, program)
 
         if len(kernel_entities) == 0:
-            raise ParseError(f"Unable to find kernel: {loop.kernel}")
+            raise CodegenError(f"Unable to find kernel: {loop.kernel}")
 
         extracted_entities = ctk.extractDependancies(kernel_entities, app)
         return ctk.writeSource(extracted_entities)
@@ -552,7 +553,7 @@ class CppOpenMPOffload(Scheme):
         kernel_entities = app.findEntities(loop.kernel, program)
 
         if len(kernel_entities) == 0:
-            raise ParseError(f"Unable to find kernel: {loop.kernel}")
+            raise CodegenError(f"Unable to find kernel: {loop.kernel}")
 
         extracted_entities = ctk.extractDependancies(kernel_entities, app)
         return ctk.writeSource(extracted_entities)
@@ -579,7 +580,7 @@ class CppOpenMPOffload(Scheme):
 #        kernel_entities = app.findEntities(loop.kernel, program)
 #
 #        if len(kernel_entities) == 0:
-#            raise ParseError(f"Unable to find kernel: {loop.kernel}")
+#            raise CodegenError(f"Unable to find kernel: {loop.kernel}")
 #
 #        extracted_entities = ctk.extractDependancies(kernel_entities, app)
 #        return ctk.writeSource(extracted_entities)
@@ -609,7 +610,7 @@ class CppSycl(Scheme):
         kernel_entities = app.findEntities(loop.kernel, program)
 
         if len(kernel_entities) == 0:
-            raise ParseError(f"Unable to find kernel: {loop.kernel}")
+            raise CodegenError(f"Unable to find kernel: {loop.kernel}")
 
         extracted_entities = ctk.extractDependancies(kernel_entities, app)
         return ctk.writeSource(extracted_entities)
