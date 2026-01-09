@@ -145,12 +145,12 @@ namespace hls {
         tile_count[0] = tile_count_x;
         tile_count[1] = tile_count_y;
         #ifndef __SYTHESIS__
-        // #ifdef DEBUG_LOG
+        #ifdef DEBUG_LOG
             printf("|HLS DEBUG LOG|%s| genTileMetadata output -> tile_count: (%d, %d), tile_size: (%d, %d), overlap_size: (%d, %d), effective_tile_size: (%d, %d), last_tile_size: (%d, %d)\n",
             __func__, tile_count[0], tile_count[1], tile_size[0], tile_size[1], overlap_size[0], overlap_size[1], effective_tile_size[0], effective_tile_size[1], last_tile_size[0], last_tile_size[1]);
             printf("|HLS DEBUG LOG|%s| xblocks breakdown -> total_xblocks: %u, interior: %u, ab: %u, ba: %u, last_tile: %u\n",
             __func__, total_xblocks, interior_x_blocks, ab_x_blocks, ba_x_blocks, last_tile_x_blocks);
-        // #endif
+        #endif
         #endif
     }
 
@@ -338,9 +338,18 @@ namespace hls {
 
         unsigned int total_tiles = tile_count_x * tile_count_y;
         config.total_tile_count = total_tiles;
+                const unsigned short tile_count_min_1_x = tile_count_x - 1;
+        const unsigned short tile_count_min_1_y = tile_count_y - 1;
+        unsigned int iterior_tile_count = tile_count_min_1_x * tile_count_min_1_y;
+        unsigned int interior_x_blocks = iterior_tile_count * diff_z * realized_tile_size_x_beats * realized_tile_size_y;
+        unsigned int ab_x_blocks = diff_z * last_tile_size_x_beats * realized_tile_size_y * tile_count_min_1_y;
+        unsigned int ba_x_blocks = diff_z * last_tile_size_y * realized_tile_size_x_beats * tile_count_min_1_x;
+        unsigned int last_tile_x_blocks = diff_z * last_tile_size_x_beats * last_tile_size_y;
+        unsigned int total_xblocks =  interior_x_blocks + ab_x_blocks + ba_x_blocks + last_tile_x_blocks;
+
         config.isContinous = total_tiles == 1 and (grid_xblocks == num_xblocks or range.dim == 1) and (diff_y == gridSize[1] or range.dim != 3);
         config.start_offset = start_x + config.start_y * grid_xblocks + config.start_z * gridSize[1] * grid_xblocks;
-        config.total_xblocks = total_tiles * diff_z * tile_size_x_beats;
+        config.total_xblocks = total_xblocks;
         config.total_size_bytes = config.total_xblocks << ShiftBits << DataShiftBits;
 
 #ifndef __SYTHESIS__
