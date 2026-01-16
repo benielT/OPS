@@ -350,10 +350,10 @@ class CppHLS(Scheme):
                 consts_map[kernel_idx] = kernel_consts
                 consts.extend(x for x in kernel_consts if x not in consts)
         
-        return [(iterloop_datamover_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, tiles=program.getTileSizes()), self.iterloop_datamover_inc_extension),
-                (iterLoop_datamover_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, tiles=program.getTileSizes()), self.iterloop_datamover_src_extension),
-                (iterLoop_kernel_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts), self.iterloop_device_inc_extension),
-                (iterLoop_kernel_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, consts_map = consts_map), self.iterloop_device_src_extension)]
+        return [(iterloop_datamover_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_datamover_inc_extension),
+                (iterLoop_datamover_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_datamover_src_extension),
+                (iterLoop_kernel_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_device_inc_extension),
+                (iterLoop_kernel_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, consts_map = consts_map, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_device_src_extension)]
     
     def gen_local_dependancy_map(self, node: ops.DataflowNode) -> List[int]:
         datMap = [x for x in range(len(node.loop.dats))]
@@ -430,7 +430,9 @@ class CppHLS(Scheme):
                  is_arg_idx = (kernel_idx_arg_name != None),
                  ops=ops,
                  widen_stencil_disc_map = widen_stencil_desc_map,
-                 widen_read_stencil_desc = widen_read_stencil_desc
+                 widen_read_stencil_desc = widen_read_stencil_desc,
+                 isTiling = program.isTiling(),
+                 tiles=program.getTileSizes()
                  ),self.loop_device_PE_extension)]
         )
     

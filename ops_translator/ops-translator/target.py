@@ -175,8 +175,8 @@ class HLS(Target):
         "data_width" : 32,
         "mem_data_width" : 32,
         "maxi_depth" : 4096,
-        "maxi_read_burst_length" : 64,
-        "maxi_write_burst_length" : 64,
+        "maxi_read_burst_length" : 32,
+        "maxi_write_burst_length" : 32,
         "num_read_outstanding" : 4,
         "num_write_outstanding" : 4,
         "maxi_offset" : "slave",
@@ -189,7 +189,8 @@ class HLS(Target):
         "platform_is_multi_slr" : True,
         "platform_is_sb_selectable" : True,
         "platform_is_ib_selectable" : False,
-        "supported_internal_storage" : []
+        "supported_internal_storage" : [],
+        "default_tile_sizes" : [256,256]
         }
     platforms = {
         "u280" : {
@@ -236,7 +237,7 @@ class HLS(Target):
     def verify_config(self, app: Application) -> None:
         super().verify_config(app)
         # if App is tiled then datamover mode cannot be loopback
-        is_tiled = any(program.tiling for program in app.programs)
+        is_tiled = any(program.isTiling() for program in app.programs)
         if is_tiled and self.config["datamover_mode"] != FpgaDatamoverMode.DATAMOVER_DATACOPY.value:
             CodeGenWarning(f"Target {self.name} config warning: Application is tiled, changing datamover_mode to DATAMOVER_DATACOPY")
             self.config["datamover_mode"] = FpgaDatamoverMode.DATAMOVER_DATACOPY.value

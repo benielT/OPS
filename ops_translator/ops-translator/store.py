@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Union
 from util import flatten, uniqueBy
 import logging
 import ops
-from ops import OpsError
+from ops import OpsError, OpsWarning
 
 if TYPE_CHECKING:
     from language import Lang
@@ -141,8 +141,15 @@ class Program:
     tiling: Optional[bool] = False
     tile_sizes: List[int] = field(default_factory=lambda: [-1, -1, -1])  # x,y,z
 
+    def isTiling(self) -> bool:
+        return self.tiling
+    
     def getTileSizes(self) -> Union[List[int], None]:
-        if self.tiling:
+        if self.isTiling():
+            tileSizes = self.tile_sizes[:self.ndim]
+            for i in range(len(tileSizes)):
+                if tileSizes[i] == -1:
+                    OpsWarning(f"Tile size for dimension {i} not set in program {self.path} setting the default tile size from the config will be used")
             return self.tile_sizes[:self.ndim]
         else:
             return None

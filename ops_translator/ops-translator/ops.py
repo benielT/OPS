@@ -62,6 +62,19 @@ class OpsError(Exception):
         else:
             return f"OPS error: {self.message}"
 
+class OpsWarning(Warning):
+    message: str
+    loc: Location
+
+    def __init__(self, message: str, loc: Location = None) -> None:
+        self.message = message
+        self.loc = loc
+
+    def __str__(self) -> str:
+        if self.loc:
+            return f"{self.loc}: OPS Warning: {self.message}"
+        else:
+            return f"OPS Warning: {self.message}"
 
 class Type:
     formatter: Callable[["Type"], str]
