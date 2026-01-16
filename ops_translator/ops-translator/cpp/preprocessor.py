@@ -106,15 +106,15 @@ class Preprocessor(pcpp.Preprocessor):
         for name, macro in self.macros.items():
             if name == "OPS_TILING":
                 self.__is_ops_tiled_flag = True
-            elif name == "OPS_TILESIZE_X": 
+            elif name == "OPS_MAXTILESIZE_X": 
                 self.__ops_tile_sizes[0] = self.extract_macro_value(name, macro)
                 print(f"X tile size: {self.__ops_tile_sizes[0]}")
                 
-            elif name == "OPS_TILESIZE_Y":
+            elif name == "OPS_MAXTILESIZE_Y":
                 self.__ops_tile_sizes[1] = self.extract_macro_value(name, macro)
                 print(f"Y tile size: {self.__ops_tile_sizes[1]}")
 
-            elif name == "OPS_TILESIZE_Z":
+            elif name == "OPS_MAXTILESIZE_Z":
                 self.__ops_tile_sizes[2] = self.extract_macro_value(name, macro)
                 print(f"Z tile size: {self.__ops_tile_sizes[2]}")
 
