@@ -1104,15 +1104,15 @@ void mem2streamTiled(ap_uint<MEM_DATA_WIDTH>* mem_in_b1,
  * @tparam IN_ITR: II of the mem write
  * @tparam BURST_SIZE : Burst length of the AXI4 (max beats < 256)
  *
- * @param stream_in : input hls-stream
  * @param mem_out_b1 : output memory port for bank 1
  * @param mem_out_b2 : output memory port for bank 2
+ * @param stream_in : input hls-stream
  * @param config : MemConfigTile to guide writing
  */
 template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-void stream2memTiled(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
-                ap_uint<MEM_DATA_WIDTH>* mem_out_b1,
+void stream2memTiled(ap_uint<MEM_DATA_WIDTH>* mem_out_b1,
                 ap_uint<MEM_DATA_WIDTH>* mem_out_b2,
+                ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
 				const ops::hls::MemConfigTile& config)
 {
 #ifdef DEBUG_LOG
