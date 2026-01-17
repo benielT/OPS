@@ -207,6 +207,12 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
 {
     {% for arg in ilh.joint_args|ops_dat %}
         {% if arg is ops_read_or_rw%}
+            {% if isTiling %}
+    static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_strm_b1;
+    #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm_b1 depth={{(tiles[0] / config["vector_factor"] + 2)|int}};
+    static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_strm_b2;
+    #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm_b2 depth={{(tiles[0] / config["vector_factor"] + 2)|int}}
+            {% endif %}
     static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_strm;
     #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm
             {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
@@ -221,13 +227,22 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
             {% endif %}
     static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_strm;
     #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm
+            {% if isTiling %}
+    static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_strm_b1;
+    #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm_b1 depth={{(tiles[0] / config["vector_factor"] + 2)|int}};
+    static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_strm_b2;
+    #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm_b2 depth={{(tiles[0] / config["vector_factor"] + 2)|int}}
+            {% endif %}
         {% endif %}
     {% endfor %}
 
 #pragma HLS DATAFLOW
     {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw %}
         {% if isTiling %}
-        ops::hls::mem2streamTiled<mem_data_width, {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b1, arg{{arg.id}}_b2, arg{{arg.id}}_read_mem_strm, memconfig);
+        //ops::hls::mem2streamTiled<mem_data_width, {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b1, arg{{arg.id}}_b2, arg{{arg.id}}_read_mem_strm, memconfig);
+        ops::hls::stridedTileMem2stream<mem_data_width,  {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b1, arg{{arg.id}}_read_mem_strm_b1, memconfig, 0);
+        ops::hls::stridedTileMem2stream<mem_data_width,  {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b2, arg{{arg.id}}_read_mem_strm_b2, memconfig, 1);
+        ops::hls::combineSteams<mem_data_width, {{II(arg)}}>(arg{{arg.id}}_read_mem_strm_b1, arg{{arg.id}}_read_mem_strm_b2, arg{{arg.id}}_read_mem_strm, memconfig);
         {% else %}
         ops::hls::mem2stream<mem_data_width, {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}, arg{{arg.id}}_read_mem_strm, {{memconfig(arg)}}.total_xblocks);
         {% endif %}
@@ -283,7 +298,10 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
     {% for arg in ilh.joint_args|ops_dat|ops_write_or_rw %}
         {% if arg is not read_only_rw %}
             {% if isTiling %}
-        ops::hls::stream2memTiled<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b1, arg{{arg.id}}_b2, arg{{arg.id}}_write_mem_strm, memconfig);
+        // ops::hls::stream2memTiled<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b1, arg{{arg.id}}_b2, arg{{arg.id}}_write_mem_strm, memconfig);
+        ops::hls::splitStream<mem_data_width, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm, arg{{arg.id}}_write_mem_strm_b1, arg{{arg.id}}_write_mem_strm_b2, memconfig);
+        ops::hls::stridedTileStream2mem<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm_b1, arg{{arg.id}}_b1, memconfig, 0);
+        ops::hls::stridedTileStream2mem<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm_b2, arg{{arg.id}}_b2, memconfig, 1);
             {% else %}
         ops::hls::stream2mem<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}, arg{{arg.id}}_write_mem_strm, {{memconfig(arg)}}.total_xblocks);
             {% endif %}
