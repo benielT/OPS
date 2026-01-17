@@ -44,7 +44,7 @@ CXXFLAGS += -DPROFILE
 
 ########  VERIIFICATION OPTIONS  ######
 #Enable if wanted to verify
-#CXXFLAGS += -DVERIFICATION
+CXXFLAGS += -DVERIFICATION
 
 ######## ASYN_DISPATCH OPTION ########
 #Enable if wanted to use asynchronous dispatch

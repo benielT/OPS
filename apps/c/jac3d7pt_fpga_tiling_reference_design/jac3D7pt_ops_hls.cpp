@@ -381,7 +381,7 @@ int main(int argc, const char **argv)
         // else
         //     std::cout << "[BATCH - " << bat << "] verification of u after calculation" << "[FAILED]" << std::endl;
 
-        if(verify(u2_raw, u2_cpu[bat], size, d_m, d_p, full_range, batch_size))
+        if(verify(u2_raw, u2_cpu[bat], size, d_m, d_p, internal_range, batch_size))
             std::cout << "[BATCH - " << bat << "] verification of u2 after calculation" << "[PASSED]" << std::endl;
         else
             std::cout << "[BATCH - " << bat << "] verification of u2 after calculation" << "[FAILED]" << std::endl;

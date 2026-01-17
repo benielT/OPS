@@ -57,6 +57,115 @@ namespace hls {
         unsigned int total_size_bytes;
     };
 
+/**
+ * @brief Generates tile metadata for memory access patterns with configurable data width and memory width.
+ * 
+ * This template function calculates tiling parameters including tile sizes, overlap regions, effective
+ * tile dimensions, and tile counts for both X and Y dimensions. It supports variable memory data widths
+ * and adjusts calculations based on whether the memory is wide memory or not.
+ * 
+ * @tparam MEM_DATA_WIDTH The memory data width in bits (must be between min_mem_data_width and max_mem_data_width)
+ * @tparam DATA_WIDTH The individual data element width in bits (default: 32)
+ * @tparam TILE_DIM The number of dimensions to tile (default: 2 for X and Y)
+ * 
+ * @param[in,out] grid_size The total grid dimensions [x, y]
+ * @param[in,out] range The access range with start and end coordinates
+ * @param[in,out] tile_size Input tile dimensions, output adjusted tile dimensions [x, y]
+ * @param[in,out] overlap_size Input overlap dimensions, output adjusted overlap dimensions [x, y]
+ * @param[out] effective_tile_size The effective tile size excluding overlap [x, y]
+ * @param[out] last_tile_size The size of the last tile which may be smaller [x, y]
+ * @param[out] tile_count The number of tiles needed to cover the access range [x, y]
+ * @param[in] isWidMem Flag indicating if memory is wide memory format (default: true).
+ *            When true, X dimensions are in beats; when false, they are converted to byte units.
+ * 
+ * @note Uses compile-time assertions to validate MEM_DATA_WIDTH constraints
+ * @note All calculations use bit-shift operations for efficiency
+ */
+template <unsigned short MEM_DATA_WIDTH, unsigned short DATA_WIDTH=32, unsigned short TILE_DIM=2>
+void genTileMetadata(
+        ops::hls::SizeType& grid_size, 
+        ops::hls::AccessRange& range, 
+        ops::hls::SizeType2d& tile_size,
+        ops::hls::SizeType2d& overlap_size,
+        ops::hls::SizeType2d& effective_tile_size,
+        ops::hls::SizeType2d& last_tile_size,
+        ops::hls::SizeType2d& tile_count,
+        // ops::hls::SizeType2d& last_tile_upper_limit,
+        unsigned int& total_xblocks,
+        bool isWidMem = true)
+{
+#ifndef __SYTHESIS__
+    static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
+            "MEM_DATA_WIDTH failed limit check");
+    static_assert(TILE_DIM >= 1 && TILE_DIM < 3,
+            "TILE_DIM must be 1 or 2");
+#endif
+    constexpr unsigned short data_vector_factor = MEM_DATA_WIDTH / DATA_WIDTH;
+    const unsigned short ShiftBits = (unsigned short)LOG2(data_vector_factor);
+    const unsigned short DataShiftBits = (unsigned short)LOG2(DATA_WIDTH/8);
+    const unsigned short start_x = range.start[0] >> ShiftBits;
+    const unsigned short end_x = (range.end[0] + data_vector_factor - 1) >> ShiftBits;
+    const unsigned short grid_xblocks = grid_size[0] >> ShiftBits;
+    const unsigned short num_xblocks = end_x - start_x;
+
+    const unsigned short tile_size_x_beats = tile_size[0] >> ShiftBits;
+    const unsigned short overlap_size_x_beats = overlap_size[0] >> ShiftBits;
+
+    const unsigned short effective_tile_size_x_beats = tile_size_x_beats - overlap_size_x_beats;
+
+// #ifndef __xilinx__
+//     if (effective_tile_size_x_beats == 0) {
+//         std::string msg = "|OPS ERROR LOG| " + std::string(__func__) + "| effective tile size in X dimension is zero, where the tile_size_x_beats: " 
+//                         + std::to_string(tile_size_x_beats) + ", overlap_size_x_beats: " + std::to_string(overlap_size_x_beats) + ". PLEASE RUN WITH BETTER TILE SIZE ONFIGURATION.";
+//         throw std::runtime_error(msg);
+//     }
+// #endif
+
+    const unsigned short effective_tile_size_y = TILE_DIM == 2 ? tile_size[1] - overlap_size[1] : grid_size[1];
+    const unsigned short diff_y = range.end[1] - range.start[1];
+    const unsigned short realized_tile_size_x_beats = tile_size_x_beats > num_xblocks ? num_xblocks : tile_size_x_beats;
+    const unsigned short tile_count_x = ((num_xblocks - realized_tile_size_x_beats) + effective_tile_size_x_beats - 1) / effective_tile_size_x_beats + 1;
+    const unsigned short last_tile_size_x_beats = tile_count_x > 1 ? num_xblocks - (tile_count_x - 1) * effective_tile_size_x_beats : realized_tile_size_x_beats;
+    // const unsigned short last_tile_upper_limit_x = range.end[0] - ((tile_count_x - 1) * effective_tile_size_x_beats << ShiftBits);
+
+    const unsigned short realized_tile_size_y = TILE_DIM == 2 ? tile_size[1] > diff_y ? diff_y : tile_size[1] : grid_size[1];
+    const unsigned short tile_count_y = ((diff_y - realized_tile_size_y) + effective_tile_size_y - 1) / effective_tile_size_y + 1;
+    const unsigned short last_tile_size_y = tile_count_y > 1 ? diff_y - (tile_count_y - 1) * effective_tile_size_y : realized_tile_size_y;
+    // const unsigned short last_tile_upper_limit_y = TILE_DIM == 2 ? range.end[1] - (tile_count_y - 1) * effective_tile_size_y : range.end[1];
+    
+    // Total xblocks calculations
+    const unsigned short diff_z = range.end[2] - range.start[2];
+    const unsigned short tile_count_min_1_x = tile_count_x - 1;
+    const unsigned short tile_count_min_1_y = tile_count_y - 1;
+    unsigned int iterior_tile_count = tile_count_min_1_x * tile_count_min_1_y;
+    unsigned int interior_x_blocks = iterior_tile_count * diff_z * realized_tile_size_x_beats * realized_tile_size_y;
+    unsigned int ab_x_blocks = diff_z * last_tile_size_x_beats * realized_tile_size_y * tile_count_min_1_y;
+    unsigned int ba_x_blocks = diff_z * last_tile_size_y * realized_tile_size_x_beats * tile_count_min_1_x;
+    unsigned int last_tile_x_blocks = diff_z * last_tile_size_x_beats * last_tile_size_y;
+    total_xblocks =  interior_x_blocks + ab_x_blocks + ba_x_blocks + last_tile_x_blocks;
+
+    grid_size[0] = grid_xblocks;
+    range.start[0] = start_x;
+    range.end[0] = end_x;
+    tile_size[0] = isWidMem ? realized_tile_size_x_beats : (realized_tile_size_x_beats << ShiftBits);
+    tile_size[1] = realized_tile_size_y;
+    overlap_size[0] = isWidMem ? overlap_size_x_beats : (overlap_size_x_beats << ShiftBits);
+    overlap_size[1] = overlap_size[1];
+    effective_tile_size[0] = isWidMem ? effective_tile_size_x_beats : (effective_tile_size_x_beats << ShiftBits);
+    effective_tile_size[1] = effective_tile_size_y;
+    last_tile_size[0] = isWidMem ? last_tile_size_x_beats : (last_tile_size_x_beats << ShiftBits);
+    last_tile_size[1] = last_tile_size_y;
+    tile_count[0] = tile_count_x;
+    tile_count[1] = tile_count_y;
+
+    #ifdef DEBUG_LOG
+        printf("|HLS DEBUG LOG|%s| genTileMetadata output -> tile_count: (%d, %d), tile_size: (%d, %d), overlap_size: (%d, %d), effective_tile_size: (%d, %d), last_tile_size: (%d, %d)\n",
+        __func__, tile_count[0], tile_count[1], tile_size[0], tile_size[1], overlap_size[0], overlap_size[1], effective_tile_size[0], effective_tile_size[1], last_tile_size[0], last_tile_size[1]);
+        printf("|HLS DEBUG LOG|%s| xblocks breakdown -> total_xblocks: %u, interior: %u, ab: %u, ba: %u, last_tile: %u\n",
+        __func__, total_xblocks, interior_x_blocks, ab_x_blocks, ba_x_blocks, last_tile_x_blocks);
+    #endif
+
+}
 
     /**
      * @brief Generates memory configuration for tiled access patterns with specified data widths.
@@ -109,7 +218,7 @@ namespace hls {
         const unsigned short DataShiftBits = (unsigned short)LOG2(DATA_WIDTH/8);
         // const unsigned short start_x = range.start[0] >> ShiftBits;
         // const unsigned short end_x = (range.end[0] + data_vector_factor - 1) >> ShiftBits;
-        // const unsigned short grid_xblocks = gridSize[0] >> ShiftBits; //GridSize[0] has to be MEM_DATA_WIDTH aligned
+        const unsigned short grid_xblocks = gridSize[0] >> ShiftBits; //GridSize[0] has to be MEM_DATA_WIDTH aligned
 
         const unsigned short num_xblocks = range.end[0] - range.start[0];
         
@@ -119,7 +228,7 @@ namespace hls {
         config.end_x = range.end[0];
         config.end_y = range.end[1];
         config.end_z = range.end[2];
-        config.grid_xblocks = gridSize[0];
+        config.grid_xblocks = grid_xblocks;
         config.grid_size_y = gridSize[1];
         config.grid_size_z = gridSize[2];
 

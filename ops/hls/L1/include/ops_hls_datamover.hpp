@@ -711,8 +711,12 @@ static void stridedTileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream
                     unsigned int offset = offset_3 + j_offset;
 
                     #ifdef DEBUG_LOG
-                        printf("|HLS DEBUG_LOG|%s| offset:%u tile_y:%u tile_x:%u k:%u j:%u tile_size_x:%u\n",
+                        printf("|HLS DEBUG_LOG|%s| offset_1:%u offset_2:%u offset_3:%u j_offset:%u offset:%u tile_y:%u tile_x:%u k:%u j:%u tile_size_x:%u\n",
                                __func__,
+                               (unsigned int)offset_1,
+                               (unsigned int)offset_2,
+                               (unsigned int)offset_3,
+                               (unsigned int)j_offset,
                                (unsigned int)offset,
                                (unsigned int)tile_y,
                                (unsigned int)tile_x,
