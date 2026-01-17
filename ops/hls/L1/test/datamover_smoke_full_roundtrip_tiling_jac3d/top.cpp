@@ -584,11 +584,11 @@ static void readWriteTiledDataflow(
     #pragma HLS STREAM variable = hls_streams depth = 10
 
     // Read from memory banks into stream
-    ops::hls::mem2streamTiled<MEM_DATA_WIDTH, IN_ITR, BURST_SIZE>(mem_in_b1, mem_in_b2, hls_streams[0], config);
+    ops::hls::mem2streamTiled<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(mem_in_b1, mem_in_b2, hls_streams[0], config);
 
     kernel_outerloop_0_dataflow_region_cascaded(stencilConfig, hls_streams);
     // Write from stream to memory banks
-    ops::hls::stream2memTiled<MEM_DATA_WIDTH, IN_ITR, BURST_SIZE>(hls_streams[iter_par_factor], mem_out_b1, mem_out_b2, config);
+    ops::hls::stream2memTiled<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>( mem_out_b1, mem_out_b2, hls_streams[iter_par_factor], config);
 }
 
 void dut(ap_uint<AXI_M_WIDTH>* mem_in_b1,
