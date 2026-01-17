@@ -90,7 +90,7 @@ void genTileMetadata(
         ops::hls::SizeType2d& effective_tile_size,
         ops::hls::SizeType2d& last_tile_size,
         ops::hls::SizeType2d& tile_count,
-        // ops::hls::SizeType2d& last_tile_upper_limit,
+        unsigned short& last_tile_upper_limit_x,
         unsigned int& total_xblocks,
         bool isWidMem = true)
 {
@@ -126,7 +126,7 @@ void genTileMetadata(
     const unsigned short realized_tile_size_x_beats = tile_size_x_beats > num_xblocks ? num_xblocks : tile_size_x_beats;
     const unsigned short tile_count_x = ((num_xblocks - realized_tile_size_x_beats) + effective_tile_size_x_beats - 1) / effective_tile_size_x_beats + 1;
     const unsigned short last_tile_size_x_beats = tile_count_x > 1 ? num_xblocks - (tile_count_x - 1) * effective_tile_size_x_beats : realized_tile_size_x_beats;
-    // const unsigned short last_tile_upper_limit_x = range.end[0] - ((tile_count_x - 1) * effective_tile_size_x_beats << ShiftBits);
+    last_tile_upper_limit_x = range.end[0] - ((tile_count_x - 1) * effective_tile_size_x_beats << ShiftBits);
 
     const unsigned short realized_tile_size_y = TILE_DIM == 2 ? tile_size[1] > diff_y ? diff_y : tile_size[1] : grid_size[1];
     const unsigned short tile_count_y = ((diff_y - realized_tile_size_y) + effective_tile_size_y - 1) / effective_tile_size_y + 1;

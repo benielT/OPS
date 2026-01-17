@@ -163,9 +163,11 @@ public:
                 const unsigned short lower_limit_x = adj_half_span_x;
                 const unsigned short lower_limit_y = adj_half_span_x;
                 const unsigned short lower_limit_z = half_span_x;
-                const unsigned short upper_limit_x = true_tile_size_x - adj_half_span_x;
-                const unsigned short upper_limit_y = tile_size_y - adj_half_span_x;
-                const unsigned short upper_limit_z = stencilConfig.outer_loop_limit - half_span_x;
+                const unsigned short upper_limit_x_const = stencilConfig.last_tile_upper_limit_x - adj_half_span_x;
+                const unsigned short upper_limit_x = upper_limit_x_const < adj_half_span_x ? adj_half_span_x : upper_limit_x_const;
+                const unsigned short upper_limit_y_const = tile_size_y - adj_half_span_x;
+                const unsigned short upper_limit_y = upper_limit_y_const < adj_half_span_x ? adj_half_span_x : upper_limit_y_const;
+                const unsigned short upper_limit_z = stencilConfig.outer_loop_limit - half_span_x - 1;
                 // SizeType lower_limit = {half_span_x * (m_pid + 1), half_span_x, half_span_x};
                 // #pragma HLS ARRAY_PARTITION variable = stencilConfig.lower_limit dim = 1 complete
                 // #pragma HLS ARRAY_PARTITION variable = stencilConfig.upper_limit dim = 1 complete

@@ -151,6 +151,7 @@ struct StencilConfigCoreTiled // : public StencilConfigCore
     unsigned short outer_loop_limit;
     SizeType2d tile_size; //{xblocks, y}
     SizeType2d last_tile_size; //{xblocks, y}
+    unsigned short last_tile_upper_limit_x;
     // SizeType2d tile_overlap_size; //{xblocks, y}
     // SizeType2d effective_tile_size; //{xblocks, y}
     SizeType2d tile_count; //{xblocks, y}   

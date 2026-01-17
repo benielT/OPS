@@ -46,6 +46,10 @@ static void datamover_outerloop_0_dataflow_read_write_dataflow_region(
         hls::stream <ap_axiu<axis_data_width,0,0,0>>& arg1_axis_in
 )    
 {
+    static ::hls::stream<ap_uint<mem_data_width>> arg0_read_mem_strm_b1;
+    #pragma HLS STREAM variable = arg0_read_mem_strm_b1 depth=32
+    static ::hls::stream<ap_uint<mem_data_width>> arg0_read_mem_strm_b2;
+    #pragma HLS STREAM variable = arg0_read_mem_strm_b2 depth=32
     static ::hls::stream<ap_uint<mem_data_width>> arg0_read_mem_strm;
     #pragma HLS STREAM variable = arg0_read_mem_strm
     static ::hls::stream<ap_uint<axis_data_width>> arg0_read_reduced_mem_strm;
@@ -54,9 +58,16 @@ static void datamover_outerloop_0_dataflow_read_write_dataflow_region(
     #pragma HLS STREAM variable = arg1_write_reduced_mem_strm
     static ::hls::stream<ap_uint<mem_data_width>> arg1_write_mem_strm;
     #pragma HLS STREAM variable = arg1_write_mem_strm
+    static ::hls::stream<ap_uint<mem_data_width>> arg1_write_mem_strm_b1;
+    #pragma HLS STREAM variable = arg1_write_mem_strm_b1 depth=32
+    static ::hls::stream<ap_uint<mem_data_width>> arg1_write_mem_strm_b2;
+    #pragma HLS STREAM variable = arg1_write_mem_strm_b2 depth=32
 
 #pragma HLS DATAFLOW
-        ops::hls::mem2streamTiled<mem_data_width, 32, 2>(arg0_b1, arg0_b2, arg0_read_mem_strm, memconfig);
+        // ops::hls::mem2streamTiled<mem_data_width, 32, 2>(arg0_b1, arg0_b2, arg0_read_mem_strm, memconfig);
+        ops::hls::stridedTileMem2stream<mem_data_width, 1, 32>(arg0_b1, arg0_read_mem_strm_b1, memconfig, 0);
+        ops::hls::stridedTileMem2stream<mem_data_width, 1, 32>(arg0_b2, arg0_read_mem_strm_b2, memconfig, 1);
+        ops::hls::combineSteams<mem_data_width, 2>(arg0_read_mem_strm_b1, arg0_read_mem_strm_b2, arg0_read_mem_strm, memconfig);
         // ops::hls::mem2stream<mem_data_width, 32, 2>(arg0, arg0_read_mem_strm, memconfig.total_xblocks);
         ops::hls::stream2streamStepdown<mem_data_width, axis_data_width>(arg0_read_mem_strm, arg0_read_reduced_mem_strm, memconfig.total_xblocks);
         ops::hls::stream2axis<axis_data_width>(arg0_read_reduced_mem_strm, arg0_axis_out, num_pkts);
@@ -64,7 +75,10 @@ static void datamover_outerloop_0_dataflow_read_write_dataflow_region(
     
         ops::hls::stream2streamStepup<axis_data_width, mem_data_width>(arg1_write_reduced_mem_strm, arg1_write_mem_strm, memconfig.total_xblocks);
         // ops::hls::stream2mem<mem_data_width, 32, 2>(arg1, arg1_write_mem_strm, memconfig.total_xblocks);
-        ops::hls::stream2memTiled<mem_data_width, 32, 2>(arg1_write_mem_strm, arg1_b1, arg1_b2, memconfig);
+        // ops::hls::stream2memTiled<mem_data_width, 32, 2>(arg1_b1, arg1_b2, arg1_write_mem_strm, memconfig);
+        ops::hls::splitStream<mem_data_width, 2>(arg1_write_mem_strm, arg1_write_mem_strm_b1, arg1_write_mem_strm_b2, memconfig);
+        ops::hls::stridedTileStream2mem<mem_data_width, 1, 32>(arg1_write_mem_strm_b1, arg1_b1, memconfig, 0);
+        ops::hls::stridedTileStream2mem<mem_data_width, 1, 32>(arg1_write_mem_strm_b2, arg1_b2, memconfig, 1);
 }
 
 static void datamover_outerloop_0_dataflow_read_write(

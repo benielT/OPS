@@ -50,12 +50,13 @@ public:
         ops::hls::SizeType2d effective_tile_size;
         ops::hls::SizeType2d last_tile_size;
         unsigned int total_xblocks_widen;
+        unsigned short last_tile_upper_limit_x;
 
-        ops::hls::genTileMetadata<512, 32>(gridSize_copy, read_range_copy, tile_size, overlap_size, effective_tile_size, last_tile_size, tile_count, total_xblocks_widen);
+        ops::hls::genTileMetadata<512, 32>(gridSize_copy, read_range_copy, tile_size, overlap_size, effective_tile_size, last_tile_size, tile_count, last_tile_upper_limit_x, total_xblocks_widen, true);
         std::cout << "Adjusted tile Tile Size: " << tile_size[0] << " x " << tile_size[1] << std::endl;
 
-        ops::hls::MemConfigTile config;
-        ops::hls::genMemConfigTileV2<512, 32>(gridSize_copy, read_range_copy, tile_size, tile_count, overlap_size, effective_tile_size, last_tile_size, total_xblocks_widen, config);
+        // ops::hls::MemConfigTile config;
+        // ops::hls::genMemConfigTileV2<512, 32>(gridSize_copy, read_range_copy, tile_size, tile_count, overlap_size, effective_tile_size, last_tile_size, total_xblocks_widen, config);
 
         // Tile data to kernels need to be adjusted by factor of 2 as axis_data_width = 256 and mem_data_width = 512
         constexpr unsigned short num_of_pkts_per_beats = 2;
@@ -98,7 +99,8 @@ public:
         OCL_CHECK(err, err = m_kernel_0.setArg(narg++, kernel_last_tile_size[1]));
         OCL_CHECK(err, err = m_kernel_0.setArg(narg++, tile_count[0]));
         OCL_CHECK(err, err = m_kernel_0.setArg(narg++, tile_count[1]));
-        OCL_CHECK(err, err = m_kernel_0.setArg(narg++, config.total_xblocks));
+        OCL_CHECK(err, err = m_kernel_0.setArg(narg++, total_xblocks_widen));
+        OCL_CHECK(err, err = m_kernel_0.setArg(narg++, last_tile_upper_limit_x));
 #endif
         narg = 0; 
         OCL_CHECK(err, err = m_kernel_1.setArg(narg++, (unsigned short)1));
@@ -126,7 +128,8 @@ public:
         OCL_CHECK(err, err = m_kernel_1.setArg(narg++, kernel_last_tile_size[1]));
         OCL_CHECK(err, err = m_kernel_1.setArg(narg++, tile_count[0]));
         OCL_CHECK(err, err = m_kernel_1.setArg(narg++, tile_count[1]));
-        OCL_CHECK(err, err = m_kernel_1.setArg(narg++, config.total_xblocks));
+        OCL_CHECK(err, err = m_kernel_1.setArg(narg++, total_xblocks_widen));
+        OCL_CHECK(err, err = m_kernel_1.setArg(narg++, last_tile_upper_limit_x));
 #endif
         narg = 0; 
         OCL_CHECK(err, err = m_kernel_2.setArg(narg++, (unsigned short)2));
@@ -154,7 +157,8 @@ public:
         OCL_CHECK(err, err = m_kernel_2.setArg(narg++, kernel_last_tile_size[1]));
         OCL_CHECK(err, err = m_kernel_2.setArg(narg++, tile_count[0]));
         OCL_CHECK(err, err = m_kernel_2.setArg(narg++, tile_count[1]));
-        OCL_CHECK(err, err = m_kernel_2.setArg(narg++, config.total_xblocks));
+        OCL_CHECK(err, err = m_kernel_2.setArg(narg++, total_xblocks_widen));
+        OCL_CHECK(err, err = m_kernel_2.setArg(narg++, last_tile_upper_limit_x));
 #endif
 #ifndef OPS_HLS_NO_LOOPBACK
         bool loopback_enbl = true;

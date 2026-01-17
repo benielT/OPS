@@ -77,6 +77,7 @@ extern "C" void kernel_outerloop_0(
         const unsigned short tile_count_x,
         const unsigned short tile_count_y,
         const unsigned int total_xblocks,
+        const unsigned short last_tile_upper_limit_x,
 #endif
     //u
         hls::stream <ap_axiu<axis_data_width, 0, 0, 0>>& arg0_axis_in,
@@ -111,6 +112,7 @@ extern "C" void kernel_outerloop_0(
     #pragma HLS INTERFACE s_axilite port = tile_count_x bundle = control
     #pragma HLS INTERFACE s_axilite port = tile_count_y bundle = control
     #pragma HLS INTERFACE s_axilite port = total_xblocks bundle = control
+    #pragma HLS INTERFACE s_axilite port = last_tile_upper_limit_x bundle = control
 #endif
 
     #pragma HLS INTERFACE axis port = arg0_axis_in register
@@ -148,6 +150,7 @@ extern "C" void kernel_outerloop_0(
     stencilConfig.last_tile_size[1] = last_tile_size_y;
     stencilConfig.tile_count[0] = tile_count_x;
     stencilConfig.tile_count[1] = tile_count_y;
+    stencilConfig.last_tile_upper_limit_x = last_tile_upper_limit_x;
 #endif
     // unsigned int tmp1 = stencilConfig_batch_size * vector_factor;
     // unsigned int tmp2 = stencilConfig_total_itr * sizeof(stencil_type);

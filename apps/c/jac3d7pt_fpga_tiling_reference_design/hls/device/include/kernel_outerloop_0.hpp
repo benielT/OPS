@@ -33,6 +33,7 @@ extern "C" void kernel_outerloop_0(
         const unsigned short tile_count_x,
         const unsigned short tile_count_y,
         const unsigned int total_xblocks,
+        const unsigned short last_tile_upper_limit_x,
 #endif
     //u
         hls::stream <ap_axiu<axis_data_width, 0, 0, 0>>& arg0_axis_in,
