@@ -43,6 +43,13 @@ memconfig
     {%- set ii_factor = ii_factor | int %}
 {{ii_factor}}
 {%- endmacro -%}
+{% macro tile_size(idx) -%}
+    {%- if tiles[idx] == -1 -%}
+{{config["default_tile_sizes"][idx]}}
+    {%- else -%}
+{{tiles[idx]}}
+    {%- endif -%}
+{%- endmacro -%}
 {% block header_block %}
 
 #pragma once
@@ -69,15 +76,42 @@ extern "C" void datamover_outerloop_{{ilh.id}}(
     {% for i in range(ndim) %}
         const unsigned short range_start_{{i}},
         const unsigned short range_end_{{i}},
-    {% endfor%}
+    {% endfor %}
     {% for i in range(ndim) %}
         const unsigned short gridSize_{{i}},
     {% endfor %}
         const unsigned int outer_itr,
+    {% if isTiling %}
+        {% if ndim == 3 %}
+        const unsigned short tile_size_x,
+        const unsigned short tile_size_y,
+        const unsigned short overlap_size_x,
+        const unsigned short overlap_size_y,
+        const unsigned short effective_tile_size_x,
+        const unsigned short effective_tile_size_y,
+        const unsigned short last_tile_size_x,
+        const unsigned short last_tile_size_y,
+        const unsigned short tile_count_x,
+        const unsigned short tile_count_y,
+        {% else %}
+        const unsigned short tile_size_x,
+        const unsigned short overlap_size_x,
+        const unsigned short effective_tile_size_x,
+        const unsigned short last_tile_size_x,
+        const unsigned short tile_count_x,
+        {% endif %}
+        const unsigned int total_xblocks,
+    {% else %}
         const unsigned short batch_size,
+    {% endif %}
     {% for arg in ilh.joint_args|ops_dat %}
     //{{ilh.dats[arg.dat_id][0].ptr}}
+        {% if isTiling %}
+        ap_uint<mem_data_width>* arg{{(arg.id)}}_b1,
+        ap_uint<mem_data_width>* arg{{(arg.id)}}_b2,
+        {% else %}
         ap_uint<mem_data_width>* arg{{(arg.id)}},
+        {% endif %}
     {% endfor %}
     {% for arg in ilh.joint_args|ops_dat %}
     //{{ilh.dats[arg.dat_id][0].ptr}}

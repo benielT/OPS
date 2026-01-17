@@ -10,7 +10,7 @@ arg{{ilh.getOrderedSwapPairIds(arg.dat_id)[0]}}_arg{{ilh.getOrderedSwapPairIds(a
 {% endblock %}
 
 {% block joint_PE %}
-static void joint_PE_outerloop_{{ilh.id}}(const unsigned short PEId, const ops::hls::StencilConfigCore& stencilConfig, 
+static void joint_PE_outerloop_{{ilh.id}}(const unsigned short PEId, const ops::hls::{{"StencilConfigCoreTiled" if isTiling else "StencilConfigCore"}} & stencilConfig, 
     {% for arg in ilh.joint_args|ops_not_idx %}
         {% if arg is ops_dat %}
             {% if arg is not ops_rw %}
@@ -65,7 +65,7 @@ static void joint_PE_outerloop_{{ilh.id}}(const unsigned short PEId, const ops::
 
 {% block kernel_dataflow_region %}
 
-static void kernel_outerloop_{{ilh.id}}_dataflow_region_cascaded(const unsigned short& slr_region, const ops::hls::StencilConfigCore& stencilConfig,
+static void kernel_outerloop_{{ilh.id}}_dataflow_region_cascaded(const unsigned short& slr_region, const ops::hls::{{"StencilConfigCoreTiled" if isTiling else "StencilConfigCore"}}& stencilConfig,
     {% for swap_pair in ilh.getUniqueDatSwapsIds() %}
     ::hls::stream<ap_uint<{{axis_data_width_datid(swap_pair[0])}}>> arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams[iter_par_factor + 1]{{", " if (not loop.last or consts or ilh.joint_args|ops_gbl)}}
     {% endfor %}
@@ -111,7 +111,7 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region_cascaded(const unsigned 
         );
     }
 }
-static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& slr_region, const ops::hls::StencilConfigCore& stencilConfig, const unsigned int total_bytes,
+static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& slr_region, const ops::hls::{{"StencilConfigCoreTiled" if isTiling else "StencilConfigCore"}}& stencilConfig, const unsigned int total_bytes,
     {% if ilh.isMultiDim() %}
         {% for m_dim in ilh.getMultidimList() %}
     const unsigned int total_bytes_d{{m_dim}},
@@ -184,15 +184,34 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& sl
     {% endfor %}#}
     #pragma HLS INTERFACE s_axilite port = stencilConfig_dim bundle = control
     #pragma HLS INTERFACE s_axilite port = stencilConfig_total_itr bundle = control
+#ifndef OPS_TILING
     {% for i in range(ndim)%}
     #pragma HLS INTERFACE s_axilite port = stencilConfig_lower_limit_{{i}} bundle = control
     {% endfor %}
     {% for i in range(ndim)%}
     #pragma HLS INTERFACE s_axilite port = stencilConfig_upper_limit_{{i}} bundle = control
     {% endfor %}
+#endif
     #pragma HLS INTERFACE s_axilite port = stencilConfig_outer_loop_limit bundle = control
+#ifndef OPS_TILING
     #pragma HLS INTERFACE s_axilite port = stencilConfig_batch_size bundle = control
-
+#else
+    {% if ndim == 3 %}
+    #pragma HLS INTERFACE s_axilite port = tile_size_x bundle = control
+    #pragma HLS INTERFACE s_axilite port = tile_size_y bundle = control
+    #pragma HLS INTERFACE s_axilite port = last_tile_size_x bundle = control
+    #pragma HLS INTERFACE s_axilite port = last_tile_size_y bundle = control
+    #pragma HLS INTERFACE s_axilite port = tile_count_x bundle = control
+    #pragma HLS INTERFACE s_axilite port = tile_count_y bundle = control
+    #pragma HLS INTERFACE s_axilite port = total_xblocks bundle = control
+    #pragma HLS INTERFACE s_axilite port = last_tile_upper_limit_x bundle = control
+    {% else %}
+    #pragma HLS INTERFACE s_axilite port = tile_size_x bundle = control
+    #pragma HLS INTERFACE s_axilite port = last_tile_size_x bundle = control
+    #pragma HLS INTERFACE s_axilite port = tile_count_x bundle = control
+    #pragma HLS INTERFACE s_axilite port = total_xblocks bundle = control
+    {% endif %}
+#endif
     {% for const_arg in ilh.joint_args|ops_gbl%}
     #pragma HLS INTERFACE s_axilite port = {{get_arg_gbl_name(const_arg)}} bundle = control
     {% endfor %}    
@@ -212,32 +231,86 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& sl
     #pragma HLS INTERFACE ap_ctrl_chain port = return
     #pragma HLS INTERFACE s_axilite port = return bundle = control   
 
-
+    {% if not isTiling %}
     ops::hls::StencilConfigCore stencilConfig;
+    {% else %}
+    ops::hls::StencilConfigCoreTiled stencilConfig;
+    {% endif %}
 
     stencilConfig.dim = stencilConfig_dim;
     {% for i in range(ndim)%}
     stencilConfig.grid_size[{{i}}] = stencilConfig_grid_size_{{i}};
     {% endfor %}
-    {% for i in range(ndim)%}
+    {% if not isTiling %}
+        {% for i in range(ndim)%}
     stencilConfig.lower_limit[{{i}}] = stencilConfig_lower_limit_{{i}};
-    {% endfor %}
-    {% for i in range(ndim)%}
+        {% endfor %}
+        {% for i in range(ndim)%}
     stencilConfig.upper_limit[{{i}}] = stencilConfig_upper_limit_{{i}};
-    {% endfor %}
+        {% endfor %}
     stencilConfig.total_itr = stencilConfig_total_itr;
+    {% endif %}
     stencilConfig.outer_loop_limit = stencilConfig_outer_loop_limit;
+    {% if not isTiling %}
     stencilConfig.batch_size = stencilConfig_batch_size;
-
+    {% else %}
+    stencilConfig.tiling_dim = {{2 if ndim == 3 else 1}};
+    stencilConfig.tile_size[0] = tile_size_x;
+    stencilConfig.tile_size[1] = {% if ndim == 3 %}tile_size_y{% else %}1{% endif %};
+    stencilConfig.last_tile_size[0] = last_tile_size_x;
+    stencilConfig.last_tile_size[1] = {% if ndim == 3 %}last_tile_size_y{% else %}1{% endif %};
+    stencilConfig.tile_count[0] = tile_count_x;
+    stencilConfig.tile_count[1] = {% if ndim == 3 %}tile_count_y{% else %}1{% endif %};
+    stencilConfig.last_tile_upper_limit_x = last_tile_upper_limit_x;
+    {% endif %}
+    {% if not isTiling %}
     unsigned int tmp1 = stencilConfig_batch_size * vector_factor;
     unsigned int tmp2 = stencilConfig_total_itr * sizeof(stencil_type);
     unsigned int total_bytes = tmp1 * tmp2;
-    
+    {% else %}
+    constexpr unsigned short num_of_pkts_per_beat = mem_data_width / axis_data_width;
+    constexpr unsigned short bytes_per_pkt = sizeof(stencil_type) * vector_factor;
+    const unsigned int num_beats = total_xblocks;
+    const unsigned int num_pkts = num_beats * num_of_pkts_per_beat;
+    const unsigned int total_bytes = num_pkts * bytes_per_pkt;
+    {% endif %}
     {% if ilh.isMultiDim() %}
         {% for m_dim in ilh.getMultidimList() %}
     unsigned int total_bytes_d{{m_dim}} = total_bytes * {{m_dim}};
         {% endfor %}
     {% endif %}
+
+#ifdef DEBUG_LOG
+    printf("[KERNEL_DEBUG]|%s| num_beats: %d, num_pkts: %d, total_bytes: %d\n", __func__,
+         num_beats, num_pkts, total_bytes);
+    {% if ilh.isMultiDim() %}
+        {% for m_dim in ilh.getMultidimList() %}
+    printf("[KERNEL_DEBUG]|%s| total_bytes_d{{m_dim}}: %d\n", __func__, total_bytes_d{{m_dim}});
+        {% endfor %}
+    {% endif %}
+    {% if not isTiling %}
+    printf("[KERNEL_DEBUG]|%s| stencilConfig: dim: %hu, grid_size:(%d,%d,%d), lower_limit:(%d,%d,%d), upper_limit:(%d,%d,%d), 
+            total_itr: %d, outer_loop_limit: %d, batch_size: %d\n", __func__,
+        stencilConfig.dim,
+        stencilConfig.grid_size[0], stencilConfig.grid_size[1], stencilConfig.grid_size[2],
+        stencilConfig.lower_limit[0], stencilConfig.lower_limit[1], stencilConfig.lower_limit[2],
+        stencilConfig.upper_limit[0], stencilConfig.upper_limit[1], stencilConfig.upper_limit[2],
+        stencilConfig.total_itr,
+        stencilConfig.outer_loop_limit,
+        stencilConfig.batch_size);
+    {% else %}
+
+    printf("[KERNEL_DEBUG]|%s| stencilConfig: dim: %hu, grid_size:(%d,%d,%d), outer_loop_limit: %d, tiling_dim: %hu, tile_size:(%d,%d),\
+        last_tile_size:(%d,%d), tile_count:(%d,%d)\n, total_xblocks: %d\n", __func__,
+        stencilConfig.dim,
+        stencilConfig.grid_size[0], stencilConfig.grid_size[1], stencilConfig.grid_size[2],
+        stencilConfig.outer_loop_limit,
+        stencilConfig.tiling_dim,
+        stencilConfig.tile_size[0], stencilConfig.tile_size[1],
+        stencilConfig.last_tile_size[0], stencilConfig.last_tile_size[1],
+        stencilConfig.tile_count[0], stencilConfig.tile_count[1], total_xblocks);
+    {% endif %}
+#endif
 
 #ifdef DEBUG_LOG
     printf("[KERNEL_DEBUG]|%s| Starting outerloop_{{ilh.id}} kernel TOP \n", __func__);
