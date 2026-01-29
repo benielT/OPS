@@ -190,7 +190,8 @@ class HLS(Target):
         "platform_is_sb_selectable" : True,
         "platform_is_ib_selectable" : False,
         "supported_internal_storage" : [],
-        "default_tile_sizes" : [256,256]
+        "default_tile_sizes" : [256,256],
+        "tile_banks" : 1
         }
     platforms = {
         "u280" : {
