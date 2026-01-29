@@ -233,6 +233,18 @@ ops::hls::Grid<T> ops_hls_decl_dat(ops::hls::Block& block, int elem_size, int* s
     data_size *= grid.originalProperty.batch_size;
 
 	grid.hostBuffer.resize(data_size);
+
+    // std::cout << "What " << std::endl;
+#ifdef OPS_TILING
+    // If tiling is enabled, we may need to allocate extra buffer space for row tiles
+    if (grid.alt_banks > 1)
+    {
+        auto alt_buffer_sizes = grid.getAltBufferSizes();
+        for (int bank = 0; bank < grid.alt_banks; bank++) {
+            grid.altHostBuffers[bank].resize(alt_buffer_sizes[bank]);
+        }
+    }
+#endif
 	grid.isSetAsArg = false;
 
 	if (data_ptr != nullptr)
@@ -240,6 +252,7 @@ ops::hls::Grid<T> ops_hls_decl_dat(ops::hls::Block& block, int elem_size, int* s
 		memcpy(grid.hostBuffer.data(), data_ptr, data_size);
 		grid.isHostBufDirty = true;
 		grid.isDevBufDirty = false;
+        grid.splitGrid();
 	}
 	else
 	{
@@ -247,8 +260,18 @@ ops::hls::Grid<T> ops_hls_decl_dat(ops::hls::Block& block, int elem_size, int* s
 		grid.isDevBufDirty = false;
 	}
 
+#ifndef OPS_TILING
 	grid.deviceBuffer = ops::hls::FPGA::getInstance()->createDeviceBuffer(CL_MEM_USE_HOST_PTR | CL_MEM_READ_WRITE, grid.hostBuffer);
-	// TODO: Else need to handle user defined hostBuffer
+#else
+    if (grid.alt_banks == 1) {
+        grid.deviceBuffer.push_back(ops::hls::FPGA::getInstance()->createDeviceBuffer(CL_MEM_USE_HOST_PTR | CL_MEM_READ_WRITE, grid.hostBuffer));
+    }
+    else {
+        for (int bank = 0; bank < grid.alt_banks; bank++) {
+            grid.deviceBuffer.push_back(ops::hls::FPGA::getInstance()->createDeviceBuffer(CL_MEM_USE_HOST_PTR | CL_MEM_READ_WRITE, grid.altHostBuffers[bank]));
+        }
+    }
+#endif
 	return grid;
 }
 
