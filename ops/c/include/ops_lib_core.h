@@ -112,7 +112,7 @@ typedef __half half;
 typedef sycl::half half;
 #elif defined(__STDCPP_FLOAT16_T__) || defined(FLT16_MIN)
 typedef _Float16 half;
-#elif defined(__VITIS_HLS__)
+#elif defined(__VITIS_HLS__) || defined (OPS_FPGA)
 #include <ap_int.h>
 #else
 typedef uint16_t half;
