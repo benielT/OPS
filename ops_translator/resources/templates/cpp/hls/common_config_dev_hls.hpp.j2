@@ -4,6 +4,8 @@
 
 {% block config_body %}
 typedef {{config["stencil_type"]}} stencil_type;
+//#define OPS_HLS_ROW_TILES {{config["tile_banks"]}}
+
 constexpr unsigned short data_width = sizeof(stencil_type) * 8;
 constexpr unsigned short max_depth = max_depth_bytes / data_width;
 constexpr unsigned short line_buff_2d_depth = max_depth;

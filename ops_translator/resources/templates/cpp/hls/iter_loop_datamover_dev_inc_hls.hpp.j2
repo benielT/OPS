@@ -106,12 +106,12 @@ extern "C" void datamover_outerloop_{{ilh.id}}(
     {% endif %}
     {% for arg in ilh.joint_args|ops_dat %}
     //{{ilh.dats[arg.dat_id][0].ptr}}
-        {% if isTiling %}
+        {#% if isTiling %}
         ap_uint<mem_data_width>* arg{{(arg.id)}}_b1,
         ap_uint<mem_data_width>* arg{{(arg.id)}}_b2,
-        {% else %}
+        {% else %#}
         ap_uint<mem_data_width>* arg{{(arg.id)}},
-        {% endif %}
+        {#% endif %#}
     {% endfor %}
     {% for arg in ilh.joint_args|ops_dat %}
     //{{ilh.dats[arg.dat_id][0].ptr}}

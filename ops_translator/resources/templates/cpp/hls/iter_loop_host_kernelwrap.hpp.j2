@@ -248,8 +248,8 @@ public:
     {% for arg in ilh.joint_args %}
         {% if arg is ops_dat %}
 #ifdef OPS_TILING
-        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.deviceBuffer));
-        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.deviceBuffer));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.deviceBuffer[0]));
+        {#OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.deviceBuffer[1]));#}
 #else
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.deviceBuffer));
 #endif

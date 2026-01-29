@@ -189,12 +189,12 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         {% endfor %}
     {% endif %}
     {% for arg in ilh.joint_args|ops_dat %}
-        {% if isTiling %}
+        {#{% if isTiling %}
         ap_uint<mem_data_width>* arg{{(arg.id)}}_b1,
         ap_uint<mem_data_width>* arg{{(arg.id)}}_b2,
-        {% else %}
+        {% else %}#}
         ap_uint<mem_data_width>* arg{{(arg.id)}},
-        {% endif %}
+        {#{% endif %}#}
     {% endfor %}
     {% for arg in ilh.joint_args|ops_dat %}
         {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
@@ -207,12 +207,12 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
 {
     {% for arg in ilh.joint_args|ops_dat %}
         {% if arg is ops_read_or_rw%}
-            {% if isTiling %}
+            {#{% if isTiling %}
     static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_strm_b1;
-    #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm_b1 depth={{(tiles[0] / config["vector_factor"] + 2)|int}};
+    #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm_b1 depth={{(tiles[0] / config["vector_factor"] + 2)|int}}
     static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_strm_b2;
     #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm_b2 depth={{(tiles[0] / config["vector_factor"] + 2)|int}}
-            {% endif %}
+            {% endif %}#}
     static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_strm;
     #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm
             {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
@@ -227,12 +227,12 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
             {% endif %}
     static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_strm;
     #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm
-            {% if isTiling %}
+            {#{% if isTiling %}
     static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_strm_b1;
-    #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm_b1 depth={{(tiles[0] / config["vector_factor"] + 2)|int}};
+    #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm_b1 depth={{(tiles[0] / config["vector_factor"] + 2)|int}}
     static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_strm_b2;
     #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm_b2 depth={{(tiles[0] / config["vector_factor"] + 2)|int}}
-            {% endif %}
+            {% endif %}#}
         {% endif %}
     {% endfor %}
 
@@ -240,9 +240,10 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
     {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw %}
         {% if isTiling %}
         //ops::hls::mem2streamTiled<mem_data_width, {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b1, arg{{arg.id}}_b2, arg{{arg.id}}_read_mem_strm, memconfig);
-        ops::hls::stridedTileMem2stream<mem_data_width,  {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b1, arg{{arg.id}}_read_mem_strm_b1, memconfig, 0);
-        ops::hls::stridedTileMem2stream<mem_data_width,  {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b2, arg{{arg.id}}_read_mem_strm_b2, memconfig, 1);
-        ops::hls::combineSteams<mem_data_width, {{II(arg)}}>(arg{{arg.id}}_read_mem_strm_b1, arg{{arg.id}}_read_mem_strm_b2, arg{{arg.id}}_read_mem_strm, memconfig);
+        //ops::hls::stridedTileMem2stream<mem_data_width,  {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b1, arg{{arg.id}}_read_mem_strm_b1, memconfig, 0);
+        //ops::hls::stridedTileMem2stream<mem_data_width,  {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b2, arg{{arg.id}}_read_mem_strm_b2, memconfig, 1);
+        //ops::hls::combineSteams<mem_data_width, {{II(arg)}}>(arg{{arg.id}}_read_mem_strm_b1, arg{{arg.id}}_read_mem_strm_b2, arg{{arg.id}}_read_mem_strm, memconfig);
+        ops::hls::tileMem2stream<mem_data_width, {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}, arg{{arg.id}}_read_mem_strm, memconfig);
         {% else %}
         ops::hls::mem2stream<mem_data_width, {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}, arg{{arg.id}}_read_mem_strm, {{memconfig(arg)}}.total_xblocks);
         {% endif %}
@@ -299,9 +300,10 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         {% if arg is not read_only_rw %}
             {% if isTiling %}
         // ops::hls::stream2memTiled<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b1, arg{{arg.id}}_b2, arg{{arg.id}}_write_mem_strm, memconfig);
-        ops::hls::splitStream<mem_data_width, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm, arg{{arg.id}}_write_mem_strm_b1, arg{{arg.id}}_write_mem_strm_b2, memconfig);
-        ops::hls::stridedTileStream2mem<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm_b1, arg{{arg.id}}_b1, memconfig, 0);
-        ops::hls::stridedTileStream2mem<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm_b2, arg{{arg.id}}_b2, memconfig, 1);
+        // ops::hls::splitStream<mem_data_width, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm, arg{{arg.id}}_write_mem_strm_b1, arg{{arg.id}}_write_mem_strm_b2, memconfig);
+        // ops::hls::stridedTileStream2mem<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm_b1, arg{{arg.id}}_b1, memconfig, 0);
+        // ops::hls::stridedTileStream2mem<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm_b2, arg{{arg.id}}_b2, memconfig, 1);
+           ops::hls::tileStream2mem<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}, arg{{arg.id}}_write_mem_strm, memconfig);
             {% else %}
         ops::hls::stream2mem<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}, arg{{arg.id}}_write_mem_strm, {{memconfig(arg)}}.total_xblocks);
             {% endif %}
@@ -328,12 +330,12 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
         {% endfor %}
     {% endif %}
     {% for arg in ilh.joint_args|ops_dat %}
-        {% if isTiling %}
+        {#{% if isTiling %}
         ap_uint<mem_data_width>* arg{{(arg.id)}}_b1,
         ap_uint<mem_data_width>* arg{{(arg.id)}}_b2,
-        {% else %}
+        {% else %}#}
         ap_uint<mem_data_width>* arg{{(arg.id)}},
-        {% endif %}
+        {#{% endif %}#}
     {% endfor %}
     {% for arg in ilh.joint_args|ops_dat %}
         {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
@@ -364,12 +366,12 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
                 {% endfor %}
             {% endif %}
             {% for arg in ilh.joint_args|ops_dat %}
-                {% if isTiling %}
+                {#% if isTiling %}
                 arg{{(arg.id)}}_b1,
                 arg{{(arg.id)}}_b2,
-                {% else %}
+                {% else %#}
                 arg{{(arg.id)}},
-                {% endif %}
+                {#% endif %#}
             {% endfor %}
             {% for arg in ilh.joint_args|ops_dat %}
                 {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
@@ -394,12 +396,12 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
                 {% endfor %}
             {% endif %}
             {% for arg in ilh.joint_args|ops_dat %}
-                {% if isTiling %}
+                {#% if isTiling %}
                 arg{{ilh.getSwapArg(arg).id}}_b1,
                 arg{{ilh.getSwapArg(arg).id}}_b2,
-                {% else %}
+                {% else %#}
                 arg{{ilh.getSwapArg(arg).id}},
-                {% endif %}
+                {#% endif %#}
             {% endfor %}
             {% for arg in ilh.joint_args|ops_dat %}
                 {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
@@ -537,14 +539,14 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
     {% endif %}
     {% for arg in ilh.joint_args|ops_dat %} 
         {% if isTiling %}
-    #pragma HLS INTERFACE mode=m_axi bundle=gmem{{arg.id * 2}} depth={{config["maxi_depth"]}} max_read_burst_length={{config["maxi_read_burst_length"]}} max_write_burst_length={{config["maxi_write_burst_length"]}} \
+    #pragma HLS INTERFACE mode=m_axi bundle=gmem{{arg.id}} depth={{config["maxi_depth"]}} max_read_burst_length={{config["maxi_read_burst_length"]}} max_write_burst_length={{config["maxi_write_burst_length"]}} \
             num_read_outstanding={{config["num_read_outstanding"]}} num_write_outstanding={{config["num_write_outstanding"]}} \
-            port=arg{{arg.id}}_b1 offset={{config["maxi_offset"]}}
-    #pragma HLS INTERFACE mode=m_axi bundle=gmem{{arg.id * 2 + 1}} depth={{config["maxi_depth"]}} max_read_burst_length={{config["maxi_read_burst_length"]}} max_write_burst_length={{config["maxi_write_burst_length"]}} \
+            port=arg{{arg.id}} offset={{config["maxi_offset"]}}
+    {##pragma HLS INTERFACE mode=m_axi bundle=gmem{{arg.id * 2 + 1}} depth={{config["maxi_depth"]}} max_read_burst_length={{config["maxi_read_burst_length"]}} max_write_burst_length={{config["maxi_write_burst_length"]}} \
             num_read_outstanding={{config["num_read_outstanding"]}} num_write_outstanding={{config["num_write_outstanding"]}} \
-            port=arg{{arg.id}}_b2 offset={{config["maxi_offset"]}}
-    #pragma HLS INTERFACE s_axilite port = arg{{arg.id}}_b1 bundle = control
-    #pragma HLS INTERFACE s_axilite port = arg{{arg.id}}_b2 bundle = control
+            port=arg{{arg.id}}_b2 offset={{config["maxi_offset"]}}#}
+    #pragma HLS INTERFACE s_axilite port = arg{{arg.id}} bundle = control
+    {#pragma HLS INTERFACE s_axilite port = arg{{arg.id}}_b2 bundle = control#}
         {% else %}
     #pragma HLS INTERFACE mode=m_axi bundle=gmem{{arg.id}} depth={{config["maxi_depth"]}} max_read_burst_length={{config["maxi_read_burst_length"]}} max_write_burst_length={{config["maxi_write_burst_length"]}} \
             num_read_outstanding={{config["num_read_outstanding"]}} num_write_outstanding={{config["num_write_outstanding"]}} \
@@ -764,12 +766,12 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
                 {% endfor %}
         {% endif %}
         {% for arg in ilh.joint_args|ops_dat %}
-            {% if isTiling %}
+            {#% if isTiling %}
                 arg{{(arg.id)}}_b1,
                 arg{{(arg.id)}}_b2,
-            {% else %}
+            {% else %#}
                 arg{{(arg.id)}},
-            {% endif %}
+            {#% endif %#}
         {% endfor %}
         {% for arg in ilh.joint_args|ops_dat %}
                 {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}

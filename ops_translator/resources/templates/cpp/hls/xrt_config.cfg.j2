@@ -36,8 +36,8 @@ slr=kernel_outerloop_{{ilh.id}}_{{loop.index0+1}}:SLR{{slr_id}}
     {% for ilh, program in app.uniqueOuterLoops() %}
         {% for arg in ilh.joint_args|ops_dat %}
             {% if program.tiling %}
-sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b1:HBM[{{arg.id}}]
-sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b2:HBM[{{arg.id}}]
+sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{arg.id}}]
+{#sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b2:HBM[{{arg.id * 2 + 1}}]#}
             {% else %}
 sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{arg.id}}]
             {% endif %}
