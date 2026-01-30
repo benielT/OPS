@@ -194,10 +194,10 @@ public:
         OCL_CHECK(err, err = m_datamover.setArg(narg++, tile_count[0]));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, tile_count[1]));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, total_xblocks_widen));
-        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.deviceBuffer));
-        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.deviceBuffer));
-        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg1.deviceBuffer));
-        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg1.deviceBuffer));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.deviceBuffer[0]));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.deviceBuffer[1]));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg1.deviceBuffer[0]));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg1.deviceBuffer[1]));
 #else   
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.deviceBuffer));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg1.deviceBuffer));

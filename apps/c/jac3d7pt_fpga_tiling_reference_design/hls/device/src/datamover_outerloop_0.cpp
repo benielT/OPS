@@ -223,17 +223,17 @@ extern "C" void datamover_outerloop_0(
             port=arg0_b1 offset=slave
     #pragma HLS INTERFACE s_axilite port = arg0_b1 bundle = control
  
-    #pragma HLS INTERFACE mode=m_axi bundle=gmem0 depth=4096 max_read_burst_length=64 max_write_burst_length=64 \
+    #pragma HLS INTERFACE mode=m_axi bundle=gmem1 depth=4096 max_read_burst_length=64 max_write_burst_length=64 \
             num_read_outstanding=4 num_write_outstanding=4 \
             port=arg0_b2 offset=slave
     #pragma HLS INTERFACE s_axilite port = arg0_b2 bundle = control
 
-    #pragma HLS INTERFACE mode=m_axi bundle=gmem1 depth=4096 max_read_burst_length=64 max_write_burst_length=64 \
+    #pragma HLS INTERFACE mode=m_axi bundle=gmem2 depth=4096 max_read_burst_length=64 max_write_burst_length=64 \
             num_read_outstanding=4 num_write_outstanding=4 \
             port=arg1_b1 offset=slave
     #pragma HLS INTERFACE s_axilite port = arg1_b1 bundle = control
 
-    #pragma HLS INTERFACE mode=m_axi bundle=gmem1 depth=4096 max_read_burst_length=64 max_write_burst_length=64 \
+    #pragma HLS INTERFACE mode=m_axi bundle=gmem4 depth=4096 max_read_burst_length=64 max_write_burst_length=64 \
             num_read_outstanding=4 num_write_outstanding=4 \
             port=arg1_b2 offset=slave
     #pragma HLS INTERFACE s_axilite port = arg1_b2 bundle = control
