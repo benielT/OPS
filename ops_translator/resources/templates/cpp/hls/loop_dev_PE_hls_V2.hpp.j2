@@ -221,8 +221,15 @@ public:
     {
         {% if isTiling %}
         ::ops::hls::StencilConfigCoreTiled stencilConfig = m_stencilConfig;
+        #pragma HLS ARRAY_PARTITION variable = stencilConfig.tile_size dim = 1 complete
+        #pragma HLS ARRAY_PARTITION variable = stencilConfig.last_tile_size dim = 1 complete
+        #pragma HLS ARRAY_PARTITION variable = stencilConfig.tile_count dim = 1 complete
+        #pragma HLS ARRAY_PARTITION variable = stencilConfig.grid_size dim = 1 complete
         {% else %}
         ::ops::hls::StencilConfigCore stencilConfig = m_stencilConfig;
+        #pragma HLS ARRAY_PARTITION variable = stencilConfig.lower_limit dim = 1 complete
+        #pragma HLS ARRAY_PARTITION variable = stencilConfig.upper_limit dim = 1 complete
+        #pragma HLS ARRAY_PARTITION variable = stencilConfig.grid_size dim = 1 complete
         {% endif %}
         const unsigned short peId = m_PEId;
 
@@ -244,8 +251,6 @@ public:
         const unsigned short lower_limit_y = half_span_x;
             {% endif %}
         {% else %}
-        #pragma HLS ARRAY_PARTITION variable = stencilConfig.lower_limit dim = 1 complete
-        #pragma HLS ARRAY_PARTITION variable = stencilConfig.upper_limit dim = 1 complete
         const unsigned short lower_limit_x = stencilConfig.lower_limit[0];
         const unsigned short lower_limit_y = stencilConfig.lower_limit[1];
         const unsigned short lower_limit_z = stencilConfig.lower_limit[2];
@@ -255,13 +260,21 @@ public:
         {% endif %}
 
         {% if isTiling %}
-        for (unsigned short tile_x = 0; tile_x < stencilConfig.tile_count[0]; tile_x++)
+        const unsigned short total_tiles = stencilConfig.tile_count[0] * stencilConfig.tile_count[1];
+        unsigned short tile_x = 0;
+        unsigned short tile_y = 0;
+        for (unsigned short tile_id = 0; tile_id < total_tiles; tile_id++)
         {
-            {% if lh.ndim == 3 %}
-        for (unsigned short tile_y = 0; tile_y < stencilConfig.tile_count[1]; tile_y++)
-        {
-            #pragma HLS LOOP_FLATTEN
-            {% endif %}
+
+            const unsigned short tile_id_reged = register_it(tile_id);
+            const unsigned short prev_tile_x = tile_x;
+            tile_x = tile_id_reged % stencilConfig.tile_count[0];
+            
+            if (prev_tile_x >= tile_x)
+            {
+                tile_y++;
+            }
+
         {% else %}
         for (unsigned bat = 0; bat < stencilConfig.batch_size; bat++)
         {
@@ -269,14 +282,14 @@ public:
         {% set read_origin_wide_diff = read_stencil.read_origin_diff %}
         {% set read_origin_wide_diff_x = read_origin_wide_diff.x %}
         {% set read_origin_wide_diff_x  = ((read_origin_wide_diff_x + config["vector_factor"] - 1) / config["vector_factor"])|round(0,"floor")|int %}
-        //read_origin_wide_diff_x: {{read_origin_wide_diff_x}}, read_origin_wide_diff: {{read_origin_wide_diff}}
+            //read_origin_wide_diff_x: {{read_origin_wide_diff_x}}, read_origin_wide_diff: {{read_origin_wide_diff}}
         {% if isTiling %}
-        const bool is_last_tile_x = (tile_x == stencilConfig.tile_count[0] - 1);
-        const unsigned short tile_size_x = is_last_tile_x ? stencilConfig.last_tile_size[0] : stencilConfig.tile_size[0];
-        const unsigned short true_tile_size_x = tile_size_x << shift_bits;
+            const bool is_last_tile_x = (tile_x == stencilConfig.tile_count[0] - 1);
+            const unsigned short tile_size_x = is_last_tile_x ? stencilConfig.last_tile_size[0] : stencilConfig.tile_size[0];
+            const unsigned short true_tile_size_x = tile_size_x << shift_bits;
             {% if lh.ndim == 3 %}
-        const bool is_last_tile_y = (tile_y == stencilConfig.tile_count[1] - 1);
-        const unsigned short tile_size_y = is_last_tile_y ? stencilConfig.last_tile_size[1] : stencilConfig.tile_size[1];
+            const bool is_last_tile_y = (tile_y == stencilConfig.tile_count[1] - 1);
+            const unsigned short tile_size_y = is_last_tile_y ? stencilConfig.last_tile_size[1] : stencilConfig.tile_size[1];
             {% endif %}
         {% endif %}
         //  *** counters definitions ****
@@ -947,9 +960,6 @@ public:
                 }
             }
         }
-        {% if isTiling and lh.ndim == 3 %}
-        }
-        {% endif %}
     } 
 };
 {% endblock %}
