@@ -667,7 +667,7 @@ void stream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out,
  * 
  * @see ops::hls::MemConfigTile
  */
-template <unsigned short MEM_DATA_WIDTH, unsigned short BUST_SIZE=32, unsigned short IN_ITR=2>
+template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
 static void tileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, const ops::hls::MemConfigTile& config)
 {
     // #pragma HLS INLINE off
@@ -720,7 +720,7 @@ static void tileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uin
                                (unsigned int)j,
                                (unsigned int)tile_size_x);
                     #endif
-                    mem2stream<MEM_DATA_WIDTH, BUST_SIZE, IN_ITR>(mem_in + offset, strm_out, tile_size_x);
+                    mem2stream<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(mem_in + offset, strm_out, tile_size_x);
                 }
             }
         }
