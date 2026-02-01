@@ -283,10 +283,11 @@ public:
         {% endif %}
     {% endfor %}
 
-        OCL_CHECK(err, err = m_fpga->getCommandQueue().enqueueTask(m_datamover, &activeEvents, &event_datamover));
-    {% for slr_id in range(config["SLR_count"]) %}
+    // enque in backward order
+    {% for slr_id in range(config["SLR_count"])|reverse %}
         OCL_CHECK(err, err = m_fpga->getCommandQueue().enqueueTask(m_kernel_{{slr_id}}, &activeEvents, &event_kernel_{{slr_id}}));
     {% endfor %}
+        OCL_CHECK(err, err = m_fpga->getCommandQueue().enqueueTask(m_datamover, &activeEvents, &event_datamover));
 
 {##ifdef DEBUG_LOG
     {% for arg in ilh.joint_args %}
