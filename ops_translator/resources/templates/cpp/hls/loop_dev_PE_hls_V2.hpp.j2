@@ -246,9 +246,11 @@ public:
             {% if lh.ndim == 3 %}
         const unsigned short lower_limit_y = adj_half_span_x;
         const unsigned short lower_limit_z = half_span_x;
+        const unsigned short upper_limit_z = stencilConfig.outer_loop_limit - span_x;
         const unsigned short upper_limit_y_const = (stencilConfig.last_tile_size[1] - adj_half_span_x) < adj_half_span_x ? adj_half_span_x : (stencilConfig.last_tile_size[1] - adj_half_span_x);
             {% else %}
         const unsigned short lower_limit_y = half_span_x;
+        const unsigned short upper_limit_y = stencilConfig.outer_loop_limit - span_x;
             {% endif %}
         {% else %}
         const unsigned short lower_limit_x = stencilConfig.lower_limit[0];
@@ -354,9 +356,6 @@ public:
         const unsigned short upper_limit_x = is_last_tile_x ? upper_limit_x_const : true_tile_size_x - adj_half_span_x;
             {% if lh.ndim == 3 %}
         const unsigned short upper_limit_y = is_last_tile_y ? upper_limit_y_const : tile_size_y - adj_half_span_x;
-        const unsigned short upper_limit_z = stencilConfig.outer_loop_limit - half_span_x;
-            {% else %}
-        const unsigned short upper_limit_y = stencilConfig.outer_loop_limit - half_span_x;
             {% endif %}
         {% endif %}
 
