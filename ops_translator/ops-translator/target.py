@@ -177,6 +177,7 @@ class HLS(Target):
         "maxi_depth" : 4096,
         "maxi_read_burst_length" : 32,
         "maxi_write_burst_length" : 32,
+        "maxi_latency" : 40,
         "num_read_outstanding" : 4,
         "num_write_outstanding" : 4,
         "maxi_offset" : "slave",
