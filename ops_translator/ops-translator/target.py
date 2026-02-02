@@ -261,6 +261,15 @@ class HLS(Target):
                 print(CodeGenWarning(f"Target {self.name} config warining: DATAMOVER_XF is not tested for non-tiled version. Reverting to DATAMOVER_NATIVE"))
                 self.config["datamover_lib"] == FPGDatamoverLib.DATAMOVER_NATIVE.value
             
+        # Warning for high mem_burst * mem_outstanding combo
+        if self.config["maxi_read_burst_length"] * self.config["num_read_outstanding"] > 128:
+             print(CodeGenWarning(f"Target {self.name} config warining: maxi_read_burst_length x num_read_outstanding is higher than 128. Might cause high resource utility \n \
+                                  in internal HLS stream of the datamover"))
+        if self.config["maxi_write_burst_length"] * self.config["num_write_outstanding"] > 128:
+             print(CodeGenWarning(f"Target {self.name} config warining: maxi_write_burst_length x num_write_outstanding is higher than 128. Might cause high resource utility \n \
+                                  in internal HLS stream of the datamover"))
+        
+        
         # Check platform specific constraints
         
         platform = self.config.get("platform", "")

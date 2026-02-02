@@ -40,10 +40,10 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_region_read(
     {% for arg in ilh.joint_args|ops_dat %}
         {% if arg is ops_read_or_rw%}
     static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_strm;
-    #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm
+    #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm depth = {{(config["maxi_read_burst_length"] * config["num_read_outstanding"]) | int}}
             {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
     static ::hls::stream<ap_uint<{{axis_data_width(arg)-}}>> arg{{arg.id}}_read_reduced_mem_strm;
-    #pragma HLS STREAM variable = arg{{arg.id}}_read_reduced_mem_strm
+    #pragma HLS STREAM variable = arg{{arg.id}}_read_reduced_mem_strm depth = {{(config["maxi_read_burst_length"] * config["num_read_outstanding"] *  config["mem_vector_factor"] / config["vector_factor"]) | int}}
             {% endif %}
         {% endif %}
     {% endfor %}
@@ -116,10 +116,10 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_region_write(
     {% for arg in ilh.joint_args|ops_dat %}
         {% if arg is ops_write_or_rw and arg is not read_only_rw %}
     static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_strm;
-    #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm
+    #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm depth = {{(config["maxi_write_burst_length"] * config["num_write_outstanding"]) | int}}
             {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
     static ::hls::stream<ap_uint<{{axis_data_width(arg)-}}>> arg{{arg.id}}_write_reduced_mem_strm;
-    #pragma HLS STREAM variable = arg{{arg.id}}_write_reduced_mem_strm
+    #pragma HLS STREAM variable = arg{{arg.id}}_write_reduced_mem_strm depth = {{(config["maxi_write_burst_length"] * config["num_write_outstanding"] *  config["mem_vector_factor"] / config["vector_factor"]) | int}}
             {% endif %}
         {% endif %}
     {% endfor %}
@@ -218,19 +218,19 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
     #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm_b2 depth={{(tiles[0] / config["vector_factor"] + 2)|int}}
             {% endif %}#}
     static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_strm;
-    #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm depth = {{config["maxi_read_burst_length"]}}
+    #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm depth = {{(config["maxi_read_burst_length"] * config["num_read_outstanding"])|int}}
             {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
     static ::hls::stream<ap_uint<{{axis_data_width(arg)-}}>> arg{{arg.id}}_read_reduced_mem_strm;
-    #pragma HLS STREAM variable = arg{{arg.id}}_read_reduced_mem_strm depth = {{config["maxi_read_burst_length"]}}
+    #pragma HLS STREAM variable = arg{{arg.id}}_read_reduced_mem_strm depth = {{(config["maxi_read_burst_length"] * config["num_read_outstanding"] *  config["mem_vector_factor"] / config["vector_factor"])|int}}
             {% endif %}
         {% endif %}
         {% if arg is ops_write_or_rw and arg is not read_only_rw %}
             {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
     static ::hls::stream<ap_uint<{{axis_data_width(arg)-}}>> arg{{arg.id}}_write_reduced_mem_strm;
-    #pragma HLS STREAM variable = arg{{arg.id}}_write_reduced_mem_strm depth = {{config["maxi_write_burst_length"]}}
+    #pragma HLS STREAM variable = arg{{arg.id}}_write_reduced_mem_strm depth = {{(config["maxi_write_burst_length"] * config["num_write_outstanding"] *  config["mem_vector_factor"] / config["vector_factor"])|int}}
             {% endif %}
     static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_strm;
-    #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm depth = {{config["maxi_write_burst_length"]}}
+    #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm depth = {{(config["maxi_write_burst_length"] * config["num_write_outstanding"])|int}}
             {#{% if isTiling %}
     static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_strm_b1;
     #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm_b1 depth={{(tiles[0] / config["vector_factor"] + 2)|int}}
