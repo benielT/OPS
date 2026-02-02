@@ -193,7 +193,11 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         ap_uint<mem_data_width>* arg{{(arg.id)}}_b1,
         ap_uint<mem_data_width>* arg{{(arg.id)}}_b2,
         {% else %}#}
+    {% if config["datamover_lib"] == 1 %}
         ap_uint<mem_data_width>* arg{{(arg.id)}},
+    {% else %}
+        ::hls::burst_maxi<ap_uint<mem_data_width>>& arg{{(arg.id)}},
+    {% endif %}
         {#{% endif %}#}
     {% endfor %}
     {% for arg in ilh.joint_args|ops_dat %}
@@ -243,7 +247,11 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         //ops::hls::stridedTileMem2stream<mem_data_width,  {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b1, arg{{arg.id}}_read_mem_strm_b1, memconfig, 0);
         //ops::hls::stridedTileMem2stream<mem_data_width,  {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b2, arg{{arg.id}}_read_mem_strm_b2, memconfig, 1);
         //ops::hls::combineSteams<mem_data_width, {{II(arg)}}>(arg{{arg.id}}_read_mem_strm_b1, arg{{arg.id}}_read_mem_strm_b2, arg{{arg.id}}_read_mem_strm, memconfig);
+            {% if config["datamover_lib"] == 1 %}
         ops::hls::tileMem2stream<mem_data_width, {{config["maxi_read_burst_length"]}}, 1>(arg{{arg.id}}, arg{{arg.id}}_read_mem_strm, memconfig);
+            {% else %}
+        xf::data_mover::tiledMem2stream3D<mem_data_width, {{config["maxi_latency"]}}, {{config["maxi_read_burst_length"]}}, {{config["num_read_outstanding"]}},  {{II(arg)}}>(arg{{arg.id}}, arg{{arg.id}}_read_mem_strm, memconfig);
+            {% endif %}
         {% else %}
         ops::hls::mem2stream<mem_data_width, {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}, arg{{arg.id}}_read_mem_strm, {{memconfig(arg)}}.total_xblocks);
         {% endif %}
@@ -268,6 +276,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
             {% endif %}
         {% endif %}
     {% endfor %}
+
     {% for arg in ilh.joint_args|ops_dat|ops_write_or_rw %}
         {% if arg is ops_write_or_rw %}
             {% if arg is read_only_rw %}
@@ -303,7 +312,11 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         // ops::hls::splitStream<mem_data_width, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm, arg{{arg.id}}_write_mem_strm_b1, arg{{arg.id}}_write_mem_strm_b2, memconfig);
         // ops::hls::stridedTileStream2mem<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm_b1, arg{{arg.id}}_b1, memconfig, 0);
         // ops::hls::stridedTileStream2mem<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm_b2, arg{{arg.id}}_b2, memconfig, 1);
-           ops::hls::tileStream2mem<mem_data_width, {{config["maxi_write_burst_length"]}}, 1>(arg{{arg.id}}, arg{{arg.id}}_write_mem_strm, memconfig);
+                {% if config["datamover_lib"] == 1 %}
+        ops::hls::tileStream2mem<mem_data_width, {{config["maxi_write_burst_length"]}}, 1>(arg{{arg.id}}, arg{{arg.id}}_write_mem_strm, memconfig);
+                {% else %}
+        xf::data_mover::tiledStream2mem3D<mem_data_width, {{config["maxi_latency"]}}, {{config["maxi_write_burst_length"]}}, {{config["num_write_outstanding"]}},  {{II(arg)}}>(arg{{arg.id}}, arg{{arg.id}}_write_mem_strm, memconfig);
+                {% endif %}
             {% else %}
         ops::hls::stream2mem<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}, arg{{arg.id}}_write_mem_strm, {{memconfig(arg)}}.total_xblocks);
             {% endif %}
@@ -334,7 +347,11 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
         ap_uint<mem_data_width>* arg{{(arg.id)}}_b1,
         ap_uint<mem_data_width>* arg{{(arg.id)}}_b2,
         {% else %}#}
+    {% if config["datamover_lib"] == 1 %}
         ap_uint<mem_data_width>* arg{{(arg.id)}},
+    {% else %}
+        ::hls::burst_maxi<ap_uint<mem_data_width>>& arg{{(arg.id)}},
+    {% endif %}
         {#{% endif %}#}
     {% endfor %}
     {% for arg in ilh.joint_args|ops_dat %}

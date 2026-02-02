@@ -149,6 +149,11 @@ class FpgaDatamoverMode(Enum):
     DATAMOVER_LOOPBACK = 1
     DATAMOVER_DATACOPY = 2
     DATAMOVER_HYBRID = 3
+
+class FPGDatamoverLib(Enum):
+    DATAMOVER_NATIVE = 1
+    DATAMOVER_XF = 2
+
 class F2CSycl(Target):
     name = "f2c_sycl"
     suffix = "f2c"
@@ -184,7 +189,8 @@ class HLS(Target):
         "ops_max_dim" : 3,
         "axis_interconnect_buff_size" : 2048,
         "hls_interconnect_buff_size" : 10,
-        "datamover_mode" : 1,
+        "datamover_mode" : FpgaDatamoverMode.DATAMOVER_DATACOPY.value,
+        "datamover_lib" : FPGDatamoverLib.DATAMOVER_NATIVE.value,
         "profile" : False,
         "platform" : "",
         "platform_is_multi_slr" : True,
@@ -234,15 +240,27 @@ class HLS(Target):
         "maxi_offset" : ("select", {"master","slave"}),
         "ops_max_dim" : ("numeric", {None,3}),
         "datamover_mode" : ("select", {1,2,3}),
+        "datamover_lib" : ("select", {1,2}),
         "profile" : ("bool", (True, False))
     }
+    
     def verify_config(self, app: Application) -> None:
         super().verify_config(app)
         # if App is tiled then datamover mode cannot be loopback
         is_tiled = any(program.isTiling() for program in app.programs)
         if is_tiled and self.config["datamover_mode"] != FpgaDatamoverMode.DATAMOVER_DATACOPY.value:
-            CodeGenWarning(f"Target {self.name} config warning: Application is tiled, changing datamover_mode to DATAMOVER_DATACOPY")
+            print(CodeGenWarning(f"Target {self.name} config warning: Application is tiled, changing datamover_mode to DATAMOVER_DATACOPY"))
             self.config["datamover_mode"] = FpgaDatamoverMode.DATAMOVER_DATACOPY.value
+        if is_tiled:
+            if self.config["datamover_lib"] == FPGDatamoverLib.DATAMOVER_XF.value:
+                # Just warning
+                print(CodeGenWarning(f"Target {self.name} config warining: DATAMOVER_XF is used for tiled datamover implementation"))
+        else:
+            if self.config["datamover_lib"] == FPGDatamoverLib.DATAMOVER_XF.value:
+                #TODO: Remove this if DATAMOVER_XF implemented for non-tiled version as well. 
+                print(CodeGenWarning(f"Target {self.name} config warining: DATAMOVER_XF is not tested for non-tiled version. Reverting to DATAMOVER_NATIVE"))
+                self.config["datamover_lib"] == FPGDatamoverLib.DATAMOVER_NATIVE.value
+            
         # Check platform specific constraints
         
         platform = self.config.get("platform", "")

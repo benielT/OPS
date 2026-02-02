@@ -14,6 +14,7 @@
 #include "../../common/include/ops_hls_utils.hpp"
 #include "../../common/include/ops_hls_common_memconfig.hpp"
 #include "../../L1/include/ops_hls_datamover.hpp"
+#include "../../L1/include/xf_datamover.hpp"
 #include "../../L1/include/ops_hls_stencil_core_v2.hpp"
 
 // typedef struct ops_hls_core

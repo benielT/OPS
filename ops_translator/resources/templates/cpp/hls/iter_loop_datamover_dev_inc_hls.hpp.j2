@@ -110,7 +110,11 @@ extern "C" void datamover_outerloop_{{ilh.id}}(
         ap_uint<mem_data_width>* arg{{(arg.id)}}_b1,
         ap_uint<mem_data_width>* arg{{(arg.id)}}_b2,
         {% else %#}
+    {% if config["datamover_lib"] == 1 %}
         ap_uint<mem_data_width>* arg{{(arg.id)}},
+    {% else %}
+        ::hls::burst_maxi<ap_uint<mem_data_width>> arg{{(arg.id)}},
+    {% endif %}
         {#% endif %#}
     {% endfor %}
     {% for arg in ilh.joint_args|ops_dat %}

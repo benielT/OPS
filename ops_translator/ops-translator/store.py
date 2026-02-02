@@ -58,10 +58,10 @@ class CodeGenWarning(Warning):
     def __str__(self) -> str:
         if self.loc:
             logging.warning(f"[CODEGEN_WARNING] at {self.loc}: {self.message}")
-            return f"Codegen warning at {self.loc}: {self.message}"
+            return f"CODEGEN_WARNING] at {self.loc}: {self.message}"
         else:
             logging.warning(f"[CODEGEN_WARNING]: {self.message}")
-            return f"Codegen warning: {self.message}"
+            return f"CODEGEN_WARNING]: {self.message}"
 
 @dataclass
 class Entity:
