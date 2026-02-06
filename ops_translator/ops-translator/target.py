@@ -198,6 +198,7 @@ class HLS(Target):
         "platform_is_ib_selectable" : False,
         "supported_internal_storage" : [],
         "default_tile_sizes" : [256,256],
+        "max_grid_size" : [300,300,300],
         "tile_banks" : 1
         }
     platforms = {
@@ -241,7 +242,8 @@ class HLS(Target):
         "ops_max_dim" : ("numeric", {None,3}),
         "datamover_mode" : ("select", {1,2,3}),
         "datamover_lib" : ("select", {1,2}),
-        "profile" : ("bool", (True, False))
+        "profile" : ("bool", (True, False)),
+        "tile_banks" : ("select", {1,2,4,8})
     }
     
     def verify_config(self, app: Application) -> None:
@@ -252,6 +254,7 @@ class HLS(Target):
             print(CodeGenWarning(f"Target {self.name} config warning: Application is tiled, changing datamover_mode to DATAMOVER_DATACOPY"))
             self.config["datamover_mode"] = FpgaDatamoverMode.DATAMOVER_DATACOPY.value
         if is_tiled:
+            print(CodeGenWarning(f"Target {self.name} config warining: max_grid_size config will be omitted as OPS_TILING enabled"))
             if self.config["datamover_lib"] == FPGDatamoverLib.DATAMOVER_XF.value:
                 # Just warning
                 print(CodeGenWarning(f"Target {self.name} config warining: DATAMOVER_XF is used for tiled datamover implementation"))

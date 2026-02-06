@@ -6,6 +6,7 @@ from argparse import ArgumentParser, ArgumentTypeError, Namespace
 from datetime import datetime
 from pathlib import Path
 import logging
+import re
 
 #custom implementation imports
 import cpp
@@ -198,7 +199,10 @@ def main(argv=None) -> None:
         if args.verbose:
             print(f"Translation scheme: {scheme}")
             logging.info(f"Translation scheme: {scheme}")
-            
+        
+        #Target config update based on defines
+        captureDefines(args, target)
+        
         #Calling Optimizer for FPGA
         if target.name == "hls": 
             logging.info("Code-gen : Starting optimization phase for target: " + target.name)
@@ -262,7 +266,21 @@ def main(argv=None) -> None:
         create_cpp_main()
         replace_fortran_program_with_subroutine(args.file_paths)
 
-
+def captureDefines(args: Namespace, target: Target) -> None:
+    defines = [define for [define] in args.D]
+    ops_hls_row_tiles_pat = re.compile("OPS_HLS_ROW_TILES=*")
+    
+    #Search for OPS_HLS_ROW_TILES
+    for d in defines:
+        if (ops_hls_row_tiles_pat.search(d)):
+            tile_banks = d.split("=")[1]
+            if not tile_banks.isnumeric():
+                break
+            if "tile_banks" in target.config:
+                target.config["tile_banks"] = int(tile_banks)
+            break
+    
+    
 def parse(args: Namespace, lang: Lang) -> Application:
     app = Application()
 

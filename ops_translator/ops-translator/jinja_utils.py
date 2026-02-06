@@ -120,10 +120,21 @@ def getReadArgsFromStencil(stencil_ptr: str, loop: ops.Loop) :
             read_args.append(arg)
     return read_args
 
+def getAdjustedLineBufferSize(buf_size: int, half_span: int, vec_fac: int) -> int :
+    return ((int)((buf_size + 2*half_span + vec_fac - 1)/vec_fac))
+
+def getAdjustedPlaneBufferSize(x_size: int, y_size: int, half_span: int, vec_fac: int) -> int:
+    print(f"x_size: {x_size}, y_size: {y_size}, half_span: {half_span}, vec_fac: {vec_fac}\n")
+    adj_x_size = (int)((x_size + 2*half_span + vec_fac - 1)/vec_fac)
+    adj_y_size = y_size + 2*half_span
+    return (adj_x_size * adj_y_size)
+
 env.globals.update(get_read_arg_from_dat = lambda dat, loop: getReadArgFromDat(dat, loop))
 env.globals.update(get_write_arg_from_dat = lambda dat, loop: getWriteArgFromDat(dat, loop))
 env.globals.update(get_arg_gbl_name = lambda gbl: getArgGblName(gbl))
 env.globals.update(get_read_args_from_stencil = lambda stencil_ptr, loop: getReadArgsFromStencil(stencil_ptr, loop))
+env.globals.update(get_line_buff_size = lambda x_size, half_span, vec_fac: getAdjustedLineBufferSize(x_size, half_span, vec_fac))
+env.globals.update(get_plane_buff_size = lambda x_size, y_size, half_span, vec_fac: getAdjustedPlaneBufferSize(x_size, y_size, half_span, vec_fac))
 
 def unpack(tup):
     if not isinstance(tup, tuple):
