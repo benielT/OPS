@@ -36,6 +36,10 @@ arg{{arg.id}}_{{link}}
 vector_factor_{{lh.kernel}}_{{arg.id}}
 {%- endmacro -%}
 
+{%- macro vector_factor(arg) -%}
+{{config["vector_factor"] * lh.dats[arg.dat_id].dim}}
+{%- endmacro -%}
+
 {%- macro axis_data_width_name(arg) -%}
 axis_data_width_l_{{lh.kernel}}_{{arg.id}}
 {%- endmacro -%}
@@ -236,7 +240,10 @@ public:
         const unsigned short span_x = {{span_x}};
         const unsigned short half_span_x = {{half_span_x}};
         {% if isTiling %}
-        const unsigned short adj_half_span_x = half_span_x * (peId + 1);
+        const unsigned short adj_half_span_x = stencilConfig.tile_count[0] == 1? half_span_x : half_span_x * (peId + 1);
+            {% if lh.ndim == 3 %}
+        const unsigned short adj_half_span_y = stencilConfig.tile_count[1] == 1? half_span_x : half_span_x * (peId + 1);
+            {% endif %}
         {% endif %}
 
         {% if isTiling %}
@@ -247,7 +254,7 @@ public:
         const unsigned short lower_limit_y = adj_half_span_x;
         const unsigned short lower_limit_z = half_span_x;
         const unsigned short upper_limit_z = stencilConfig.outer_loop_limit - span_x;
-        const unsigned short upper_limit_y_const = (stencilConfig.last_tile_size[1] - adj_half_span_x) < adj_half_span_x ? adj_half_span_x : (stencilConfig.last_tile_size[1] - adj_half_span_x);
+        const unsigned short upper_limit_y_const = (stencilConfig.last_tile_size[1] - adj_half_span_y) < adj_half_span_y ? adj_half_span_y : (stencilConfig.last_tile_size[1] - adj_half_span_y);
             {% else %}
         const unsigned short lower_limit_y = half_span_x;
         const unsigned short upper_limit_y = stencilConfig.outer_loop_limit - span_x;
@@ -442,20 +449,36 @@ public:
             #pragma HLS ARRAY_PARTITION variable = arg{{arg.id}}_widenStencilValues dim = 1 complete
 
             {% for buffer in widen_stencil_disc_map[arg.stencil_ptr].window_buffers %}
-                {% if buffer.buffer_type == ops.BufferType.LINE_BUFF and lh.ndim == 3 %}
-            {{widen_dt_name(arg)}} arg{{arg.id}}_{{buffer.name}}[line_buff_3d_depth];
+                {% if buffer.buffer_type == ops.BufferType.LINE_BUFF %}
+                    {% if isTiling %}
+            {{widen_dt_name(arg)}} arg{{arg.id}}_{{buffer.name}}[{{get_line_buff_size(tiles[0]|int, half_span_x|int, vector_factor(arg)|int)}}];
+                    {% else %}
+            {{widen_dt_name(arg)}} arg{{arg.id}}_{{buffer.name}}[{{get_line_buff_size(config["max_grid_size"][0]|int, half_span_x|int, vector_factor(arg)|int)}}];
+                    {% endif %}
                 {% else %}
-            {{widen_dt_name(arg)}} arg{{arg.id}}_{{buffer.name}}[max_depth];
+                    {% if isTiling %}
+            {{widen_dt_name(arg)}} arg{{arg.id}}_{{buffer.name}}[{{get_plane_buff_size(tiles[0]|int, tiles[1]|int, half_span_x|int, vector_factor(arg)|int)}}];
+                    {% else %}
+            {{widen_dt_name(arg)}} arg{{arg.id}}_{{buffer.name}}[{{get_plane_buff_size(config["max_grid_size"][0]|int, config["max_grid_size"][1]|int, half_span_x|int, vector_factor(arg)|int)}}];
+                    {% endif %}
                 {% endif %}
                 {% if buffer.is_read_write_aligned %}
                     {% if SIS %}
-            #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_s2p impl = {{config["supported_internal_storage"][SIS_id[0]]}} latency=2
+                        {% if  buffer.buffer_type == ops.BufferType.LINE_BUFF %}
+            #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_1p {% if "BRAM" in (config["supported_internal_storage"]) %}impl = BRAM{% endif %} latency=2
+                        {% else %}
+            #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_1p {% if "URAM" in (config["supported_internal_storage"]) %}impl = URAM{% endif %} latency=2  
+                        {% endif %}
                     {% else %}
-            #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_s2p latency=2
+            #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_1p latency=2
                     {% endif %}
                 {% else %}
                     {% if SIS %}
-            #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_s2p impl = {{config["supported_internal_storage"][SIS_id[0]]}} latency=2
+                        {% if  buffer.buffer_type == ops.BufferType.LINE_BUFF %}
+            #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_s2p {% if "BRAM" in (config["supported_internal_storage"]) %}impl = BRAM{% endif %} latency=2
+                        {% else %}
+            #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_s2p {% if "URAM" in (config["supported_internal_storage"]) %}impl = URAM{% endif %} latency=2  
+                        {% endif %}
                     {% else %}
             #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_s2p latency=2
                     {% endif %}

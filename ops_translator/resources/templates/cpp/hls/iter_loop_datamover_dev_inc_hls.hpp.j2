@@ -111,7 +111,13 @@ extern "C" void datamover_outerloop_{{ilh.id}}(
         ap_uint<mem_data_width>* arg{{(arg.id)}}_b2,
         {% else %#}
     {% if config["datamover_lib"] == 1 %}
+        {% if config["tile_banks"] > 1 %}
+            {% for i in range(config["tile_banks"]) %}
+        ap_uint<mem_data_width>* arg{{(arg.id)}}_b{{i}},
+            {% endfor %}
+        {% else %}
         ap_uint<mem_data_width>* arg{{(arg.id)}},
+        {% endif %}
     {% else %}
         ::hls::burst_maxi<ap_uint<mem_data_width>> arg{{(arg.id)}},
     {% endif %}

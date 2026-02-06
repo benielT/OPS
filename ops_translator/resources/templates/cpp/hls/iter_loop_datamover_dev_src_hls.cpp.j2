@@ -171,6 +171,181 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_region_write(
     {% endfor %}#}
 }
 
+{% if isTiling and config["tile_banks"] > 1 %}
+template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
+static void stridedTileMem2stream(
+    {% for i in range(config["tile_banks"]) %}
+        ap_uint<mem_data_width>* arg_b{{i}},
+    {% endfor %}
+        ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, const ops::hls::MemConfigTile& config)
+{
+    // #pragma HLS INLINE off
+    #ifdef DEBUG_LOG
+        printf("|HLS DEBUG_LOG|%s| reading tile. tile_start:%d, tile_size:%d, stride_start:%d\n", __func__, config.start_offset, config.total_size_bytes, stride_start);
+    #endif
+
+    const unsigned short NUM_BANKS_SHIFT = LOG2(NUM_BANKS);
+    const unsigned short z_diff = config.end_z - config.start_z;
+    // const unsigned short tile_size_y_mul_z_diff = config.tile_size_y * z_diff;
+    // const unsigned short last_tile_size_y_mul_z_diff = config.last_tile_size_y * z_diff;
+    const unsigned short adjusted_grid_size_y = config.grid_size_y >> NUM_BANKS_SHIFT;
+    const unsigned short k_multiplier_coeff = config.grid_xblocks * adjusted_grid_size_y;
+
+    for (unsigned short tile_y = 0; tile_y < config.tile_count_y; tile_y++)
+    {
+        const unsigned short tile_size_y = tile_y == (config.tile_count_y -1) ? config.last_tile_size_y : config.tile_size_y;
+        // const unsigned short realized_tile_size_y_mul_z_diff = tile_y == (config.tile_count_y -1) ? last_tile_size_y_mul_z_diff : tile_size_y_mul_z_diff;
+        const unsigned int tile_y_offset = tile_y * config.effective_tile_size_y * config.grid_xblocks;
+        // const unsigned int abs_row_id_y_offset = config.tile_count_x * tile_y * tile_size_y_mul_z_diff;
+
+        for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++)
+        {
+            // const unsigned int abs_row_id_x_offset = tile_x * realized_tile_size_y_mul_z_diff;
+            const unsigned int tile_x_offset = tile_x * config.effective_tile_size_x;
+
+            for (unsigned short k = 0; k < z_diff; k++)
+            {
+                // const unsigned int abs_row_id_y_offset_k = k * realized_tile_size_y_mul_z_diff;
+                const unsigned int k_offset = k * k_multiplier_coeff;
+
+                for (unsigned short j = 0; j < tile_size_y; j++)
+                {
+                    {#% for i in range(config["tile_banks"]) %}
+                    unsigned short ad_j{{i}} = j * NUM_BANKS + {{i}};
+                    {% endfor %#}
+                    unsigned short bank_id = j % NUM_BANKS;
+                    unsigned short j_shifted = j >> NUM_BANKS_SHIFT;
+                    unsigned short j_floor = j_shifted << NUM_BANKS_SHIFT;
+                    bool access_cond = j_floor + bank_id < tile_size_y;
+                    #pragma HLS PIPELINE // TODO: Check whether this is effective or not. Most probaly not required as mem2stream already has PIPELINE pragma inside.
+                    const unsigned short tile_size_x = tile_x == (config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
+                    unsigned int offset_1 = config.start_offset + tile_x_offset;
+                    unsigned int offset_2 = k_offset + tile_y_offset;
+                    unsigned int offset_3 = offset_1 + offset_2;
+                    unsigned int j_offset  = j_shifted * config.grid_xblocks;
+                    unsigned int offset = offset_3 + j_offset;
+                    #ifdef DEBUG_LOG
+                        printf("|HLS DEBUG_LOG|%s| offset_1:%u offset_2:%u offset_3:%u j_offset:%u offset:%u tile_y:%u tile_x:%u k:%u j:%u tile_size_x:%u\n",
+                                __func__,
+                                (unsigned int)offset_1,
+                                (unsigned int)offset_2,
+                                (unsigned int)offset_3,
+                                (unsigned int)j_offset,
+                                (unsigned int)offset,
+                                (unsigned int)tile_y,
+                                (unsigned int)tile_x,
+                                (unsigned int)k,
+                                (unsigned int)j,
+                                (unsigned int)tile_size_x);
+                    #endif
+                    
+                    {% for i in range(config["tile_banks"]) %}
+                    if (bank_id == {{i}} and access_cond) 
+                        ops::hls::mem2stream<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>((ap_uint<MEM_DATA_WIDTH>* )(arg_b{{i}} + offset), strm_out, tile_size_x);
+                    {% endfor %}
+                    {#for (unsigned short b = 0; b  < NUM_BANKS; b++)
+                    {
+                    // #pragma HLS UNROLL type=complete
+                        unsigned short ad_j = j * NUM_BANKS + b;
+                        switch(b){
+                        {% for i in range(config["tile_banks"]) %}
+                        case {{i}}:
+                            if (ad_j < tile_size_y) 
+                                ops::hls::mem2stream<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>((ap_uint<MEM_DATA_WIDTH>* )(arg_b{{i}} + offset), strm_out, tile_size_x);
+                            break;
+                        {% endfor %}
+                        }
+                    }#}
+                }
+            }
+        }
+    }
+}
+
+template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
+static void stridedTileStream2mem(
+    {% for i in range(config["tile_banks"]) %}
+        ap_uint<mem_data_width>* arg_b{{i}},
+    {% endfor %}
+        ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, const ops::hls::MemConfigTile& config)
+{
+    //     // #pragma HLS INLINE off
+    #ifdef DEBUG_LOG
+        printf("|HLS DEBUG_LOG|%s| writing tile. tile_start:%d, tile_size:%d\n", __func__, config.start_offset, config.total_size_bytes);
+    #endif
+    const unsigned short NUM_BANKS_SHIFT = LOG2(NUM_BANKS);
+    const unsigned short z_diff = config.end_z - config.start_z;
+    // const unsigned short tile_size_y_mul_z_diff = config.tile_size_y * z_diff;
+    // const unsigned short last_tile_size_y_mul_z_diff = config.last_tile_size_y * z_diff;
+    const unsigned short adjusted_grid_size_y = config.grid_size_y >> NUM_BANKS_SHIFT;
+    const unsigned short k_multiplier_coeff = config.grid_xblocks * adjusted_grid_size_y;
+
+    for (unsigned short tile_y = 0; tile_y < config.tile_count_y; tile_y++)
+    {
+        const unsigned short tile_size_y = tile_y == (config.tile_count_y -1) ? config.last_tile_size_y : config.tile_size_y;
+        // const unsigned short realized_tile_size_y_mul_z_diff = tile_y == (config.tile_count_y -1) ? last_tile_size_y_mul_z_diff : tile_size_y_mul_z_diff;
+        const unsigned int tile_y_offset = tile_y * config.effective_tile_size_y * config.grid_xblocks;
+
+        for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++)
+        {
+            // const unsigned int abs_row_id_x_offset = tile_x * realized_tile_size_y_mul_z_diff;
+            const unsigned int tile_x_offset = tile_x * config.effective_tile_size_x; 
+
+            for (unsigned short k = 0; k < z_diff; k++)
+            {
+                const unsigned int k_offset = k * k_multiplier_coeff;
+
+                for (unsigned short j = 0; j < tile_size_y; j++)
+                {
+                    {#% for i in range(config["tile_banks"]) %}
+                    unsigned short ad_j{{i}} = j * NUM_BANKS + {{i}};
+                    {% endfor %#}
+                    unsigned short bank_id = j % NUM_BANKS;
+                    unsigned short j_shifted = j >> NUM_BANKS_SHIFT;
+                    unsigned short j_floor = j_shifted << NUM_BANKS_SHIFT;
+                    bool access_cond = j_floor + bank_id < tile_size_y;
+                    // #pragma HLS PIPELINE // TODO: Check whether this is effective or not. Most probaly not required as stream2mem already has PIPELINE pragma inside.
+                    const unsigned short tile_size_x = tile_x == (config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
+                 
+                    unsigned int offset_1 = config.start_offset + tile_x_offset;
+                    unsigned int offset_2 = k_offset + tile_y_offset;
+                    unsigned int offset_3 = offset_1 + offset_2;
+                    unsigned int j_offset  = j_shifted * config.grid_xblocks;
+                    unsigned int offset = offset_3 + j_offset;
+                    #ifdef DEBUG_LOG
+                        printf("|HLS DEBUG_LOG|%s| offset:%u tile_y:%u tile_x:%u k:%u j:%u tile_size_x:%u\n",
+                               __func__,
+                               (unsigned int)offset,
+                               (unsigned int)tile_y,
+                               (unsigned int)tile_x,
+                               (unsigned int)k,
+                               (unsigned int)j,
+                               (unsigned int)tile_size_x);
+                    #endif
+                    {% for i in range(config["tile_banks"]) %}
+                    if (bank_id == {{i}} and access_cond) 
+                        ops::hls::stream2mem<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>((ap_uint<MEM_DATA_WIDTH>* )(arg_b{{i}} + offset), strm_in, tile_size_x);
+                    {% endfor %}
+                    {#for (unsigned short b = 0; b  < NUM_BANKS; b++)
+                    {
+                    // #pragma HLS UNROLL type=complete
+                        unsigned short ad_j = j * NUM_BANKS + b;
+                        switch(b){
+                        {% for i in range(config["tile_banks"]) %}
+                        case {{i}}:
+                            if (ad_j < tile_size_y) 
+                                ops::hls::stream2mem<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>((ap_uint<MEM_DATA_WIDTH>* )(arg_b{{i}} + offset), strm_in, tile_size_x);
+                            break;
+                        {% endfor %}
+                        }
+                    }#}
+                }
+            }
+        }
+    }
+}
+{% endif %}
+
 static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         const unsigned int num_pkts,
     {#{% if ilh.isMultiDim() %}
@@ -189,16 +364,17 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         {% endfor %}
     {% endif %}
     {% for arg in ilh.joint_args|ops_dat %}
-        {#{% if isTiling %}
-        ap_uint<mem_data_width>* arg{{(arg.id)}}_b1,
-        ap_uint<mem_data_width>* arg{{(arg.id)}}_b2,
-        {% else %}#}
-    {% if config["datamover_lib"] == 1 %}
+        {% if config["datamover_lib"] == 1 %}
+            {% if isTiling and config["tile_banks"] > 1 %}
+                {% for i in range(config["tile_banks"]) %}
+        ap_uint<mem_data_width>* arg{{(arg.id)}}_b{{i}},
+                {% endfor %}
+            {% else %}
         ap_uint<mem_data_width>* arg{{(arg.id)}},
-    {% else %}
+            {% endif %}
+        {% else %}
         ::hls::burst_maxi<ap_uint<mem_data_width>>& arg{{(arg.id)}},
-    {% endif %}
-        {#{% endif %}#}
+        {% endif %}
     {% endfor %}
     {% for arg in ilh.joint_args|ops_dat %}
         {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
@@ -211,12 +387,18 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
 {
     {% for arg in ilh.joint_args|ops_dat %}
         {% if arg is ops_read_or_rw%}
-            {#{% if isTiling %}
-    static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_strm_b1;
-    #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm_b1 depth={{(tiles[0] / config["vector_factor"] + 2)|int}}
-    static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_strm_b2;
-    #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm_b2 depth={{(tiles[0] / config["vector_factor"] + 2)|int}}
-            {% endif %}#}
+            {% if isTiling and config["tile_banks"] > 1 and config["datamover_lib"] == 1 %}
+                {#% for i in range(config["tile_banks"]) %}
+    static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_strm_b{{i}};
+    #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm_b{{i}} depth={{config["maxi_read_burst_length"]}}
+                {% endfor %#}
+    {#static ap_uint<mem_data_width>* arg{{arg.id}}_arr[{{config["tile_banks"]}}] = {
+                {% for i in range(config["tile_banks"]) %}
+        arg{{arg.id}}_b{{i}}{{"," if not loop.last}}
+                {% endfor %}
+    };
+    #pragma HLS ARRAY_PARTITION variable = arg{{arg.id}}_arr type = complete#}
+            {% endif %}
     static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_strm;
     #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm depth = {{(config["maxi_read_burst_length"] * config["num_read_outstanding"])|int}}
             {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
@@ -231,12 +413,18 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
             {% endif %}
     static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_strm;
     #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm depth = {{(config["maxi_write_burst_length"] * config["num_write_outstanding"])|int}}
-            {#{% if isTiling %}
-    static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_strm_b1;
-    #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm_b1 depth={{(tiles[0] / config["vector_factor"] + 2)|int}}
-    static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_strm_b2;
-    #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm_b2 depth={{(tiles[0] / config["vector_factor"] + 2)|int}}
-            {% endif %}#}
+            {% if isTiling and config["tile_banks"] > 1 and config["datamover_lib"] == 1 %}
+                {#% for i in range(config["tile_banks"]) %}
+    static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_strm_b{{i}};
+    #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm_b{{i}} depth={{config["maxi_write_burst_length"]}}
+                {% endfor %#}
+    {#static ap_uint<mem_data_width>* arg{{arg.id}}_arr[{{config["tile_banks"]}}] = {
+                {% for i in range(config["tile_banks"]) %}
+        arg{{arg.id}}_b{{i}}{{"," if not loop.last}}
+                {% endfor %}
+    };
+    #pragma HLS ARRAY_PARTITION variable =  arg{{arg.id}}_arr type = complete #}
+            {% endif %}
         {% endif %}
     {% endfor %}
 
@@ -248,7 +436,15 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         //ops::hls::stridedTileMem2stream<mem_data_width,  {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b2, arg{{arg.id}}_read_mem_strm_b2, memconfig, 1);
         //ops::hls::combineSteams<mem_data_width, {{II(arg)}}>(arg{{arg.id}}_read_mem_strm_b1, arg{{arg.id}}_read_mem_strm_b2, arg{{arg.id}}_read_mem_strm, memconfig);
             {% if config["datamover_lib"] == 1 %}
+                {% if config["tile_banks"] > 1 %}
+        stridedTileMem2stream<mem_data_width, {{config["tile_banks"]}}, {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(
+                    {% for i in range(config["tile_banks"]) %}
+                arg{{arg.id}}_b{{i}},
+                    {% endfor %}
+                arg{{arg.id}}_read_mem_strm, memconfig);
+                {% else %}
         ops::hls::tileMem2stream<mem_data_width, {{config["maxi_read_burst_length"]}}, 1>(arg{{arg.id}}, arg{{arg.id}}_read_mem_strm, memconfig);
+                {% endif %}
             {% else %}
         xf::data_mover::tiledMem2stream3D<mem_data_width, {{config["maxi_latency"]}}, {{config["maxi_read_burst_length"]}}, {{config["num_read_outstanding"]}},  {{II(arg)}}>(arg{{arg.id}}, arg{{arg.id}}_read_mem_strm, memconfig);
             {% endif %}
@@ -313,7 +509,15 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         // ops::hls::stridedTileStream2mem<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm_b1, arg{{arg.id}}_b1, memconfig, 0);
         // ops::hls::stridedTileStream2mem<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm_b2, arg{{arg.id}}_b2, memconfig, 1);
                 {% if config["datamover_lib"] == 1 %}
+                    {% if config["tile_banks"] > 1 %}
+        stridedTileStream2mem<mem_data_width, {{config["tile_banks"]}}, {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(
+                        {% for i in range(config["tile_banks"]) %}
+                arg{{arg.id}}_b{{i}},
+                        {% endfor %}
+                arg{{arg.id}}_write_mem_strm, memconfig);
+                    {% else %}
         ops::hls::tileStream2mem<mem_data_width, {{config["maxi_write_burst_length"]}}, 1>(arg{{arg.id}}, arg{{arg.id}}_write_mem_strm, memconfig);
+                    {% endif %}
                 {% else %}
         xf::data_mover::tiledStream2mem3D<mem_data_width, {{config["maxi_latency"]}}, {{config["maxi_write_burst_length"]}}, {{config["num_write_outstanding"]}},  {{II(arg)}}>(arg{{arg.id}}, arg{{arg.id}}_write_mem_strm, memconfig);
                 {% endif %}
@@ -343,12 +547,14 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
         {% endfor %}
     {% endif %}
     {% for arg in ilh.joint_args|ops_dat %}
-        {#{% if isTiling %}
-        ap_uint<mem_data_width>* arg{{(arg.id)}}_b1,
-        ap_uint<mem_data_width>* arg{{(arg.id)}}_b2,
-        {% else %}#}
     {% if config["datamover_lib"] == 1 %}
+        {% if isTiling and config["tile_banks"] > 1 %}
+            {% for i in range(config["tile_banks"]) %}
+        ap_uint<mem_data_width>* arg{{(arg.id)}}_b{{i}},
+            {% endfor %}
+        {% else %}
         ap_uint<mem_data_width>* arg{{(arg.id)}},
+        {% endif %}
     {% else %}
         ::hls::burst_maxi<ap_uint<mem_data_width>>& arg{{(arg.id)}},
     {% endif %}
@@ -383,12 +589,13 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
                 {% endfor %}
             {% endif %}
             {% for arg in ilh.joint_args|ops_dat %}
-                {#% if isTiling %}
-                arg{{(arg.id)}}_b1,
-                arg{{(arg.id)}}_b2,
-                {% else %#}
+                {% if isTiling and config["tile_banks"] > 1 and config["datamover_lib"] == 1 %}
+                    {% for i in range(config["tile_banks"]) %}
+                arg{{(arg.id)}}_b{{i}},
+                    {% endfor %}
+                {% else %}
                 arg{{(arg.id)}},
-                {#% endif %#}
+                {% endif %}
             {% endfor %}
             {% for arg in ilh.joint_args|ops_dat %}
                 {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
@@ -413,12 +620,13 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
                 {% endfor %}
             {% endif %}
             {% for arg in ilh.joint_args|ops_dat %}
-                {#% if isTiling %}
-                arg{{ilh.getSwapArg(arg).id}}_b1,
-                arg{{ilh.getSwapArg(arg).id}}_b2,
-                {% else %#}
+                {% if isTiling and config["tile_banks"] > 1 and config["datamover_lib"] == 1 %}
+                    {% for i in range(config["tile_banks"]) %}
+                arg{{ilh.getSwapArg(arg).id}}_b{{i}},
+                    {% endfor %}
+                {% else %}
                 arg{{ilh.getSwapArg(arg).id}},
-                {#% endif %#}
+                {% endif %}
             {% endfor %}
             {% for arg in ilh.joint_args|ops_dat %}
                 {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
@@ -556,13 +764,22 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
     {% endif %}
     {% for arg in ilh.joint_args|ops_dat %} 
         {% if isTiling %}
+            {% if config["datamover_lib"] == 1 and config["tile_banks"] > 1 %}
+                {% for i in range(config["tile_banks"]) %}
+    #pragma HLS INTERFACE mode=m_axi bundle=gmem{{(arg.id * config["tile_banks"]|int + i) % 32}} depth={{config["maxi_depth"]}} max_read_burst_length={{config["maxi_read_burst_length"]}} max_write_burst_length={{config["maxi_write_burst_length"]}} \
+            num_read_outstanding={{config["num_read_outstanding"]}} num_write_outstanding={{config["num_write_outstanding"]}} \
+            port=arg{{arg.id}}_b{{i}} offset={{config["maxi_offset"]}} latency={{config["maxi_latency"]}}
+    #pragma HLS INTERFACE s_axilite port = arg{{arg.id}}_b{{i}} bundle = control
+                {% endfor %}
+            {% else %}
     #pragma HLS INTERFACE mode=m_axi bundle=gmem{{arg.id}} depth={{config["maxi_depth"]}} max_read_burst_length={{config["maxi_read_burst_length"]}} max_write_burst_length={{config["maxi_write_burst_length"]}} \
             num_read_outstanding={{config["num_read_outstanding"]}} num_write_outstanding={{config["num_write_outstanding"]}} \
             port=arg{{arg.id}} offset={{config["maxi_offset"]}} latency={{config["maxi_latency"]}}
+    #pragma HLS INTERFACE s_axilite port = arg{{arg.id}} bundle = control
+            {% endif %}
     {##pragma HLS INTERFACE mode=m_axi bundle=gmem{{arg.id * 2 + 1}} depth={{config["maxi_depth"]}} max_read_burst_length={{config["maxi_read_burst_length"]}} max_write_burst_length={{config["maxi_write_burst_length"]}} \
             num_read_outstanding={{config["num_read_outstanding"]}} num_write_outstanding={{config["num_write_outstanding"]}} \
             port=arg{{arg.id}}_b2 offset={{config["maxi_offset"]}}#}
-    #pragma HLS INTERFACE s_axilite port = arg{{arg.id}} bundle = control
     {#pragma HLS INTERFACE s_axilite port = arg{{arg.id}}_b2 bundle = control#}
         {% else %}
     #pragma HLS INTERFACE mode=m_axi bundle=gmem{{arg.id}} depth={{config["maxi_depth"]}} max_read_burst_length={{config["maxi_read_burst_length"]}} max_write_burst_length={{config["maxi_write_burst_length"]}} \
@@ -783,12 +1000,13 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
                 {% endfor %}
         {% endif %}
         {% for arg in ilh.joint_args|ops_dat %}
-            {#% if isTiling %}
-                arg{{(arg.id)}}_b1,
-                arg{{(arg.id)}}_b2,
-            {% else %#}
+            {% if isTiling and config["tile_banks"] > 1 and config["datamover_lib"] == 1 %}
+                {% for i in range(config["tile_banks"]) %}
+                arg{{(arg.id)}}_b{{i}},
+                {% endfor %}
+            {% else %}
                 arg{{(arg.id)}},
-            {#% endif %#}
+            {% endif %}
         {% endfor %}
         {% for arg in ilh.joint_args|ops_dat %}
                 {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}

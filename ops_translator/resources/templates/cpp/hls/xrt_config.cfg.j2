@@ -36,7 +36,13 @@ slr=kernel_outerloop_{{ilh.id}}_{{loop.index0+1}}:SLR{{slr_id}}
     {% for ilh, program in app.uniqueOuterLoops() %}
         {% for arg in ilh.joint_args|ops_dat %}
             {% if program.tiling %}
+                {% if config["tile_banks"] > 1 %}
+                    {% for i in range(config["tile_banks"]) %}
+sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b{{i}}:HBM[{{(arg.id * config["tile_banks"]|int + i) % 32}}]
+                    {% endfor %}
+                {% else %}
 sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{arg.id}}]
+                {% endif %}
 {#sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b2:HBM[{{arg.id * 2 + 1}}]#}
             {% else %}
 sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{arg.id}}]

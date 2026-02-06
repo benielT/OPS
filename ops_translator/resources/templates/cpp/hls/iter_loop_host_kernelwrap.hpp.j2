@@ -248,7 +248,14 @@ public:
     {% for arg in ilh.joint_args %}
         {% if arg is ops_dat %}
 #ifdef OPS_TILING
+    printf("Tiles per grid: %d \n", arg0.alt_banks);
+    {% if config["tile_banks"] > 1 and config["datamover_lib"] == 1 %}
+        {% for i in range(config["tile_banks"]) %}
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.deviceBuffer[{{i}}]));
+        {% endfor %}
+    {% else %}
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.deviceBuffer[0]));
+    {% endif %}
         {#OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.deviceBuffer[1]));#}
 #else
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.deviceBuffer));
