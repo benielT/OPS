@@ -35,6 +35,13 @@ total_bytes_d{{ilh.dats[arg.dat_id][0].dim}}
 total_bytes
     {%- endif -%}
 {%- endmacro -%}
+{% macro num_pkts(arg) -%}
+    {%- if ilh.dats[arg.dat_id][0].isMultiDim() -%}
+num_pkts_d{{ilh.dats[arg.dat_id][0].dim}}
+    {%- else -%}
+num_pkts
+    {%- endif -%}
+{%- endmacro -%}
 {% block header_block %}
 #pragma once
     {% for df_node in ilh.get_active_df_graph().getAllLoopNodes() %}
@@ -58,6 +65,8 @@ constexpr unsigned short multidim_axis_data_width_{{ilh.id}}_{{dat.ptr}} = data_
 {% block kernel_dataflow_region %}
 {% endblock %}
 
+{% block kernel_main_loop_region %}
+{% endblock %}
 {% block kernel_top_prototype %}
 extern "C" void kernel_outerloop_{{ilh.id}}(
         const unsigned short slr_region,

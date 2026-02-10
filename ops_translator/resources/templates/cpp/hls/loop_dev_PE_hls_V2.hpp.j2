@@ -224,11 +224,14 @@ public:
         )
     {
         {% if isTiling %}
-        ::ops::hls::StencilConfigCoreTiled stencilConfig = m_stencilConfig;
+        ::ops::hls::StencilConfigCoreSingleTile stencilConfig = m_stencilConfig;
         #pragma HLS ARRAY_PARTITION variable = stencilConfig.tile_size dim = 1 complete
-        #pragma HLS ARRAY_PARTITION variable = stencilConfig.last_tile_size dim = 1 complete
-        #pragma HLS ARRAY_PARTITION variable = stencilConfig.tile_count dim = 1 complete
-        #pragma HLS ARRAY_PARTITION variable = stencilConfig.grid_size dim = 1 complete
+        //#pragma HLS ARRAY_PARTITION variable = stencilConfig.is_tiled dim = 1 complete
+        #pragma HLS ARRAY_PARTITION variable = stencilConfig.is_first dim = 1 complete
+        #pragma HLS ARRAY_PARTITION variable = stencilConfig.is_last dim = 1 complete
+        //#pragma HLS ARRAY_PARTITION variable = stencilConfig.last_tile_size dim = 1 complete
+        //#pragma HLS ARRAY_PARTITION variable = stencilConfig.tile_count dim = 1 complete
+        //#pragma HLS ARRAY_PARTITION variable = stencilConfig.grid_size dim = 1 complete
         {% else %}
         ::ops::hls::StencilConfigCore stencilConfig = m_stencilConfig;
         #pragma HLS ARRAY_PARTITION variable = stencilConfig.lower_limit dim = 1 complete
@@ -240,21 +243,30 @@ public:
         const unsigned short span_x = {{span_x}};
         const unsigned short half_span_x = {{half_span_x}};
         {% if isTiling %}
-        const unsigned short adj_half_span_x = stencilConfig.tile_count[0] == 1? half_span_x : half_span_x * (peId + 1);
+        const unsigned short true_tile_size_x = stencilConfig.tile_size[0] << shift_bits;
+        // overlap_size = {{get_overlap_tile_size(config["SLR_count"], config["iter_par_factor"], half_span_x, config["mem_vector_factor"])|int}}, total_PEs = {{get_total_PEs(config["SLR_count"], config["iter_par_factor"])}} 
+        // const unsigned short overlap_offset_x = {{(get_overlap_tile_size(config["SLR_count"], config["iter_par_factor"], half_span_x, config["mem_vector_factor"]) - (half_span_x * get_total_PEs(config["SLR_count"], config["iter_par_factor"])) - 1)|int}};
+        // const unsigned short adj_half_span_x = stencilConfig.tile_count[0] == 1? half_span_x : half_span_x * (peId + 1);
+        const unsigned short adj_half_span_x_lower = stencilConfig.is_first[0]? half_span_x : half_span_x * (peId + 1);
+        const unsigned short adj_half_span_x_upper = stencilConfig.is_last[0]? half_span_x : half_span_x * (peId + 1);
             {% if lh.ndim == 3 %}
-        const unsigned short adj_half_span_y = stencilConfig.tile_count[1] == 1? half_span_x : half_span_x * (peId + 1);
+        //const unsigned short adj_half_span_y = stencilConfig.tile_count[1] == 1? half_span_x : half_span_x * (peId + 1);
+        const unsigned short adj_half_span_y_lower = stencilConfig.is_first[1]? half_span_x : half_span_x * (peId + 1);
+        const unsigned short adj_half_span_y_upper = stencilConfig.is_last[1]? half_span_x : half_span_x * (peId + 1);
             {% endif %}
         {% endif %}
 
         {% if isTiling %}
         // static limits are set outside the tile loops
-        const unsigned short lower_limit_x = adj_half_span_x;
-        const unsigned short upper_limit_x_const = (stencilConfig.last_tile_upper_limit_x - adj_half_span_x) < adj_half_span_x ? adj_half_span_x : (stencilConfig.last_tile_upper_limit_x - adj_half_span_x);
+        const unsigned short lower_limit_x = adj_half_span_x_lower;
+        //const unsigned short min_limit_x_const = stencilConfig.last_tile_upper_limit_x < true_tile_size_x ? stencilConfig.last_tile_upper_limit_x : true_tile_size_x;  //(stencilConfig.last_tile_upper_limit_x - adj_half_span_x) < adj_half_span_x ? adj_half_span_x : (stencilConfig.last_tile_upper_limit_x - adj_half_span_x);
+        //const unsigned short upper_limit_x = (min_limit_x_const - adj_half_span_x_upper) < adj_half_span_x_upper ? adj_half_span_x_upper : min_limit_x_const - adj_half_span_x_upper;
+        const unsigned short upper_limit_x = stencilConfig.is_last[0] ? stencilConfig.last_tile_upper_limit_x - 1 : true_tile_size_x - adj_half_span_x_upper;
             {% if lh.ndim == 3 %}
-        const unsigned short lower_limit_y = adj_half_span_x;
+        const unsigned short lower_limit_y = adj_half_span_y_lower;
         const unsigned short lower_limit_z = half_span_x;
         const unsigned short upper_limit_z = stencilConfig.outer_loop_limit - span_x;
-        const unsigned short upper_limit_y_const = (stencilConfig.last_tile_size[1] - adj_half_span_y) < adj_half_span_y ? adj_half_span_y : (stencilConfig.last_tile_size[1] - adj_half_span_y);
+        const unsigned short upper_limit_y = (stencilConfig.tile_size[1] - adj_half_span_y_upper) < adj_half_span_y_upper ? adj_half_span_y_upper : (stencilConfig.tile_size[1] - adj_half_span_y_upper);
             {% else %}
         const unsigned short lower_limit_y = half_span_x;
         const unsigned short upper_limit_y = stencilConfig.outer_loop_limit - span_x;
@@ -268,7 +280,7 @@ public:
         const unsigned short upper_limit_z = stencilConfig.upper_limit[2];
         {% endif %}
 
-        {% if isTiling %}
+        {#% if isTiling %}
         const unsigned short total_tiles = stencilConfig.tile_count[0] * stencilConfig.tile_count[1];
         unsigned short tile_x = 0;
         unsigned short tile_y = 0;
@@ -284,7 +296,8 @@ public:
                 tile_y++;
             }
 
-        {% else %}
+        {% else %#}
+        {% if not isTiling %}
         for (unsigned bat = 0; bat < stencilConfig.batch_size; bat++)
         {
         {% endif %}
@@ -292,15 +305,15 @@ public:
         {% set read_origin_wide_diff_x = read_origin_wide_diff.x %}
         {% set read_origin_wide_diff_x  = ((read_origin_wide_diff_x + config["vector_factor"] - 1) / config["vector_factor"])|round(0,"floor")|int %}
             //read_origin_wide_diff_x: {{read_origin_wide_diff_x}}, read_origin_wide_diff: {{read_origin_wide_diff}}
-        {% if isTiling %}
-            const bool is_last_tile_x = (tile_x == stencilConfig.tile_count[0] - 1);
+        {#% if isTiling %}
+            //const bool is_last_tile_x = (tile_x == stencilConfig.tile_count[0] - 1);
             const unsigned short tile_size_x = is_last_tile_x ? stencilConfig.last_tile_size[0] : stencilConfig.tile_size[0];
             const unsigned short true_tile_size_x = tile_size_x << shift_bits;
             {% if lh.ndim == 3 %}
             const bool is_last_tile_y = (tile_y == stencilConfig.tile_count[1] - 1);
             const unsigned short tile_size_y = is_last_tile_y ? stencilConfig.last_tile_size[1] : stencilConfig.tile_size[1];
             {% endif %}
-        {% endif %}
+        {% endif %#}
         //  *** counters definitions ****
         {% if lh.ndim == 1 %}
             short i = {{(-read_origin_wide_diff_x) - 1}};
@@ -314,7 +327,8 @@ public:
             {% if not isTiling %}
             unsigned short plane_diff = stencilConfig.grid_size[0] * stencilConfig.grid_size[1] - 1;
             {% else %}
-            unsigned short plane_diff = tile_size_x * tile_size_y - 1;
+            //unsigned short plane_diff = tile_size_x * tile_size_y - 1;
+            unsigned short plane_diff = stencilConfig.tile_size[0] * stencilConfig.tile_size[1] - 1;
             {% endif %}
         {% endif %}
 
@@ -342,15 +356,15 @@ public:
                     {% else %}
             unsigned short {{stencil_name}}_{{buffer_read_idx(buffer)}};
             
-            if ({{(buffer.read_point - buffer.write_point).y}} * {{"tile_size_x" if isTiling else "stencilConfig.grid_size[0]"}} + {{(buffer.read_point - buffer.write_point).x}} > 0)
-                {{stencil_name}}_{{buffer_read_idx(buffer)}} = {{(buffer.read_point - buffer.write_point).y}} * {{"tile_size_x" if isTiling else "stencilConfig.grid_size[0]"}} + {{(buffer.read_point - buffer.write_point).x}};
+            if ({{(buffer.read_point - buffer.write_point).y}} * {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} + {{(buffer.read_point - buffer.write_point).x}} > 0)
+                {{stencil_name}}_{{buffer_read_idx(buffer)}} = {{(buffer.read_point - buffer.write_point).y}} * {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} + {{(buffer.read_point - buffer.write_point).x}};
             else
                 {{stencil_name}}_{{buffer_read_idx(buffer)}} = 0;
 
             unsigned short {{stencil_name}}_{{buffer_write_idx(buffer)}};
             
-            if ({{(buffer.write_point - buffer.read_point).y}} * {{"tile_size_x" if isTiling else "stencilConfig.grid_size[0]"}} + {{(buffer.write_point - buffer.read_point).x}} > 0)
-                {{stencil_name}}_{{buffer_write_idx(buffer)}} = {{(buffer.write_point - buffer.read_point).y}} * {{"tile_size_x" if isTiling else "stencilConfig.grid_size[0]"}} + {{(buffer.write_point - buffer.read_point).x}};
+            if ({{(buffer.write_point - buffer.read_point).y}} * {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} + {{(buffer.write_point - buffer.read_point).x}} > 0)
+                {{stencil_name}}_{{buffer_write_idx(buffer)}} = {{(buffer.write_point - buffer.read_point).y}} * {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} + {{(buffer.write_point - buffer.read_point).x}};
             else
                 {{stencil_name}}_{{buffer_write_idx(buffer)}} = 0;
                     {% endif %}
@@ -358,30 +372,30 @@ public:
             {% endfor %}
         {% endfor %}
 
-        {% if isTiling %}
+        {#% if isTiling %}
         // Dynamic limits set inside the tile loops
         const unsigned short upper_limit_x = is_last_tile_x ? upper_limit_x_const : true_tile_size_x - adj_half_span_x;
             {% if lh.ndim == 3 %}
         const unsigned short upper_limit_y = is_last_tile_y ? upper_limit_y_const : tile_size_y - adj_half_span_x;
             {% endif %}
-        {% endif %}
+        {% endif %#}
 
         //  *** iteration limit definition ****
         {% if lh.ndim  == 1 %}
             {% if isTiling %}
-            unsigned int iter_limit = true_tile_size_x + half_span_x;
+            unsigned int iter_limit = stencilConfig.tile_size[0] + half_span_x;
             {% else %}
             unsigned int iter_limit = stencilConfig.outer_loop_limit;
             {% endif %}
         {% elif lh.ndim == 2%}
             {% if isTiling %}
-            unsigned int iter_limit = stencilConfig.outer_loop_limit * tile_size_x;
+            unsigned int iter_limit = stencilConfig.outer_loop_limit * stencilConfig.tile_size[0];
             {% else %}
             unsigned int iter_limit = stencilConfig.outer_loop_limit * stencilConfig.grid_size[0]{%- if read_origin_wide_diff_x != 0 %} + {{read_origin_wide_diff_x}}{%- endif %};
             {% endif %}
         {% else %}
             {% if isTiling %}
-            unsigned int iter_limit = stencilConfig.outer_loop_limit * tile_size_x * tile_size_y;
+            unsigned int iter_limit = stencilConfig.outer_loop_limit * stencilConfig.tile_size[0] * stencilConfig.tile_size[1];
             {% else %}
             unsigned int iter_limit = stencilConfig.outer_loop_limit * 
                     stencilConfig.grid_size[1] * stencilConfig.grid_size[0] {% if read_origin_wide_diff[1] !=0 -%} + {{read_origin_wide_diff[1]}} * stencilConfig.grid_size[0] {%- endif %} {%- if read_origin_wide_diff_x != 0 %} + {{read_origin_wide_diff_x}}{%- endif %};
@@ -399,12 +413,12 @@ public:
             unsigned int {{arg.stencil_ptr}}_read_ub_itr = {% if base_offset != 0 %}{{base_offset}} + stencilConfig.grid_size[0];{% else %}stencilConfig.grid_size[0];{% endif %}
                 {% elif lh.ndim == 2 %}
                     {% set base_offset = widen_read_stencil_desc.widen_stencil.base_point.y - widen_stencil_disc_map[arg.stencil_ptr].widen_stencil.base_point.y %}
-            unsigned int {{arg.stencil_ptr}}_read_lb_itr = {% if base_offset != 0 %}{{base_offset}} * {{"tile_size_x" if isTiling else "stencilConfig.grid_size[0]"}}{% else %}0{% endif %};
-            unsigned int {{arg.stencil_ptr}}_read_ub_itr = {% if base_offset != 0 %}({{base_offset}} + stencilConfig.grid_size[1]){% else %}stencilConfig.grid_size[1]{% endif %} * {{"tile_size_x" if isTiling else "stencilConfig.grid_size[0]"}};
+            unsigned int {{arg.stencil_ptr}}_read_lb_itr = {% if base_offset != 0 %}{{base_offset}} * {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}}{% else %}0{% endif %};
+            unsigned int {{arg.stencil_ptr}}_read_ub_itr = {% if base_offset != 0 %}({{base_offset}} + stencilConfig.grid_size[1]){% else %}stencilConfig.grid_size[1]{% endif %} * {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}};
                 {% else %}
                     {% set base_offset = widen_read_stencil_desc.widen_stencil.base_point.z - widen_stencil_disc_map[arg.stencil_ptr].widen_stencil.base_point.z %}
-            unsigned int {{arg.stencil_ptr}}_read_lb_itr = {% if base_offset != 0 %}{{base_offset}} * {{"tile_size_x" if isTiling else "stencilConfig.grid_size[0]"}} * {{"tile_size_y" if isTiling else "stencilConfig.grid_size[1]"}},{% else %}0{% endif %};
-            unsigned int {{arg.stencil_ptr}}_read_ub_itr = {% if base_offset != 0 %}({{base_offset}} + stencilConfig.grid_size[2]){% else %}stencilConfig.grid_size[2]{% endif %} * {{"tile_size_x" if isTiling else "stencilConfig.grid_size[0]"}} * {{"tile_size_y" if isTiling else "stencilConfig.grid_size[1]"}};
+            unsigned int {{arg.stencil_ptr}}_read_lb_itr = {% if base_offset != 0 %}{{base_offset}} * {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} * {{"stencilConfig.tile_size[1]" if isTiling else "stencilConfig.grid_size[1]"}},{% else %}0{% endif %};
+            unsigned int {{arg.stencil_ptr}}_read_ub_itr = {% if base_offset != 0 %}({{base_offset}} + {{"stencilConfig.tile_size[2]" if isTiling else "stencilConfig.grid_size[2]"}} ){% else %}{{"stencilConfig.tile_size[2]" if isTiling else "stencilConfig.grid_size[2]"}} {% endif %} * {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} * {{"stencilConfig.tile_size[1]" if isTiling else "stencilConfig.grid_size[1]"}};
                 {% endif %}
             {% endif %}
         {% endfor %}
@@ -509,11 +523,11 @@ public:
             {% endfor %}
         {% endfor %}
 
-            const short cond_x_val = {{"tile_size_x" if isTiling else "stencilConfig.grid_size[0]"}} - 1; 
+            const short cond_x_val = {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} - 1; 
         {% if lh.ndim == 2 %}
             const short cond_y_val = stencilConfig.outer_loop_limit - 1;
         {% elif lh.ndim == 3 %}
-            const short cond_y_val = {{"tile_size_y" if isTiling else "stencilConfig.grid_size[1]"}}  - 1;
+            const short cond_y_val = {{"stencilConfig.tile_size[1]" if isTiling else "stencilConfig.grid_size[1]"}}  - 1;
             const short cond_z_val = stencilConfig.outer_loop_limit - 1;
         {% endif %}
 
@@ -613,9 +627,9 @@ public:
         {% for stencil_name in lh.get_unique_read_stencil_names() %}
             {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
                 {% if buffer.buffer_type == ops.BufferType.LINE_BUFF %}
-                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_read_idx(buffer)}} = {{stencil_name}}_{{buffer_read_idx(buffer)}} >= ({{"tile_size_x" if isTiling else "stencilConfig.grid_size[0]"}} - 1);
+                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_read_idx(buffer)}} = {{stencil_name}}_{{buffer_read_idx(buffer)}} >= ({{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} - 1);
                     {% if not buffer.is_read_write_aligned %}
-                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_write_idx(buffer)}} = {{stencil_name}}_{{buffer_write_idx(buffer)}} >= ({{"tile_size_x" if isTiling else "stencilConfig.grid_size[0]"}} - 1);
+                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_write_idx(buffer)}} = {{stencil_name}}_{{buffer_write_idx(buffer)}} >= ({{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} - 1);
                     {% endif %}
                 {% else %}
                     bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_read_idx(buffer)}} = {{stencil_name}}_{{buffer_read_idx(buffer)}} >= (plane_diff);
@@ -982,12 +996,14 @@ public:
                 }
             }
         }
-    } 
+    {% if not isTiling %}
+    }
+    {% endif %}
 };
 {% endblock %}
 
 {% block kernel_PE %}
-void kernel_{{lh.kernel}}_PE(const short& PEId, const ops::hls::{{"StencilConfigCoreTiled" if isTiling else "StencilConfigCore"}}& stencilConfig,
+void kernel_{{lh.kernel}}_PE(const short& PEId, const ops::hls::{{"StencilConfigCoreSingleTile" if isTiling else "StencilConfigCore"}}& stencilConfig,
     {% for arg in lh.args|ops_not_idx %}
         {% if loop.last %}
             {% if consts or lh.args|ops_gbl|length > 0 %}

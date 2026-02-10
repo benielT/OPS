@@ -354,14 +354,19 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         {% endfor %}
     {% endif %}#}
     {% if isTiling %}
-        const ops::hls::MemConfigTile& memconfig,
+        const unsigned int num_beats,
+        {% if ndim == 3 %}
+        ap_uint<192>& command,
+        {% else %}
+        ap_uint<160>& command,
+        {% endif %}
     {% else %}
         const ops::hls::MemConfig& memconfig,
-    {% endif %}
-    {% if ilh.isMultiDim() %}
-        {% for m_dim in ilh.getMultidimList() %}
+        {% if ilh.isMultiDim() %}
+            {% for m_dim in ilh.getMultidimList() %}
         const ops::hls::MemConfig& memconfig_d{{m_dim}},
-        {% endfor %}
+            {% endfor %}
+        {% endif %}
     {% endif %}
     {% for arg in ilh.joint_args|ops_dat %}
         {% if config["datamover_lib"] == 1 %}
@@ -443,7 +448,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
                     {% endfor %}
                 arg{{arg.id}}_read_mem_strm, memconfig);
                 {% else %}
-        ops::hls::tileMem2stream<mem_data_width, {{config["maxi_read_burst_length"]}}, 1>(arg{{arg.id}}, arg{{arg.id}}_read_mem_strm, memconfig);
+        ops::hls::tileMem2stream<mem_data_width, {{config["maxi_read_burst_length"]}}, 1>(arg{{arg.id}}, arg{{arg.id}}_read_mem_strm, command.range(159,0));
                 {% endif %}
             {% else %}
         xf::data_mover::tiledMem2stream3D<mem_data_width, {{config["maxi_latency"]}}, {{config["maxi_read_burst_length"]}}, {{config["num_read_outstanding"]}},  {{II(arg)}}>(arg{{arg.id}}, arg{{arg.id}}_read_mem_strm, memconfig);
@@ -454,21 +459,21 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
     {% endfor %}
     {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw %}
         {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
-        ops::hls::stream2streamStepdown<mem_data_width, {{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_strm, arg{{arg.id}}_read_reduced_mem_strm, {{num_beats(arg)}});
+        ops::hls::stream2streamStepdown<mem_data_width, {{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_strm, arg{{arg.id}}_read_reduced_mem_strm, {%if isTiling %}num_beats{% else %}{{num_beats(arg)}}{% endif %});
         {% endif %}
     {% endfor %}
     {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw %}
         {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
             {% if arg is ops_read %}
-        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm, {{axis_name(arg)}}, {{num_pkts(arg)}});
+        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm, {{axis_name(arg)}}, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
             {% elif arg is ops_rw %}
-        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm, {{axis_name_t2(arg, "out")}}, {{num_pkts(arg)}});
+        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm, {{axis_name_t2(arg, "out")}}, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
             {% endif %}
         {% else %}
             {% if arg is ops_read %}
-        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_strm, {{axis_name(arg)}}, {{num_pkts(arg)}});
+        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_strm, {{axis_name(arg)}}, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
             {% elif arg is ops_rw %}
-        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_strm, {{axis_name_t2(arg, "out")}}, {{num_pkts(arg)}});
+        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_strm, {{axis_name_t2(arg, "out")}}, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
             {% endif %}
         {% endif %}
     {% endfor %}
@@ -476,19 +481,19 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
     {% for arg in ilh.joint_args|ops_dat|ops_write_or_rw %}
         {% if arg is ops_write_or_rw %}
             {% if arg is read_only_rw %}
-        ops::hls::axisTerminate<{{axis_data_width(arg)-}}>({{axis_name_t2(arg, "in")}}, {{num_pkts(arg)}});
+        ops::hls::axisTerminate<{{axis_data_width(arg)-}}>({{axis_name_t2(arg, "in")}}, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
             {% else %}
                 {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
                     {% if arg is ops_write %}
-        ops::hls::axis2stream<{{axis_data_width(arg)-}}>({{axis_name(arg)}}, arg{{arg.id}}_write_reduced_mem_strm, {{num_pkts(arg)}});
+        ops::hls::axis2stream<{{axis_data_width(arg)-}}>({{axis_name(arg)}}, arg{{arg.id}}_write_reduced_mem_strm, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
                     {% else %}
-        ops::hls::axis2stream<{{axis_data_width(arg)-}}>({{axis_name_t2(arg, "in")}}, arg{{arg.id}}_write_reduced_mem_strm, {{num_pkts(arg)}});
+        ops::hls::axis2stream<{{axis_data_width(arg)-}}>({{axis_name_t2(arg, "in")}}, arg{{arg.id}}_write_reduced_mem_strm, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
                     {% endif %}
                 {% else %}
                     {% if arg is ops_write %}
-        ops::hls::axis2stream<{{axis_data_width(arg)-}}>({{axis_name(arg)}}, arg{{arg.id}}_write_mem_strm, {{num_pkts(arg)}});
+        ops::hls::axis2stream<{{axis_data_width(arg)-}}>({{axis_name(arg)}}, arg{{arg.id}}_write_mem_strm, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
                     {% else %}
-        ops::hls::axis2stream<{{axis_data_width(arg)-}}>({{axis_name_t2(arg, "in")}}, arg{{arg.id}}_write_mem_strm, {{num_pkts(arg)}});
+        ops::hls::axis2stream<{{axis_data_width(arg)-}}>({{axis_name_t2(arg, "in")}}, arg{{arg.id}}_write_mem_strm, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
                     {% endif %}
                 {% endif %}
             {% endif %}
@@ -497,7 +502,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
     {% for arg in ilh.joint_args|ops_dat|ops_write_or_rw %}
         {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
             {% if arg is not read_only_rw %}
-        ops::hls::stream2streamStepup<{{axis_data_width(arg)-}}, mem_data_width>(arg{{arg.id}}_write_reduced_mem_strm, arg{{arg.id}}_write_mem_strm, {{num_beats(arg)}});
+        ops::hls::stream2streamStepup<{{axis_data_width(arg)-}}, mem_data_width>(arg{{arg.id}}_write_reduced_mem_strm, arg{{arg.id}}_write_mem_strm, {%if isTiling %}num_beats{% else %}{{num_beats(arg)}}{% endif %});
             {% endif %}
         {% endif %}
     {% endfor %}
@@ -516,7 +521,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
                         {% endfor %}
                 arg{{arg.id}}_write_mem_strm, memconfig);
                     {% else %}
-        ops::hls::tileStream2mem<mem_data_width, {{config["maxi_write_burst_length"]}}, 1>(arg{{arg.id}}, arg{{arg.id}}_write_mem_strm, memconfig);
+        ops::hls::tileStream2memWithAvoid<mem_data_width, {{config["maxi_write_burst_length"]}}, 1>(arg{{arg.id}}, arg{{arg.id}}_write_mem_strm, command);
                     {% endif %}
                 {% else %}
         xf::data_mover::tiledStream2mem3D<mem_data_width, {{config["maxi_latency"]}}, {{config["maxi_write_burst_length"]}}, {{config["num_write_outstanding"]}},  {{II(arg)}}>(arg{{arg.id}}, arg{{arg.id}}_write_mem_strm, memconfig);
@@ -530,7 +535,9 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
 
 static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
         const unsigned int iter,
+    {% if not isTiling %}
         const unsigned int num_pkts,
+    {% endif %}
     {#{% if ilh.isMultiDim() %}
         {% for m_dim in ilh.getMultidimList() %}
         const unsigned int num_pkts_d{{m_dim}},
@@ -540,11 +547,11 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
         const ops::hls::MemConfigTile& memconfig,
     {% else %}
         const ops::hls::MemConfig& memconfig,
-    {% endif %}
-    {% if ilh.isMultiDim() %}
-        {% for m_dim in ilh.getMultidimList() %}
+        {% if ilh.isMultiDim() %}
+            {% for m_dim in ilh.getMultidimList() %}
         const ops::hls::MemConfig& memconfig_d{{m_dim}},
-        {% endfor %}
+            {% endfor %}
+        {% endif %}
     {% endif %}
     {% for arg in ilh.joint_args|ops_dat %}
     {% if config["datamover_lib"] == 1 %}
@@ -569,74 +576,192 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
         {% endif %}
     {% endfor %})    
 {
+    {% if isTiling %}
+        {%if ndim == 3 %}
+    const unsigned short total_tiles = memconfig.tile_count_x * memconfig.tile_count_y;
+    const unsigned short z_diff = memconfig.end_z - memconfig.start_z;
+    const unsigned short stride_z = memconfig.grid_xblocks * memconfig.grid_size_y;
+	unsigned short tile_y = 0;
+        {% else %}
+    const unsigned short total_tiles = memconfig.tile_count_x;
+    const unsigned short y_diff = memconfig.end_y - memconfig.start_y;
+        {% endif %}
+	unsigned short tile_x = 0;
+	const unsigned short stride_y = memconfig.grid_xblocks;
+    {% endif %}
+
     for (unsigned int i = 0; i < iter/2; i++)
     {
     //#pragma HLS PIPELINE REWIND
     #ifdef DEBUG_LOG
         printf("[KERNEL_DEBUG]|%s| Calling datamover. i:%d\n", __func__, i);
     #endif
-        datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
-                num_pkts,
+    {% if isTiling %}
+        for (unsigned short tile_id = 0; tile_id < total_tiles; tile_id++)
+		{
+            if (tile_id > 0) {
+				tile_x++;
+				if (tile_x >= memconfig.tile_count_x) {
+					tile_x = 0;
+                {% if ndim == 3 %}
+					tile_y++;
+                {% endif %}
+				}
+			}
+
+            const unsigned short tile_size_x = tile_x == (memconfig.tile_count_x -1) ? memconfig.last_tile_size_x : memconfig.tile_size_x;
+			const ap_uint<64> tile_x_offset = tile_x * memconfig.effective_tile_size_x;
+        {% if ndim == 3 %}
+			const ap_uint<64> tile_y_offset = tile_y * memconfig.effective_tile_size_y * memconfig.grid_xblocks;
+			const unsigned short tile_size_y = tile_y == (memconfig.tile_count_y -1) ? memconfig.last_tile_size_y : memconfig.tile_size_y;
+            const ap_uint<64> offset = memconfig.start_offset + tile_x_offset + tile_y_offset;
+            const unsigned int total_beats = tile_size_x * tile_size_y * z_diff;
+        {% else %}
+            onst ap_uint<64> offset = memconfig.start_offset + tile_x_offset;
+            const unsigned int total_beats = tile_size_x * y_diff;
+        {% endif %}
+			const unsigned int total_pkts = total_beats * num_of_pkts_per_beat;
+
+        {% if ndim == 3 %}
+            const unsigned int avoid_x = tile_x == 0 ? 0 : memconfig.tile_overlap_size_x >> 1;
+            const unsigned int avoid_y = tile_y == 0 ? 0 : memconfig.tile_overlap_size_y >> 1;
+            auto command = ops::hls::commandGen3D(offset, 1, (ap_uint<16>)tile_size_x, (ap_uint<16>)stride_y, (ap_int<16>)tile_size_y, 
+                    (ap_int<16>)stride_z, (ap_uint<16>)z_diff, (ap_uint<16>)avoid_x, (ap_uint<16>)avoid_y);
+
+        {% else %}
+            const unsigned int avoid_x = tile_x == 0 ? 0 : memconfig.tile_overlap_size_x >> 1;
+            auto command = ops::hls::commandGen2D(offset, 1, (ap_uint<16>)tile_size_x, (ap_uint<16>)stride_y, (ap_uint<16>)avoid_x);
+            
+		{% endif %}
+    {% endif %}
+            datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
+    {% if isTiling %}
+                    total_pkts,
+                    total_beats,
+    {% else %}
+                    num_pkts,
+    {% endif %}
             {#{% if ilh.isMultiDim() %}
                 {% for m_dim in ilh.getMultidimList() %}
                 num_pkts_d{{m_dim}},
                 {% endfor %}
             {% endif %}#}
-                memconfig,
-            {% if ilh.isMultiDim() %}
-                {% for m_dim in ilh.getMultidimList() %}
-                memconfig_d{{m_dim}},
-                {% endfor %}
-            {% endif %}
-            {% for arg in ilh.joint_args|ops_dat %}
-                {% if isTiling and config["tile_banks"] > 1 and config["datamover_lib"] == 1 %}
-                    {% for i in range(config["tile_banks"]) %}
-                arg{{(arg.id)}}_b{{i}},
-                    {% endfor %}
-                {% else %}
-                arg{{(arg.id)}},
-                {% endif %}
+    {% if isTiling %}
+                    command,
+    {% else %}
+                    memconfig,
+        {% if ilh.isMultiDim() %}
+            {% for m_dim in ilh.getMultidimList() %}
+                    memconfig_d{{m_dim}},
             {% endfor %}
-            {% for arg in ilh.joint_args|ops_dat %}
-                {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
-                {{axis_name(arg)-}}{{"," if not loop.last}}
-                {% else %}
-                {{axis_name_t2(arg, "out")-}},
-                {{axis_name_t2(arg, "in")-}}{{"," if not loop.last}}
-                {% endif %}
+        {% endif %}
+    {% endif %}
+    {% for arg in ilh.joint_args|ops_dat %}
+        {% if isTiling and config["tile_banks"] > 1 and config["datamover_lib"] == 1 %}
+            {% for i in range(config["tile_banks"]) %}
+                    arg{{(arg.id)}}_b{{i}},
             {% endfor %}
-        );
-        datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
-                num_pkts,
+        {% else %}
+                    arg{{(arg.id)}},
+        {% endif %}
+    {% endfor %}
+    {% for arg in ilh.joint_args|ops_dat %}
+        {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
+                    {{axis_name(arg)-}}{{"," if not loop.last}}
+        {% else %}
+                    {{axis_name_t2(arg, "out")-}},
+                    {{axis_name_t2(arg, "in")-}}{{"," if not loop.last}}
+        {% endif %}
+    {% endfor %}
+            );
+    {% if isTiling %}
+        }
+
+        tile_x = 0;
+        {% if ndim == 3 %}
+        tile_y = 0;
+
+        {% endif %}
+        for (unsigned short tile_id = 0; tile_id < total_tiles; tile_id++)
+		{
+            if (tile_id > 0) {
+				tile_x++;
+				if (tile_x >= memconfig.tile_count_x) {
+					tile_x = 0;
+                {% if ndim == 3 %}
+					tile_y++;
+                {% endif %}
+				}
+			}
+
+            const unsigned short tile_size_x = tile_x == (memconfig.tile_count_x -1) ? memconfig.last_tile_size_x : memconfig.tile_size_x;
+			const ap_uint<64> tile_x_offset = tile_x * memconfig.effective_tile_size_x;
+        {% if ndim == 3 %}
+			const ap_uint<64> tile_y_offset = tile_y * memconfig.effective_tile_size_y * memconfig.grid_xblocks;
+			const unsigned short tile_size_y = tile_y == (memconfig.tile_count_y -1) ? memconfig.last_tile_size_y : memconfig.tile_size_y;
+            const ap_uint<64> offset = memconfig.start_offset + tile_x_offset + tile_y_offset;
+            const unsigned int total_beats = tile_size_x * tile_size_y * z_diff;
+        {% else %}
+            onst ap_uint<64> offset = memconfig.start_offset + tile_x_offset;
+            const unsigned int total_beats = tile_size_x * y_diff;
+        {% endif %}
+			const unsigned int total_pkts = total_beats * num_of_pkts_per_beat;
+
+        {% if ndim == 3 %}
+            const unsigned int avoid_x = tile_x == 0 ? 0 : memconfig.tile_overlap_size_x >> 1;
+            const unsigned int avoid_y = tile_y == 0 ? 0 : memconfig.tile_overlap_size_y >> 1;
+            auto command = ops::hls::commandGen3D(offset, 1, (ap_uint<16>)tile_size_x, (ap_uint<16>)stride_y, (ap_int<16>)tile_size_y, 
+                    (ap_int<16>)stride_z, (ap_uint<16>)z_diff, (ap_uint<16>)avoid_x, (ap_uint<16>)avoid_y);
+
+        {% else %}
+            const unsigned int avoid_x = tile_x == 0 ? 0 : memconfig.tile_overlap_size_x >> 1;
+            auto command = ops::hls::commandGen2D(offset, 1, (ap_uint<16>)tile_size_x, (ap_uint<16>)stride_y, (ap_int<16>)y_diff, (ap_uint<16>)avoid_x);
+
+		{% endif %}
+    {% endif %}
+            datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
+     {% if isTiling %}
+                    total_pkts,
+                    total_beats,
+    {% else %}
+                    num_pkts,
+    {% endif %}
                 {#{% if ilh.isMultiDim() %}
                     {% for m_dim in ilh.getMultidimList() %}
                 num_pkts_d{{m_dim}},
                     {% endfor %}
                 {% endif %}#}
-                memconfig,
-            {% if ilh.isMultiDim() %}
-                {% for m_dim in ilh.getMultidimList() %}
-                memconfig_d{{m_dim}},
-                {% endfor %}
-            {% endif %}
-            {% for arg in ilh.joint_args|ops_dat %}
-                {% if isTiling and config["tile_banks"] > 1 and config["datamover_lib"] == 1 %}
-                    {% for i in range(config["tile_banks"]) %}
-                arg{{ilh.getSwapArg(arg).id}}_b{{i}},
-                    {% endfor %}
-                {% else %}
-                arg{{ilh.getSwapArg(arg).id}},
-                {% endif %}
+    {% if isTiling %}
+                    command,
+    {% else %}
+                    memconfig,
+        {% if ilh.isMultiDim() %}
+            {% for m_dim in ilh.getMultidimList() %}
+                    memconfig_d{{m_dim}},
             {% endfor %}
-            {% for arg in ilh.joint_args|ops_dat %}
-                {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
-                {{axis_name(arg)-}}{{"," if not loop.last}}
-                {% else %}
-                {{axis_name_t2(arg, "out")-}},
-                {{axis_name_t2(arg, "in")-}}{{"," if not loop.last}}
-                {% endif %}
-            {% endfor -%}
-        );
+        {% endif %}
+    {% endif %}
+    {% for arg in ilh.joint_args|ops_dat %}
+        {% if isTiling and config["tile_banks"] > 1 and config["datamover_lib"] == 1 %}
+            {% for i in range(config["tile_banks"]) %}
+                    arg{{ilh.getSwapArg(arg).id}}_b{{i}},
+            {% endfor %}
+        {% else %}
+                    arg{{ilh.getSwapArg(arg).id}},
+        {% endif %}
+    {% endfor %}
+    {% for arg in ilh.joint_args|ops_dat %}
+        {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
+                    {{axis_name(arg)-}}{{"," if not loop.last}}
+        {% else %}
+                    {{axis_name_t2(arg, "out")-}},
+                    {{axis_name_t2(arg, "in")-}}{{"," if not loop.last}}
+        {% endif %}
+    {% endfor -%}
+            );
+    {% if isTiling %}
+        }
+    {% endif %}
     }
 }
 
@@ -987,7 +1112,9 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
     {% if config["datamover_mode"] == 3 or config["datamover_mode"] == 2 %}
         datamover_outerloop_{{ilh.id}}_dataflow_read_write(
                 outer_itr,
+        {% if not isTiling %}
                 num_pkts,
+        {% endif %}
         {#{% if ilh.isMultiDim() %}
             {% for m_dim in ilh.getMultidimList() %}
                 num_pkts_d{{m_dim}},
