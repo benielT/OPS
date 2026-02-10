@@ -347,7 +347,7 @@ void configParser3DTiled(::hls::stream<ap_uint<160>>& command,
 
     for (ap_uint<16> z = 0; z < size_z; z++)
     {
-        ap_uint<64> s3 = z * stride_z;
+        ap_uint<64> s3 = offset + z * stride_z;
         for (ap_uint<16> y = 0; y < size_y; y++)
         {
             ap_uint<64> s2 = s3 + y * stride_y;

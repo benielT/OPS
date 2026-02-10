@@ -92,6 +92,7 @@ typedef union
 
 typedef unsigned short SizeType[ops_max_dim];
 typedef unsigned short SizeType2d[2];
+typedef bool BoolType2d[2];
 typedef int IdxType[ops_max_dim];
 
 constexpr unsigned short size_singleIndex = sizeof(unsigned short) * 8;
@@ -141,6 +142,17 @@ struct StencilConfigCore
     unsigned short outer_loop_limit;
     unsigned int total_itr;
     unsigned short batch_size;
+};
+
+struct StencilConfigCoreSingleTile
+{
+    SizeType tile_size; // {xblocks, y, z} this is the grid size for tile 
+    unsigned short dim;
+    unsigned short outer_loop_limit;
+    unsigned short last_tile_upper_limit_x;
+    // BoolType2d is_tiled;
+    BoolType2d is_first;
+    BoolType2d is_last;
 };
 
 struct StencilConfigCoreTiled // : public StencilConfigCore

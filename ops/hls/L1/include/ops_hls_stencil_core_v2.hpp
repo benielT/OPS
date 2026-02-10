@@ -40,8 +40,8 @@ class StencilCoreV2
         typedef ap_uint<s_mask_width> mask_dt;
         typedef ::hls::stream<widen_dt> widen_stream_dt;
         typedef ::hls::stream<mask_dt> mask_stream_dt;
-        // using configType = std::conditional_t<TILED, StencilConfigCoreTiled, StencilConfigCore>;
-        typedef typename TypeSelector<TILED, StencilConfigCoreTiled, StencilConfigCore>::Result configType;
+
+        typedef typename TypeSelector<TILED, StencilConfigCoreSingleTile, StencilConfigCore>::Result configType;
 
         StencilCoreV2()
         {
@@ -235,6 +235,28 @@ public:
     }  
 };
 */
+
+static StencilConfigCoreSingleTile stencilConfigCoreSingleTileGen(const StencilConfigCoreTiled& srcConfig, const unsigned short tile_x, const unsigned short tile_y=0)
+{
+    StencilConfigCoreSingleTile tileConfig;
+
+    tileConfig.dim = srcConfig.dim;
+    const bool is_last_tile_x = (tile_x == srcConfig.tile_count[0] - 1);
+    const bool is_last_tile_y = (tile_y == srcConfig.tile_count[1] - 1);
+    tileConfig.tile_size[0] = is_last_tile_x ? srcConfig.last_tile_size[0] : srcConfig.tile_size[0];
+    tileConfig.tile_size[1] = is_last_tile_y ? srcConfig.last_tile_size[1] : srcConfig.tile_size[1];
+    tileConfig.tile_size[2] = srcConfig.grid_size[2];
+    tileConfig.outer_loop_limit = srcConfig.outer_loop_limit;
+    //tileConfig.is_tiled[0] = srcConfig.tile_count[0] > 1;
+    //tileConfig.is_tiled[1] = srcConfig.tile_count[1] > 1;
+    tileConfig.is_first[0] = tile_x == 0;
+    tileConfig.is_first[1] = tile_y == 0;
+    tileConfig.is_last[0] = tile_x == (srcConfig.tile_count[0] - 1);
+    tileConfig.is_last[1] = tile_y == (srcConfig.tile_count[1] - 1);
+    tileConfig.last_tile_upper_limit_x = srcConfig.last_tile_upper_limit_x;
+
+    return tileConfig;
+}
 
 }
 }

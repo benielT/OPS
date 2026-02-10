@@ -59,6 +59,7 @@ static T register_it(T x){
 #define INT_MUL(...) (multiply(NUMARGS(int, __VA_ARGS__), __VA_ARGS__))
 
 #define LOG2(num) ((unsigned short)log2(num))
+#define POW2(num) ((unsigned int)powf(2,num))
 #define DUMP_VAR_NAME(var)(#var);
 
 #endif /* DOXYGEN_SHOULD_SKIP_THIS */
