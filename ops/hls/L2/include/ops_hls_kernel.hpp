@@ -160,7 +160,7 @@ public:
     void splitGrid()
     {
         if (alt_banks > 1 && originalProperty.dim >=2) {
-            for (unsigned int k = 0; k < originalProperty.batch_size; k++) {
+            for (unsigned int k = 0; k < originalProperty.grid_size[2]; k++) {
                 for (unsigned int j = 0; j < originalProperty.grid_size[1]; j++) {
                     for (unsigned int b = 0; b < originalProperty.batch_size; b++) {
                         unsigned int bank = j % alt_banks;
@@ -174,6 +174,9 @@ public:
                                         + k * (originalProperty.grid_size[0] * (originalProperty.grid_size[1] / alt_banks + ((bank < (originalProperty.grid_size[1] % alt_banks)) ? 1 : 0)))
                                         + bank_row * originalProperty.grid_size[0];
                         
+// #ifdef DEBUG_LOG
+// 		                printf("j: %d, k: %d, bank: %d, bank_row: %d, src_offset: %d dst_offset: %d\n", j, k, bank, bank_row, src_offset, dst_offset);
+// #endif
                         std::memcpy(&altHostBuffers[bank][dst_offset],
                                     &hostBuffer[src_offset],
                                     originalProperty.grid_size[0] * sizeof(T));
@@ -186,7 +189,7 @@ public:
     void mergeGrid() 
     {
         if (alt_banks > 1 && originalProperty.dim >=2) {
-            for (unsigned int k = 0; k < originalProperty.batch_size; k++) {
+            for (unsigned int k = 0; k < originalProperty.grid_size[2]; k++) {
                 for (unsigned int j = 0; j < originalProperty.grid_size[1]; j++) {
                     for (unsigned int b = 0; b < originalProperty.batch_size; b++) {
                         unsigned int bank = j % alt_banks;
@@ -243,7 +246,6 @@ cl::Event getGrid(Grid<T>& p_grid, bool force_sync = false)
         }
         else {
             //temp std::vetor<cl::Memory>
-            p_grid.mergeGrid();
             std::vector<cl::Memory> tmp;
             for (auto buf : p_grid.deviceBuffer)
                 tmp.push_back(buf);
@@ -256,10 +258,12 @@ cl::Event getGrid(Grid<T>& p_grid, bool force_sync = false)
 		p_grid.isDevBufDirty = false;
 #ifndef ASYNC_DISPATCH
 		event.wait();
+        p_grid.mergeGrid();
 #else
         if (force_sync)
         {
             event.wait();
+            p_grid.mergeGrid();
         }
 #endif
         return event;

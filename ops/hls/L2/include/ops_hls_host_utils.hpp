@@ -252,7 +252,9 @@ ops::hls::Grid<T> ops_hls_decl_dat(ops::hls::Block& block, int elem_size, int* s
 		memcpy(grid.hostBuffer.data(), data_ptr, data_size);
 		grid.isHostBufDirty = true;
 		grid.isDevBufDirty = false;
+#ifdef OPS_TILING
         grid.splitGrid();
+#endif
 	}
 	else
 	{
@@ -597,8 +599,9 @@ void ops_dat_fetch_data(ops::hls::Grid<T>& p_grid, int part, char* data)
 }
 
 template<unsigned short N_SLR, unsigned short P_SLR, unsigned short HALF_SPAN, unsigned short MEM_VECTOR_SIZE>
-constexpr unsigned short get_overlap_size() {
-    return ((N_SLR * P_SLR * HALF_SPAN + MEM_VECTOR_SIZE - 1) / MEM_VECTOR_SIZE) * MEM_VECTOR_SIZE;
+const unsigned short get_overlap_size() {
+    auto val =  (((N_SLR * P_SLR) * HALF_SPAN  + MEM_VECTOR_SIZE - 1) / MEM_VECTOR_SIZE) * MEM_VECTOR_SIZE * 2;
+	return val;
 }
 
 // /**
