@@ -113,14 +113,6 @@ void genTileMetadata(
 
     const unsigned short effective_tile_size_x_beats = tile_size_x_beats - overlap_size_x_beats;
 
-// #ifndef __xilinx__
-//     if (effective_tile_size_x_beats == 0) {
-//         std::string msg = "|OPS ERROR LOG| " + std::string(__func__) + "| effective tile size in X dimension is zero, where the tile_size_x_beats: " 
-//                         + std::to_string(tile_size_x_beats) + ", overlap_size_x_beats: " + std::to_string(overlap_size_x_beats) + ". PLEASE RUN WITH BETTER TILE SIZE ONFIGURATION.";
-//         throw std::runtime_error(msg);
-//     }
-// #endif
-
     const unsigned short effective_tile_size_y = TILE_DIM == 2 ? tile_size[1] - overlap_size[1] : grid_size[1];
     const unsigned short diff_y = range.end[1] - range.start[1];
     const unsigned short realized_tile_size_x_beats = tile_size_x_beats > num_xblocks ? num_xblocks : tile_size_x_beats;
@@ -132,7 +124,62 @@ void genTileMetadata(
     const unsigned short tile_count_y = ((diff_y - realized_tile_size_y) + effective_tile_size_y - 1) / effective_tile_size_y + 1;
     const unsigned short last_tile_size_y = tile_count_y > 1 ? diff_y - (tile_count_y - 1) * effective_tile_size_y : realized_tile_size_y;
     // const unsigned short last_tile_upper_limit_y = TILE_DIM == 2 ? range.end[1] - (tile_count_y - 1) * effective_tile_size_y : range.end[1];
-    
+
+#ifdef OPS_FPGA
+    if (tile_size[0] != POW2(LOG2(tile_size[0]))) {
+        OPSException ex(OPS_RUNTIME_ERROR);
+        ex << "ERROR: x tile_size (" << tile_size[0] << ") has to be power of 2" 
+                << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set";
+        throw ex;
+    }
+
+    if (tile_size[0] <= overlap_size[0]) {
+        OPSException ex(OPS_RUNTIME_ERROR);
+        ex << "ERROR: x tile_size (" << tile_size[0] << ") is less than the minimum required overlap size (" << overlap_size[0] << ") in x direction. " 
+                << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set";
+        throw ex;
+    }
+
+    if (tile_size[0] > OPS_MAXTILESIZE_X) {
+        OPSException ex(OPS_RUNTIME_ERROR);
+        ex << "ERROR: x tile_size (" << tile_size[0] << ") is greater than the minimum tile supported by the generated hardware (" << OPS_MAXTILESIZE_X << ") in x direction. " 
+                << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set. If bigger tile size need, rebuild with bigger OPS_MAXTILESIZE_X";
+        throw ex;
+    }
+
+    if (tile_size_x_beats > realized_tile_size_x_beats) {
+        std::cout << "[OPS_WARNING]: Grid is smaller than tile_size in x direction. Running without tiling in x direction" << std::endl;
+    }
+    if (float(effective_tile_size_x_beats) / float(tile_size_x_beats) < 0.75) {
+        std::cout << "[OPS_WARNING]: Effective tile size is: " << float(effective_tile_size_x_beats) / float(tile_size_x_beats) << ", which is less than 75%. " 
+                << " Please increase the tile size ( max: " << OPS_MAXTILESIZE_X << ") to utilize more performance"<< std::endl;
+    }
+
+    if (TILE_DIM == 2) {
+        if (tile_size[1] <= overlap_size[1]) {
+            OPSException ex(OPS_RUNTIME_ERROR);
+            ex << "ERROR: y tile_size (" << tile_size[1] << ") is less than the minimum required overlap size (" << overlap_size[1] << ") in y direction. " 
+                    << "Please make sure appropriate OPS_TILESIZE_Y runtime flag is properly set";
+            throw ex;
+        }
+
+        if (tile_size[1] > OPS_MAXTILESIZE_Y) {
+            OPSException ex(OPS_RUNTIME_ERROR);
+            ex << "ERROR: y tile_size (" << tile_size[1] << ") is greater than the minimum tile supported by the generated hardware (" << OPS_MAXTILESIZE_Y << ") in y direction. " 
+                    << "Please make sure appropriate OPS_TILESIZE_Y runtime flag is properly set. If bigger tile size need, rebuild with bigger OPS_MAXTILESIZE_Y";
+            throw ex;
+        }
+
+        if (tile_size[1] > realized_tile_size_y) {
+            std::cout << "[OPS_WARNING]: Grid is smaller than tile_size in y direction. Running without tiling in y direction" << std::endl;
+        }
+
+        if (float(effective_tile_size_y) / float(tile_size[1] ) < 0.75) {
+            std::cout << "[OPS_WARNING]: Effective tile size is: " << float(effective_tile_size_y) / float(tile_size[1] ) << ", which is less than 75%" 
+                    << " Please increase the tile size ( max: " << OPS_MAXTILESIZE_Y << ") to utilize more performance"<< std::endl;
+        }
+    }
+#endif
     // Total xblocks calculations
     const unsigned short diff_z = range.end[2] - range.start[2];
     const unsigned short tile_count_min_1_x = tile_count_x - 1;
