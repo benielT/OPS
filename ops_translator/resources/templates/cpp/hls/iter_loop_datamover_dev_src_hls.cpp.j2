@@ -761,6 +761,11 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
             );
     {% if isTiling %}
         }
+
+        tile_x = 0;
+        {% if ndim == 3 %}
+        tile_y = 0;
+        {% endif %}
     {% endif %}
     }
 }

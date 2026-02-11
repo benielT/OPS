@@ -245,7 +245,7 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short& slr_re
     {% if ndim == 3 %}
         tile_y = 0; 
     {% endif %}
-    
+
         for (unsigned short tile_id = 0; tile_id < total_tiles; tile_id++)
         {
     //#pragma HLS PIPELINE
@@ -279,6 +279,11 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short& slr_re
                 {% for const in consts %}{{const.ptr}}{{", " if not loop.last }}{% endfor %});
     {% if isTiling %}
         }
+
+        tile_x = 0;
+        {% if ndim == 3 %}
+        tile_y = 0;
+        {% endif %}
     {% endif %}
     }
 }
