@@ -258,7 +258,9 @@ cl::Event getGrid(Grid<T>& p_grid, bool force_sync = false)
 		p_grid.isDevBufDirty = false;
 #ifndef ASYNC_DISPATCH
 		event.wait();
+    #if defined(OPS_TILING)
         p_grid.mergeGrid();
+    #endif
 #else
         if (force_sync)
         {

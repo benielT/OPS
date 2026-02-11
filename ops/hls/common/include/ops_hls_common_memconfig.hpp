@@ -125,7 +125,7 @@ void genTileMetadata(
     const unsigned short last_tile_size_y = tile_count_y > 1 ? diff_y - (tile_count_y - 1) * effective_tile_size_y : realized_tile_size_y;
     // const unsigned short last_tile_upper_limit_y = TILE_DIM == 2 ? range.end[1] - (tile_count_y - 1) * effective_tile_size_y : range.end[1];
 
-#ifdef OPS_FPGA
+#if defined(OPS_FPGA) && defined(OPS_TILING)
     if (tile_size[0] != POW2(LOG2(tile_size[0]))) {
         OPSException ex(OPS_RUNTIME_ERROR);
         ex << "ERROR: x tile_size (" << tile_size[0] << ") has to be power of 2" 

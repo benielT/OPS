@@ -234,7 +234,7 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short& slr_re
             const ops::hls::StencilConfigCoreSingleTile tileConfig = ops::hls::stencilConfigCoreSingleTileGen(stencilConfig, tile_x, {%if ndim == 3 %}tile_y{%else%}0{%endif%});
     {% endif %}
 
-            kernel_outerloop_{{ilh.id}}_dataflow_region(slr_region, tileConfig, 
+            kernel_outerloop_{{ilh.id}}_dataflow_region(slr_region, {% if isTiling %}tileConfig{% else %}stencilConfig{% endif %}, 
                 num_pkts, {%if ilh.isMultiDim() -%}{% for m_dim in ilh.getMultidimList() -%}num_pkts_d{{m_dim}}, {% endfor -%} {% endif -%}{% for arg in ilh.joint_args|ops_dat -%}{% if arg is not ops_rw %}{{axis_name(arg)-}}{{", " if not loop.last or consts or ilh.joint_args|ops_gbl }}{% else %}{{axis_name_t2(arg, "in")-}}, {{axis_name_t2(arg, "out")-}}{{", " if not loop.last or consts or ilh.joint_args|ops_gbl}}{% endif %}{% endfor %}
                 {% for const_arg in ilh.joint_args|ops_gbl %}{{get_arg_gbl_name(const_arg)}}{{", " if not loop.last or consts }}{% endfor %}
                 {% for const in consts %}{{const.ptr}}{{", " if not loop.last }}{% endfor %});
@@ -273,7 +273,7 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short& slr_re
         {% endif %}
             const ops::hls::StencilConfigCoreSingleTile tileConfig = ops::hls::stencilConfigCoreSingleTileGen(stencilConfig, tile_x, {%if ndim == 3 %}tile_y{%else%}0{%endif%});
     {% endif %}
-            kernel_outerloop_{{ilh.id}}_dataflow_region(slr_region, tileConfig, 
+            kernel_outerloop_{{ilh.id}}_dataflow_region(slr_region, {% if isTiling %}tileConfig{% else %}stencilConfig{% endif %}, 
                 num_pkts, {%if ilh.isMultiDim() -%}{% for m_dim in ilh.getMultidimList() -%}num_pkts_d{{m_dim}}, {% endfor -%} {% endif -%}{% for arg in ilh.joint_args|ops_dat -%}{% if arg is not ops_rw %}{{axis_name(arg)-}}{{", " if not loop.last or consts or ilh.joint_args|ops_gbl }}{% else %}{{axis_name_t2(arg, "in")-}}, {{axis_name_t2(arg, "out")-}}{{", " if not loop.last or consts or ilh.joint_args|ops_gbl}}{% endif %}{% endfor %}
                 {% for const_arg in ilh.joint_args|ops_gbl %}{{get_arg_gbl_name(const_arg)}}{{", " if not loop.last or consts }}{% endfor %}
                 {% for const in consts %}{{const.ptr}}{{", " if not loop.last }}{% endfor %});
@@ -387,8 +387,9 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short& slr_re
     stencilConfig.last_tile_upper_limit_x = last_tile_upper_limit_x;
     {% endif %}
     {% if not isTiling %}
+    constexpr unsigned short num_of_pkts_per_beat = mem_data_width / axis_data_width;
     unsigned int tmp1 = stencilConfig_batch_size;
-    unsigned int tmp2 = stencilConfig_total_itr * sizeof(stencil_type);
+    unsigned int tmp2 = stencilConfig_total_itr;
     unsigned int num_pkts = tmp1 * tmp2;
         {% if ilh.isMultiDim() %}
             {% for m_dim in ilh.getMultidimList() %}
@@ -404,6 +405,9 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short& slr_re
     {% endif %}
 
 #ifdef DEBUG_LOG
+    {% if not isTiling %}
+    unsigned int num_beats = num_pkts / num_of_pkts_per_beat;
+    {% endif %}
     printf("[KERNEL_DEBUG]|%s| num_beats: %d, num_pkts: %d\n", __func__,
          num_beats, num_pkts);
     {% if ilh.isMultiDim() %}
@@ -412,7 +416,7 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short& slr_re
         {% endfor %}
     {% endif %}
     {% if not isTiling %}
-    printf("[KERNEL_DEBUG]|%s| stencilConfig: dim: %hu, grid_size:(%d,%d,%d), lower_limit:(%d,%d,%d), upper_limit:(%d,%d,%d), 
+    printf("[KERNEL_DEBUG]|%s| stencilConfig: dim: %hu, grid_size:(%d,%d,%d), lower_limit:(%d,%d,%d), upper_limit:(%d,%d,%d), \
             total_itr: %d, outer_loop_limit: %d, batch_size: %d\n", __func__,
         stencilConfig.dim,
         stencilConfig.grid_size[0], stencilConfig.grid_size[1], stencilConfig.grid_size[2],
