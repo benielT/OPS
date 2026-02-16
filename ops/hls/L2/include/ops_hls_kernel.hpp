@@ -163,16 +163,18 @@ public:
             for (unsigned int k = 0; k < originalProperty.grid_size[2]; k++) {
                 for (unsigned int j = 0; j < originalProperty.grid_size[1]; j++) {
                     for (unsigned int b = 0; b < originalProperty.batch_size; b++) {
-                        unsigned int bank = j % alt_banks;
-                        unsigned int bank_row = j / alt_banks;
+                        unsigned int abs_row_id = j + k * originalProperty.grid_size[1];
+                        unsigned int bank = abs_row_id % alt_banks;
+                        unsigned int bank_row = abs_row_id / alt_banks;
                         
                         size_t src_offset = b * originalProperty.grid_size[0] * originalProperty.grid_size[1] * originalProperty.grid_size[2]
                                         + k * originalProperty.grid_size[0] * originalProperty.grid_size[1]
                                         + j * originalProperty.grid_size[0];
                         
-                        size_t dst_offset = b * getAltBufferSizes()[bank] / sizeof(T)
-                                        + k * (originalProperty.grid_size[0] * (originalProperty.grid_size[1] / alt_banks + ((bank < (originalProperty.grid_size[1] % alt_banks)) ? 1 : 0)))
-                                        + bank_row * originalProperty.grid_size[0];
+                        size_t dst_offset = b * getAltBufferSizes()[bank] / sizeof(T) + (bank_row * originalProperty.grid_size[0]);
+                        // size_t dst_offset = b * getAltBufferSizes()[bank] / sizeof(T)
+                        //                 + k * (originalProperty.grid_size[0] * (originalProperty.grid_size[1] / alt_banks + ((bank < (originalProperty.grid_size[1] % alt_banks)) ? 1 : 0)))
+                        //                 + bank_row * originalProperty.grid_size[0];
                         
 // #ifdef DEBUG_LOG
 // 		                printf("j: %d, k: %d, bank: %d, bank_row: %d, src_offset: %d dst_offset: %d\n", j, k, bank, bank_row, src_offset, dst_offset);
@@ -192,16 +194,18 @@ public:
             for (unsigned int k = 0; k < originalProperty.grid_size[2]; k++) {
                 for (unsigned int j = 0; j < originalProperty.grid_size[1]; j++) {
                     for (unsigned int b = 0; b < originalProperty.batch_size; b++) {
-                        unsigned int bank = j % alt_banks;
-                        unsigned int bank_row = j / alt_banks;
+                        unsigned int abs_row_id = j + k * originalProperty.grid_size[1];
+                        unsigned int bank = abs_row_id % alt_banks;
+                        unsigned int bank_row = abs_row_id / alt_banks;
                         
                         size_t src_offset = b * originalProperty.grid_size[0] * originalProperty.grid_size[1] * originalProperty.grid_size[2]
                                         + k * originalProperty.grid_size[0] * originalProperty.grid_size[1]
                                         + j * originalProperty.grid_size[0];
                         
-                        size_t dst_offset = b * getAltBufferSizes()[bank] / sizeof(T)
-                                        + k * (originalProperty.grid_size[0] * (originalProperty.grid_size[1] / alt_banks + ((bank < (originalProperty.grid_size[1] % alt_banks)) ? 1 : 0)))
-                                        + bank_row * originalProperty.grid_size[0];
+                        size_t dst_offset = b * getAltBufferSizes()[bank] / sizeof(T) + (bank_row * originalProperty.grid_size[0]);
+                        // size_t dst_offset = b * getAltBufferSizes()[bank] / sizeof(T)
+                        //                 + k * (originalProperty.grid_size[0] * (originalProperty.grid_size[1] / alt_banks + ((bank < (originalProperty.grid_size[1] % alt_banks)) ? 1 : 0)))
+                        //                 + bank_row * originalProperty.grid_size[0];
                         
                         std::memcpy(&hostBuffer[src_offset],
                                     &altHostBuffers[bank][dst_offset],
