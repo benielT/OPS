@@ -57,6 +57,252 @@ namespace hls {
         unsigned int total_size_bytes;
     };
 
+template <unsigned short MEM_DATA_WIDTH, unsigned short DATA_WIDTH=32, unsigned short TILE_DIM=2>
+struct genTileMetadataExecHelper
+{
+    static void run(
+            ops::hls::SizeType& grid_size, 
+            ops::hls::AccessRange& range, 
+            ops::hls::SizeType2d& tile_size,
+            ops::hls::SizeType2d& overlap_size,
+            ops::hls::SizeType2d& effective_tile_size,
+            ops::hls::SizeType2d& last_tile_size,
+            ops::hls::SizeType2d& tile_count,
+            unsigned short& last_tile_upper_limit_x,
+            unsigned int& total_xblocks,
+            bool isWideMem = true) 
+    {
+    #ifndef __SYTHESIS__
+        static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
+                "MEM_DATA_WIDTH failed limit check");
+        static_assert(TILE_DIM >= 1 && TILE_DIM < 3,
+                "TILE_DIM must be 1 or 2");
+    #endif
+        constexpr unsigned short data_vector_factor = MEM_DATA_WIDTH / DATA_WIDTH;
+        const unsigned short ShiftBits = (unsigned short)LOG2(data_vector_factor);
+        const unsigned short DataShiftBits = (unsigned short)LOG2(DATA_WIDTH/8);
+        const unsigned short start_x = range.start[0] >> ShiftBits;
+        const unsigned short end_x = (range.end[0] + data_vector_factor - 1) >> ShiftBits;
+        const unsigned short grid_xblocks = grid_size[0] >> ShiftBits;
+        const unsigned short num_xblocks = end_x - start_x;
+
+        const unsigned short tile_size_x_beats = tile_size[0] >> ShiftBits;
+        const unsigned short overlap_size_x_beats = overlap_size[0] >> ShiftBits;
+
+        const unsigned short effective_tile_size_x_beats = tile_size_x_beats - overlap_size_x_beats;
+
+        const unsigned short effective_tile_size_y = TILE_DIM == 2 ? tile_size[1] - overlap_size[1] : grid_size[1];
+        const unsigned short diff_y = range.end[1] - range.start[1];
+        const unsigned short realized_tile_size_x_beats = tile_size_x_beats > num_xblocks ? num_xblocks : tile_size_x_beats;
+        const unsigned short tile_count_x = ((num_xblocks - realized_tile_size_x_beats) + effective_tile_size_x_beats - 1) / effective_tile_size_x_beats + 1;
+        const unsigned short last_tile_size_x_beats = tile_count_x > 1 ? num_xblocks - (tile_count_x - 1) * effective_tile_size_x_beats : realized_tile_size_x_beats;
+        last_tile_upper_limit_x = range.end[0] - (((tile_count_x - 1) * effective_tile_size_x_beats) << ShiftBits);
+
+        const unsigned short realized_tile_size_y = TILE_DIM == 2 ? tile_size[1] > diff_y ? diff_y : tile_size[1] : grid_size[1];
+        const unsigned short tile_count_y = ((diff_y - realized_tile_size_y) + effective_tile_size_y - 1) / effective_tile_size_y + 1;
+        const unsigned short last_tile_size_y = tile_count_y > 1 ? diff_y - (tile_count_y - 1) * effective_tile_size_y : realized_tile_size_y;
+        // const unsigned short last_tile_upper_limit_y = TILE_DIM == 2 ? range.end[1] - (tile_count_y - 1) * effective_tile_size_y : range.end[1];
+
+    #if defined(OPS_FPGA) && defined(OPS_TILING)
+        if (tile_size[0] != POW2(LOG2(tile_size[0]))) {
+            OPSException ex(OPS_RUNTIME_ERROR);
+            ex << "ERROR: x tile_size (" << tile_size[0] << ") has to be power of 2" 
+                    << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set";
+            throw ex;
+        }
+
+        if (tile_size[0] <= overlap_size[0]) {
+            OPSException ex(OPS_RUNTIME_ERROR);
+            ex << "ERROR: x tile_size (" << tile_size[0] << ") is less than the minimum required overlap size (" << overlap_size[0] << ") in x direction. " 
+                    << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set";
+            throw ex;
+        }
+
+        if (tile_size[0] > OPS_MAXTILESIZE_X) {
+            OPSException ex(OPS_RUNTIME_ERROR);
+            ex << "ERROR: x tile_size (" << tile_size[0] << ") is greater than the minimum tile supported by the generated hardware (" << OPS_MAXTILESIZE_X << ") in x direction. " 
+                    << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set. If bigger tile size need, rebuild with bigger OPS_MAXTILESIZE_X";
+            throw ex;
+        }
+
+        if (tile_size_x_beats > realized_tile_size_x_beats) {
+            std::cout << "[OPS_WARNING]: Grid is smaller than tile_size in x direction. Running without tiling in x direction" << std::endl;
+        }
+        if (float(effective_tile_size_x_beats) / float(tile_size_x_beats) < 0.75) {
+            std::cout << "[OPS_WARNING]: Effective tile size is: " << float(effective_tile_size_x_beats) / float(tile_size_x_beats) << ", which is less than 75%. " 
+                    << " Please increase the tile size ( max: " << OPS_MAXTILESIZE_X << ") to utilize more performance"<< std::endl;
+        }
+
+        if (TILE_DIM == 2) {
+            if (tile_size[1] <= overlap_size[1]) {
+                OPSException ex(OPS_RUNTIME_ERROR);
+                ex << "ERROR: y tile_size (" << tile_size[1] << ") is less than the minimum required overlap size (" << overlap_size[1] << ") in y direction. " 
+                        << "Please make sure appropriate OPS_TILESIZE_Y runtime flag is properly set";
+                throw ex;
+            }
+#ifdef OPS_MAXTILESIZE_Y
+            if (tile_size[1] > OPS_MAXTILESIZE_Y) {
+                OPSException ex(OPS_RUNTIME_ERROR);
+                ex << "ERROR: y tile_size (" << tile_size[1] << ") is greater than the minimum tile supported by the generated hardware (" << OPS_MAXTILESIZE_Y << ") in y direction. " 
+                        << "Please make sure appropriate OPS_TILESIZE_Y runtime flag is properly set. If bigger tile size need, rebuild with bigger OPS_MAXTILESIZE_Y";
+                throw ex;
+            }
+#endif
+            if (tile_size[1] > realized_tile_size_y) {
+                std::cout << "[OPS_WARNING]: Grid is smaller than tile_size in y direction. Running without tiling in y direction" << std::endl;
+            }
+#ifdef OPS_MAXTILESIZE_Y
+            if (float(effective_tile_size_y) / float(tile_size[1] ) < 0.75) {
+                std::cout << "[OPS_WARNING]: Effective tile size is: " << float(effective_tile_size_y) / float(tile_size[1] ) << ", which is less than 75%" 
+                        << " Please increase the tile size ( max: " << OPS_MAXTILESIZE_Y << ") to utilize more performance"<< std::endl;
+            }
+#endif
+        }
+    #endif
+        // Total xblocks calculations
+        const unsigned short diff_z = range.end[2] - range.start[2];
+        const unsigned short tile_count_min_1_x = tile_count_x - 1;
+        const unsigned short tile_count_min_1_y = tile_count_y - 1;
+        unsigned int iterior_tile_count = tile_count_min_1_x * tile_count_min_1_y;
+        unsigned int interior_x_blocks = iterior_tile_count * diff_z * realized_tile_size_x_beats * realized_tile_size_y;
+        unsigned int ab_x_blocks = diff_z * last_tile_size_x_beats * realized_tile_size_y * tile_count_min_1_y;
+        unsigned int ba_x_blocks = diff_z * last_tile_size_y * realized_tile_size_x_beats * tile_count_min_1_x;
+        unsigned int last_tile_x_blocks = diff_z * last_tile_size_x_beats * last_tile_size_y;
+        total_xblocks =  interior_x_blocks + ab_x_blocks + ba_x_blocks + last_tile_x_blocks;
+
+        grid_size[0] = grid_xblocks;
+        range.start[0] = start_x;
+        range.end[0] = end_x;
+        tile_size[0] = isWideMem ? realized_tile_size_x_beats : (realized_tile_size_x_beats << ShiftBits);
+        tile_size[1] = realized_tile_size_y;
+        overlap_size[0] = isWideMem ? overlap_size_x_beats : (overlap_size_x_beats << ShiftBits);
+        overlap_size[1] = overlap_size[1];
+        effective_tile_size[0] = isWideMem ? effective_tile_size_x_beats : (effective_tile_size_x_beats << ShiftBits);
+        effective_tile_size[1] = effective_tile_size_y;
+        last_tile_size[0] = isWideMem ? last_tile_size_x_beats : (last_tile_size_x_beats << ShiftBits);
+        last_tile_size[1] = last_tile_size_y;
+        tile_count[0] = tile_count_x;
+        tile_count[1] = tile_count_y;
+
+        #ifdef DEBUG_LOG
+            printf("|HLS DEBUG LOG|%s| genTileMetadata output -> tile_count: (%d, %d), tile_size: (%d, %d), overlap_size: (%d, %d), effective_tile_size: (%d, %d), last_tile_size: (%d, %d)\n",
+            __func__, tile_count[0], tile_count[1], tile_size[0], tile_size[1], overlap_size[0], overlap_size[1], effective_tile_size[0], effective_tile_size[1], last_tile_size[0], last_tile_size[1]);
+            printf("|HLS DEBUG LOG|%s| xblocks breakdown -> total_xblocks: %u, interior: %u, ab: %u, ba: %u, last_tile: %u\n",
+            __func__, total_xblocks, interior_x_blocks, ab_x_blocks, ba_x_blocks, last_tile_x_blocks);
+        #endif
+    }
+};
+
+template <unsigned short MEM_DATA_WIDTH, unsigned short DATA_WIDTH>
+struct genTileMetadataExecHelper<MEM_DATA_WIDTH, DATA_WIDTH, 1>
+{
+    static void run(
+            ops::hls::SizeType& grid_size, 
+            ops::hls::AccessRange& range, 
+            ops::hls::SizeType2d& tile_size,
+            ops::hls::SizeType2d& overlap_size,
+            ops::hls::SizeType2d& effective_tile_size,
+            ops::hls::SizeType2d& last_tile_size,
+            ops::hls::SizeType2d& tile_count,
+            unsigned short& last_tile_upper_limit_x,
+            unsigned int& total_xblocks,
+            bool isWideMem = true) 
+    {
+    #ifndef __SYTHESIS__
+        static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
+                "MEM_DATA_WIDTH failed limit check");
+    #endif
+        constexpr unsigned short data_vector_factor = MEM_DATA_WIDTH / DATA_WIDTH;
+        const unsigned short ShiftBits = (unsigned short)LOG2(data_vector_factor);
+        const unsigned short DataShiftBits = (unsigned short)LOG2(DATA_WIDTH/8);
+        const unsigned short start_x = range.start[0] >> ShiftBits;
+        const unsigned short end_x = (range.end[0] + data_vector_factor - 1) >> ShiftBits;
+        const unsigned short grid_xblocks = grid_size[0] >> ShiftBits;
+        const unsigned short num_xblocks = end_x - start_x;
+
+        const unsigned short tile_size_x_beats = tile_size[0] >> ShiftBits;
+        const unsigned short overlap_size_x_beats = overlap_size[0] >> ShiftBits;
+
+        const unsigned short effective_tile_size_x_beats = tile_size_x_beats - overlap_size_x_beats;
+
+        const unsigned short effective_tile_size_y = grid_size[1];
+        const unsigned short diff_y = range.end[1] - range.start[1];
+        const unsigned short realized_tile_size_x_beats = tile_size_x_beats > num_xblocks ? num_xblocks : tile_size_x_beats;
+        const unsigned short tile_count_x = ((num_xblocks - realized_tile_size_x_beats) + effective_tile_size_x_beats - 1) / effective_tile_size_x_beats + 1;
+        const unsigned short last_tile_size_x_beats = tile_count_x > 1 ? num_xblocks - (tile_count_x - 1) * effective_tile_size_x_beats : realized_tile_size_x_beats;
+        last_tile_upper_limit_x = range.end[0] - (((tile_count_x - 1) * effective_tile_size_x_beats) << ShiftBits);
+
+        const unsigned short realized_tile_size_y = grid_size[1];
+        const unsigned short tile_count_y = 1;
+        const unsigned short last_tile_size_y = realized_tile_size_y;
+        // const unsigned short last_tile_upper_limit_y = TILE_DIM == 2 ? range.end[1] - (tile_count_y - 1) * effective_tile_size_y : range.end[1];
+
+    #if defined(OPS_FPGA) && defined(OPS_TILING)
+        if (tile_size[0] != POW2(LOG2(tile_size[0]))) {
+            OPSException ex(OPS_RUNTIME_ERROR);
+            ex << "ERROR: x tile_size (" << tile_size[0] << ") has to be power of 2" 
+                    << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set";
+            throw ex;
+        }
+
+        if (tile_size[0] <= overlap_size[0]) {
+            OPSException ex(OPS_RUNTIME_ERROR);
+            ex << "ERROR: x tile_size (" << tile_size[0] << ") is less than the minimum required overlap size (" << overlap_size[0] << ") in x direction. " 
+                    << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set";
+            throw ex;
+        }
+
+        if (tile_size[0] > OPS_MAXTILESIZE_X) {
+            OPSException ex(OPS_RUNTIME_ERROR);
+            ex << "ERROR: x tile_size (" << tile_size[0] << ") is greater than the minimum tile supported by the generated hardware (" << OPS_MAXTILESIZE_X << ") in x direction. " 
+                    << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set. If bigger tile size need, rebuild with bigger OPS_MAXTILESIZE_X";
+            throw ex;
+        }
+
+        if (tile_size_x_beats > realized_tile_size_x_beats) {
+            std::cout << "[OPS_WARNING]: Grid is smaller than tile_size in x direction. Running without tiling in x direction" << std::endl;
+        }
+        if (float(effective_tile_size_x_beats) / float(tile_size_x_beats) < 0.75) {
+            std::cout << "[OPS_WARNING]: Effective tile size is: " << float(effective_tile_size_x_beats) / float(tile_size_x_beats) << ", which is less than 75%. " 
+                    << " Please increase the tile size ( max: " << OPS_MAXTILESIZE_X << ") to utilize more performance"<< std::endl;
+        }
+    #endif
+        // Total xblocks calculations
+        // const unsigned short diff_z = range.end[2] - range.start[2];
+        const unsigned short tile_count_min_1_x = tile_count_x - 1;
+        // const unsigned short tile_count_min_1_y = tile_count_y - 1;
+        // unsigned int iterior_tile_count = tile_count_min_1_x * tile_count_min_1_y;
+        // unsigned int interior_x_blocks = iterior_tile_count * diff_z * realized_tile_size_x_beats * realized_tile_size_y;
+        // unsigned int ab_x_blocks = diff_z * last_tile_size_x_beats * realized_tile_size_y * tile_count_min_1_y;
+        // unsigned int ba_x_blocks = diff_z * last_tile_size_y * realized_tile_size_x_beats * tile_count_min_1_x;
+        // unsigned int last_tile_x_blocks = diff_z * last_tile_size_x_beats * last_tile_size_y;
+        unsigned int interior_tile_count = tile_count_min_1_x;
+        unsigned int interior_x_blocks = interior_tile_count * realized_tile_size_x_beats * realized_tile_size_y;
+        unsigned int ab_x_blocks = last_tile_size_x_beats * realized_tile_size_y;
+        total_xblocks =  interior_x_blocks + ab_x_blocks;
+
+        grid_size[0] = grid_xblocks;
+        range.start[0] = start_x;
+        range.end[0] = end_x;
+        tile_size[0] = isWideMem ? realized_tile_size_x_beats : (realized_tile_size_x_beats << ShiftBits);
+        tile_size[1] = realized_tile_size_y;
+        overlap_size[0] = isWideMem ? overlap_size_x_beats : (overlap_size_x_beats << ShiftBits);
+        overlap_size[1] = overlap_size[1];
+        effective_tile_size[0] = isWideMem ? effective_tile_size_x_beats : (effective_tile_size_x_beats << ShiftBits);
+        effective_tile_size[1] = effective_tile_size_y;
+        last_tile_size[0] = isWideMem ? last_tile_size_x_beats : (last_tile_size_x_beats << ShiftBits);
+        last_tile_size[1] = last_tile_size_y;
+        tile_count[0] = tile_count_x;
+        tile_count[1] = tile_count_y;
+
+        #ifdef DEBUG_LOG
+            printf("|HLS DEBUG LOG|%s| genTileMetadata output -> tile_count: (%d, %d), tile_size: (%d, %d), overlap_size: (%d, %d), effective_tile_size: (%d, %d), last_tile_size: (%d, %d)\n",
+            __func__, tile_count[0], tile_count[1], tile_size[0], tile_size[1], overlap_size[0], overlap_size[1], effective_tile_size[0], effective_tile_size[1], last_tile_size[0], last_tile_size[1]);
+            printf("|HLS DEBUG LOG|%s| xblocks breakdown -> total_xblocks: %u (interior: %u, ab: %u)\n",
+            __func__, total_xblocks, interior_x_blocks, ab_x_blocks);
+        #endif
+    }
+};
 /**
  * @brief Generates tile metadata for memory access patterns with configurable data width and memory width.
  * 
@@ -75,7 +321,7 @@ namespace hls {
  * @param[out] effective_tile_size The effective tile size excluding overlap [x, y]
  * @param[out] last_tile_size The size of the last tile which may be smaller [x, y]
  * @param[out] tile_count The number of tiles needed to cover the access range [x, y]
- * @param[in] isWidMem Flag indicating if memory is wide memory format (default: true).
+ * @param[in] isWideMem Flag indicating if memory is wide memory format (default: true).
  *            When true, X dimensions are in beats; when false, they are converted to byte units.
  * 
  * @note Uses compile-time assertions to validate MEM_DATA_WIDTH constraints
@@ -92,126 +338,20 @@ void genTileMetadata(
         ops::hls::SizeType2d& tile_count,
         unsigned short& last_tile_upper_limit_x,
         unsigned int& total_xblocks,
-        bool isWidMem = true)
+        bool isWideMem = true)
 {
-#ifndef __SYTHESIS__
-    static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
-            "MEM_DATA_WIDTH failed limit check");
-    static_assert(TILE_DIM >= 1 && TILE_DIM < 3,
-            "TILE_DIM must be 1 or 2");
-#endif
-    constexpr unsigned short data_vector_factor = MEM_DATA_WIDTH / DATA_WIDTH;
-    const unsigned short ShiftBits = (unsigned short)LOG2(data_vector_factor);
-    const unsigned short DataShiftBits = (unsigned short)LOG2(DATA_WIDTH/8);
-    const unsigned short start_x = range.start[0] >> ShiftBits;
-    const unsigned short end_x = (range.end[0] + data_vector_factor - 1) >> ShiftBits;
-    const unsigned short grid_xblocks = grid_size[0] >> ShiftBits;
-    const unsigned short num_xblocks = end_x - start_x;
-
-    const unsigned short tile_size_x_beats = tile_size[0] >> ShiftBits;
-    const unsigned short overlap_size_x_beats = overlap_size[0] >> ShiftBits;
-
-    const unsigned short effective_tile_size_x_beats = tile_size_x_beats - overlap_size_x_beats;
-
-    const unsigned short effective_tile_size_y = TILE_DIM == 2 ? tile_size[1] - overlap_size[1] : grid_size[1];
-    const unsigned short diff_y = range.end[1] - range.start[1];
-    const unsigned short realized_tile_size_x_beats = tile_size_x_beats > num_xblocks ? num_xblocks : tile_size_x_beats;
-    const unsigned short tile_count_x = ((num_xblocks - realized_tile_size_x_beats) + effective_tile_size_x_beats - 1) / effective_tile_size_x_beats + 1;
-    const unsigned short last_tile_size_x_beats = tile_count_x > 1 ? num_xblocks - (tile_count_x - 1) * effective_tile_size_x_beats : realized_tile_size_x_beats;
-    last_tile_upper_limit_x = range.end[0] - (((tile_count_x - 1) * effective_tile_size_x_beats) << ShiftBits);
-
-    const unsigned short realized_tile_size_y = TILE_DIM == 2 ? tile_size[1] > diff_y ? diff_y : tile_size[1] : grid_size[1];
-    const unsigned short tile_count_y = ((diff_y - realized_tile_size_y) + effective_tile_size_y - 1) / effective_tile_size_y + 1;
-    const unsigned short last_tile_size_y = tile_count_y > 1 ? diff_y - (tile_count_y - 1) * effective_tile_size_y : realized_tile_size_y;
-    // const unsigned short last_tile_upper_limit_y = TILE_DIM == 2 ? range.end[1] - (tile_count_y - 1) * effective_tile_size_y : range.end[1];
-
-#if defined(OPS_FPGA) && defined(OPS_TILING)
-    if (tile_size[0] != POW2(LOG2(tile_size[0]))) {
-        OPSException ex(OPS_RUNTIME_ERROR);
-        ex << "ERROR: x tile_size (" << tile_size[0] << ") has to be power of 2" 
-                << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set";
-        throw ex;
-    }
-
-    if (tile_size[0] <= overlap_size[0]) {
-        OPSException ex(OPS_RUNTIME_ERROR);
-        ex << "ERROR: x tile_size (" << tile_size[0] << ") is less than the minimum required overlap size (" << overlap_size[0] << ") in x direction. " 
-                << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set";
-        throw ex;
-    }
-
-    if (tile_size[0] > OPS_MAXTILESIZE_X) {
-        OPSException ex(OPS_RUNTIME_ERROR);
-        ex << "ERROR: x tile_size (" << tile_size[0] << ") is greater than the minimum tile supported by the generated hardware (" << OPS_MAXTILESIZE_X << ") in x direction. " 
-                << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set. If bigger tile size need, rebuild with bigger OPS_MAXTILESIZE_X";
-        throw ex;
-    }
-
-    if (tile_size_x_beats > realized_tile_size_x_beats) {
-        std::cout << "[OPS_WARNING]: Grid is smaller than tile_size in x direction. Running without tiling in x direction" << std::endl;
-    }
-    if (float(effective_tile_size_x_beats) / float(tile_size_x_beats) < 0.75) {
-        std::cout << "[OPS_WARNING]: Effective tile size is: " << float(effective_tile_size_x_beats) / float(tile_size_x_beats) << ", which is less than 75%. " 
-                << " Please increase the tile size ( max: " << OPS_MAXTILESIZE_X << ") to utilize more performance"<< std::endl;
-    }
-
-    if (TILE_DIM == 2) {
-        if (tile_size[1] <= overlap_size[1]) {
-            OPSException ex(OPS_RUNTIME_ERROR);
-            ex << "ERROR: y tile_size (" << tile_size[1] << ") is less than the minimum required overlap size (" << overlap_size[1] << ") in y direction. " 
-                    << "Please make sure appropriate OPS_TILESIZE_Y runtime flag is properly set";
-            throw ex;
-        }
-
-        if (tile_size[1] > OPS_MAXTILESIZE_Y) {
-            OPSException ex(OPS_RUNTIME_ERROR);
-            ex << "ERROR: y tile_size (" << tile_size[1] << ") is greater than the minimum tile supported by the generated hardware (" << OPS_MAXTILESIZE_Y << ") in y direction. " 
-                    << "Please make sure appropriate OPS_TILESIZE_Y runtime flag is properly set. If bigger tile size need, rebuild with bigger OPS_MAXTILESIZE_Y";
-            throw ex;
-        }
-
-        if (tile_size[1] > realized_tile_size_y) {
-            std::cout << "[OPS_WARNING]: Grid is smaller than tile_size in y direction. Running without tiling in y direction" << std::endl;
-        }
-
-        if (float(effective_tile_size_y) / float(tile_size[1] ) < 0.75) {
-            std::cout << "[OPS_WARNING]: Effective tile size is: " << float(effective_tile_size_y) / float(tile_size[1] ) << ", which is less than 75%" 
-                    << " Please increase the tile size ( max: " << OPS_MAXTILESIZE_Y << ") to utilize more performance"<< std::endl;
-        }
-    }
-#endif
-    // Total xblocks calculations
-    const unsigned short diff_z = range.end[2] - range.start[2];
-    const unsigned short tile_count_min_1_x = tile_count_x - 1;
-    const unsigned short tile_count_min_1_y = tile_count_y - 1;
-    unsigned int iterior_tile_count = tile_count_min_1_x * tile_count_min_1_y;
-    unsigned int interior_x_blocks = iterior_tile_count * diff_z * realized_tile_size_x_beats * realized_tile_size_y;
-    unsigned int ab_x_blocks = diff_z * last_tile_size_x_beats * realized_tile_size_y * tile_count_min_1_y;
-    unsigned int ba_x_blocks = diff_z * last_tile_size_y * realized_tile_size_x_beats * tile_count_min_1_x;
-    unsigned int last_tile_x_blocks = diff_z * last_tile_size_x_beats * last_tile_size_y;
-    total_xblocks =  interior_x_blocks + ab_x_blocks + ba_x_blocks + last_tile_x_blocks;
-
-    grid_size[0] = grid_xblocks;
-    range.start[0] = start_x;
-    range.end[0] = end_x;
-    tile_size[0] = isWidMem ? realized_tile_size_x_beats : (realized_tile_size_x_beats << ShiftBits);
-    tile_size[1] = realized_tile_size_y;
-    overlap_size[0] = isWidMem ? overlap_size_x_beats : (overlap_size_x_beats << ShiftBits);
-    overlap_size[1] = overlap_size[1];
-    effective_tile_size[0] = isWidMem ? effective_tile_size_x_beats : (effective_tile_size_x_beats << ShiftBits);
-    effective_tile_size[1] = effective_tile_size_y;
-    last_tile_size[0] = isWidMem ? last_tile_size_x_beats : (last_tile_size_x_beats << ShiftBits);
-    last_tile_size[1] = last_tile_size_y;
-    tile_count[0] = tile_count_x;
-    tile_count[1] = tile_count_y;
-
-    #ifdef DEBUG_LOG
-        printf("|HLS DEBUG LOG|%s| genTileMetadata output -> tile_count: (%d, %d), tile_size: (%d, %d), overlap_size: (%d, %d), effective_tile_size: (%d, %d), last_tile_size: (%d, %d)\n",
-        __func__, tile_count[0], tile_count[1], tile_size[0], tile_size[1], overlap_size[0], overlap_size[1], effective_tile_size[0], effective_tile_size[1], last_tile_size[0], last_tile_size[1]);
-        printf("|HLS DEBUG LOG|%s| xblocks breakdown -> total_xblocks: %u, interior: %u, ab: %u, ba: %u, last_tile: %u\n",
-        __func__, total_xblocks, interior_x_blocks, ab_x_blocks, ba_x_blocks, last_tile_x_blocks);
-    #endif
-
+    genTileMetadataExecHelper<MEM_DATA_WIDTH, DATA_WIDTH, TILE_DIM>::run(
+        grid_size,
+        range,
+        tile_size,
+        overlap_size,
+        effective_tile_size,
+        last_tile_size,
+        tile_count,
+        last_tile_upper_limit_x,
+        total_xblocks,
+        isWideMem
+    );
 }
 
     /**
