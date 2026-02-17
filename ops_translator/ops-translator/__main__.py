@@ -57,10 +57,13 @@ def main(argv=None) -> None:
 
     #setting logger
     if (args.debug):
+        print("Log level DEBUG set")
         logging.basicConfig(filename=args.logfile, level=logging.DEBUG)
     elif (args.verbose):
+        print("Log level INFO set")
         logging.basicConfig(filename=args.logfile, level=logging.INFO)
     else:
+        print("Log level WARNING set")
         logging.basicConfig(filename=args.logfile, level=logging.WARNING)
     
     if os.environ.get("OPS_AUTO_SOA") is not None:

@@ -414,7 +414,7 @@ public:
                 {% elif lh.ndim == 2 %}
                     {% set base_offset = widen_read_stencil_desc.widen_stencil.base_point.y - widen_stencil_disc_map[arg.stencil_ptr].widen_stencil.base_point.y %}
             unsigned int {{arg.stencil_ptr}}_read_lb_itr = {% if base_offset != 0 %}{{base_offset}} * {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}}{% else %}0{% endif %};
-            unsigned int {{arg.stencil_ptr}}_read_ub_itr = {% if base_offset != 0 %}({{base_offset}} + stencilConfig.grid_size[1]){% else %}stencilConfig.grid_size[1]{% endif %} * {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}};
+            unsigned int {{arg.stencil_ptr}}_read_ub_itr = {% if base_offset != 0 %}({{base_offset}} + {{"stencilConfig.tile_size[1]" if isTiling else "stencilConfig.grid_size[1]"}}){% else %}{{"stencilConfig.tile_size[1]" if isTiling else "stencilConfig.grid_size[1]"}}{% endif %} * {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}};
                 {% else %}
                     {% set base_offset = widen_read_stencil_desc.widen_stencil.base_point.z - widen_stencil_disc_map[arg.stencil_ptr].widen_stencil.base_point.z %}
             unsigned int {{arg.stencil_ptr}}_read_lb_itr = {% if base_offset != 0 %}{{base_offset}} * {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} * {{"stencilConfig.tile_size[1]" if isTiling else "stencilConfig.grid_size[1]"}},{% else %}0{% endif %};
@@ -1048,7 +1048,7 @@ void kernel_{{lh.kernel}}_PE(const short& PEId, const ops::hls::{{"StencilConfig
     Stencil_{{lh.kernel}} stencil;
 
 #ifdef DEBUG_LOG
-    printf("[KERNEL_DEBUG]|%s| stencil config gridSize: %d (xblocks), %d, %d\n", __func__, stencilConfig.grid_size[0], stencilConfig.grid_size[1], stencilConfig.grid_size[2]);
+    printf("[KERNEL_DEBUG]|%s| stencil config gridSize: %d (xblocks), %d, %d\n", __func__, {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}}, {{"stencilConfig.tile_size[1]" if isTiling else "stencilConfig.grid_size[1]"}}, {{"stencilConfig.tile_size[2]" if isTiling else "stencilConfig.grid_size[2]"}});
 #endif
     stencil.setConfig(PEId, stencilConfig);
 

@@ -73,7 +73,7 @@ public:
         read_range_copy.dim = read_range.dim;
         ops::hls::SizeType2d tile_size = {m_fpga->getOPSTileSizeX(), {% if ndim == 3 %} m_fpga->getOPSTileSizeY(){% else %}1{% endif %}};
         ops::hls::SizeType2d overlap_size = {get_overlap_size<{{config["SLR_count"]}}, {{config["iter_par_factor"]}}, {{half_span_x}}, mem_vector_factor>(), 
-                get_overlap_size<{{config["SLR_count"]}}, {{config["iter_par_factor"]}}, {{half_span_x}}, vector_factor>()};
+                {% if ndim == 3 %}get_overlap_size<{{config["SLR_count"]}}, {{config["iter_par_factor"]}}, {{half_span_x}}, vector_factor>(){%else %}0{% endif %}};
         ops::hls::SizeType2d tile_count;
         ops::hls::SizeType2d effective_tile_size;
         ops::hls::SizeType2d last_tile_size;
@@ -291,7 +291,7 @@ public:
     {% endfor %}
 
     // enque in backward order
-    {% for slr_id in range(config["SLR_count"])|reverse %}
+    {% for slr_id in range(config["SLR_count"]) %}
         OCL_CHECK(err, err = m_fpga->getCommandQueue().enqueueTask(m_kernel_{{slr_id}}, &activeEvents, &event_kernel_{{slr_id}}));
     {% endfor %}
         OCL_CHECK(err, err = m_fpga->getCommandQueue().enqueueTask(m_datamover, &activeEvents, &event_datamover));

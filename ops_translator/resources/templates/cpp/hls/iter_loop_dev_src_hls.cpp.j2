@@ -224,14 +224,14 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short& slr_re
             const unsigned short tile_size_y = tile_y == (stencilConfig.tile_count[1] -1) ? stencilConfig.last_tile_size[1] : stencilConfig.tile_size[1];
             const unsigned int num_pkts = tile_size_x * tile_size_y * z_diff;
         {% else %}
-            const unsigned int num_pkts = tile_size_x * tile_size_y * z_diff;
+            const unsigned int num_pkts = tile_size_x * y_diff;
         {% endif %}
         {% if ilh.isMultiDim() %}
             {% for m_dim in ilh.getMultidimList() %}
             const unsigned int num_pkts_d{{m_dim}} = num_pkts * {{m_dim}};
             {% endfor %}
         {% endif %}
-            const ops::hls::StencilConfigCoreSingleTile tileConfig = ops::hls::stencilConfigCoreSingleTileGen(stencilConfig, tile_x, {%if ndim == 3 %}tile_y{%else%}0{%endif%});
+            const ops::hls::StencilConfigCoreSingleTile tileConfig = ops::hls::stencilConfigCoreSingleTileGen{%if ndim == 3 %}3D{%else%}2D{%endif%}(stencilConfig, tile_x{%if ndim == 3 %}, tile_y{%endif%});
     {% endif %}
 
             kernel_outerloop_{{ilh.id}}_dataflow_region(slr_region, {% if isTiling %}tileConfig{% else %}stencilConfig{% endif %}, 
@@ -264,14 +264,14 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short& slr_re
             const unsigned short tile_size_y = tile_y == (stencilConfig.tile_count[1] -1) ? stencilConfig.last_tile_size[1] : stencilConfig.tile_size[1];
             const unsigned int num_pkts = tile_size_x * tile_size_y * z_diff;
         {% else %}
-            const unsigned int num_pkts = tile_size_x * tile_size_y * z_diff;
+            const unsigned int num_pkts = tile_size_x * y_diff;
         {% endif %}
         {% if ilh.isMultiDim() %}
             {% for m_dim in ilh.getMultidimList() %}
             const unsigned int num_pkts_d{{m_dim}} = num_pkts * {{m_dim}};
             {% endfor %}
         {% endif %}
-            const ops::hls::StencilConfigCoreSingleTile tileConfig = ops::hls::stencilConfigCoreSingleTileGen(stencilConfig, tile_x, {%if ndim == 3 %}tile_y{%else%}0{%endif%});
+            const ops::hls::StencilConfigCoreSingleTile tileConfig = ops::hls::stencilConfigCoreSingleTileGen{%if ndim == 3 %}3D{%else%}2D{%endif%}(stencilConfig, tile_x{%if ndim == 3 %}, tile_y{%endif%});
     {% endif %}
             kernel_outerloop_{{ilh.id}}_dataflow_region(slr_region, {% if isTiling %}tileConfig{% else %}stencilConfig{% endif %}, 
                 num_pkts, {%if ilh.isMultiDim() -%}{% for m_dim in ilh.getMultidimList() -%}num_pkts_d{{m_dim}}, {% endfor -%} {% endif -%}{% for arg in ilh.joint_args|ops_dat -%}{% if arg is not ops_rw %}{{axis_name(arg)-}}{{", " if not loop.last or consts or ilh.joint_args|ops_gbl }}{% else %}{{axis_name_t2(arg, "in")-}}, {{axis_name_t2(arg, "out")-}}{{", " if not loop.last or consts or ilh.joint_args|ops_gbl}}{% endif %}{% endfor %}
@@ -333,6 +333,7 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short& slr_re
     #pragma HLS INTERFACE s_axilite port = last_tile_size_x bundle = control
     #pragma HLS INTERFACE s_axilite port = tile_count_x bundle = control
     #pragma HLS INTERFACE s_axilite port = total_xblocks bundle = control
+    #pragma HLS INTERFACE s_axilite port = last_tile_upper_limit_x bundle = control
     {% endif %}
 #endif
     {% for const_arg in ilh.joint_args|ops_gbl%}

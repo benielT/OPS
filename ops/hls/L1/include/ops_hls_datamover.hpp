@@ -775,6 +775,41 @@ void stream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out,
 
 /**************************** TILED ops  ****************************/
 
+static ap_uint<144> commandGen2D(const ap_uint<64>& offset, const ap_uint<16>& stride_x, const ap_uint<16>& size_x,
+                const ap_uint<16>& stride_y, const ap_uint<16>& size_y, const ap_uint<16>& avoid_x)
+{
+	ap_uint<144> command;
+    command.range(63,0) = offset;
+    command.range(79,64) = stride_x;
+    command.range(95,80) = size_x;
+    command.range(111,96) = stride_y;
+    command.range(127,112) = size_y;
+    command.range(143,128) = avoid_x;
+
+#ifdef DEBUG_LOG
+    printf("|HLS DEBUG_LOG|%s| offset:%llu, stride_x:%u, size_x:%u, stride_y:%u, size_y:%u, avoid_x:%u\n", __func__, 
+		(unsigned long long)offset, (unsigned int)stride_x, (unsigned int)size_x, (unsigned int)stride_y, (unsigned int)size_y, (unsigned int)avoid_x);
+#endif
+    return command;
+}
+
+static ap_uint<128> commandGen2D(const ap_uint<64>& offset, const ap_uint<16>& stride_x, const ap_uint<16>& size_x,
+                const ap_uint<16>& stride_y, const ap_uint<16>& size_y)
+{
+	ap_uint<128> command;
+    command.range(63,0) = offset;
+    command.range(79,64) = stride_x;
+    command.range(95,80) = size_x;
+    command.range(111,96) = stride_y;
+    command.range(127,112) = size_y;
+
+#ifdef DEBUG_LOG
+    printf("|HLS DEBUG_LOG|%s| offset:%llu, stride_x:%u, size_x:%u, stride_y:%u, size_y:%u\n", __func__, 
+		(unsigned long long)offset, (unsigned int)stride_x, (unsigned int)size_x, (unsigned int)stride_y, (unsigned int)size_y);
+#endif
+    return command;
+}
+
 static ap_uint<160> commandGen3D(const ap_uint<64>& offset, const ap_uint<16>& stride_x, const ap_uint<16>& size_x,
                 const ap_uint<16>& stride_y, const ap_uint<16>& size_y,
                 const ap_uint<16>& stride_z, const ap_uint<16>& size_z)

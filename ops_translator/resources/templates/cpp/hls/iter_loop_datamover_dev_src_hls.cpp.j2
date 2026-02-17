@@ -177,9 +177,11 @@ static void stridedTileMem2stream(
     {% for i in range(config["tile_banks"]) %}
         ap_uint<mem_data_width>* arg_b{{i}},
     {% endfor %}
+    {% if ndim == 3 %}
         unsigned short abs_row_offset,
+    {% endif %}
         unsigned short z_row_stride,
-        ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, const ap_uint<160>& command)
+        ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, const ap_uint<{% if ndim == 3 %}160{% else %}128{% endif %}>& command )
 {
     // #pragma HLS INLINE off
     #ifdef DEBUG_LOG
@@ -192,6 +194,7 @@ static void stridedTileMem2stream(
     ap_uint<16> size_x = command.range(95,80);
     ap_uint<16> stride_y = command.range(111,96);
     ap_uint<16> size_y = command.range(127,112);
+    {% if ndim == 3 %}
     ap_uint<16> stride_z = command.range(143,128);
     ap_uint<16> size_z = command.range(159,144);
 
@@ -199,28 +202,34 @@ static void stridedTileMem2stream(
     {
         unsigned short z_row_id_offset = abs_row_offset + z * z_row_stride;
 
-        for (ap_uint<16> y = 0; y < size_y; y++)
-        {
-            #pragma HLS PIPELINE
-            unsigned short abs_row_id_of_y = z_row_id_offset + y;
-            unsigned short bank_id = abs_row_id_of_y % NUM_BANKS;
-            ap_uint<64> per_bank_row = (ap_uint<64>)(abs_row_id_of_y >> NUM_BANKS_SHIFT);
-            ap_uint<64> s2 = offset_x + per_bank_row * stride_y;
-            // unsigned short j_shifted = y >> NUM_BANKS_SHIFT;
-            // unsigned short j_floor = j_shifted << NUM_BANKS_SHIFT;
-            // bool access_cond = j_floor + bank_id < size_y;
-            #ifdef DEBUG_LOG
-            printf("|HLS DEBUG_LOG|%s| z:%u y:%u abs_row_id:%u bank_id:%u  offset:%llu size_x:%u stride_y:%u size_y:%u stride_z:%u size_z:%u\n", 
-                    __func__, (unsigned int)z, (unsigned int)y, (unsigned int)abs_row_id_of_y, (unsigned int)bank_id, 
-                    (unsigned long long)s2, (unsigned int)size_x, (unsigned int)stride_y, (unsigned int)size_y, 
-                    (unsigned int)stride_z, (unsigned int)size_z);
-            #endif
-            {% for i in range(config["tile_banks"]) %}
-            if (bank_id == {{i}}) 
-                ops::hls::mem2stream<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(arg_b{{i}} + s2, strm_out, size_x);
-            {% endfor %}
-        }
+    {% endif %}
+    for (ap_uint<16> y = 0; y < size_y; y++)
+    {
+        #pragma HLS PIPELINE
+        unsigned short abs_row_id_of_y = y {% if ndim == 3 %}+ z_row_id_offset{% endif %};
+        unsigned short bank_id = abs_row_id_of_y % NUM_BANKS;
+        ap_uint<64> per_bank_row = (ap_uint<64>)(abs_row_id_of_y >> NUM_BANKS_SHIFT);
+        ap_uint<64> s2 = offset_x + per_bank_row * stride_y;
+        #ifdef DEBUG_LOG
+        {% if ndim == 3 %}
+        printf("|HLS DEBUG_LOG|%s| z:%u y:%u abs_row_id:%u bank_id:%u  offset:%llu size_x:%u stride_y:%u size_y:%u stride_z:%u size_z:%u\n", 
+                __func__, (unsigned int)z, (unsigned int)y, (unsigned int)abs_row_id_of_y, (unsigned int)bank_id, 
+                (unsigned long long)s2, (unsigned int)size_x, (unsigned int)stride_y, (unsigned int)size_y, 
+                (unsigned int)stride_z, (unsigned int)size_z);
+        {% else %}
+        printf("|HLS DEBUG_LOG|%s| y:%u abs_row_id:%u bank_id:%u  offset:%llu size_x:%u stride_y:%u size_y:%u \n", 
+                __func__, (unsigned int)y, (unsigned int)abs_row_id_of_y, (unsigned int)bank_id, 
+                (unsigned long long)s2, (unsigned int)size_x, (unsigned int)stride_y, (unsigned int)size_y);
+        {% endif %}
+        #endif
+        {% for i in range(config["tile_banks"]) %}
+        if (bank_id == {{i}}) 
+            ops::hls::mem2stream<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(arg_b{{i}} + s2, strm_out, size_x);
+        {% endfor %}
     }
+    {% if ndim == 3 %}
+    }
+    {% endif %}
 }
 
 template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
@@ -228,9 +237,11 @@ static void stridedTileStream2memWithAvoid(
     {% for i in range(config["tile_banks"]) %}
         ap_uint<mem_data_width>* arg_b{{i}},
     {% endfor %}
+    {% if ndim == 3 %}
         unsigned short abs_row_offset,
+    {% endif %}
         unsigned short z_row_stride,
-        ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, const ap_uint<192>& command)
+        ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, const ap_uint<{%if ndim == 3%}192{%else%}144{%endif%}>& command)
 {
     //     // #pragma HLS INLINE off
     #ifdef DEBUG_LOG
@@ -243,6 +254,9 @@ static void stridedTileStream2memWithAvoid(
     ap_uint<16> size_x = command.range(95,80);
     ap_uint<16> stride_y = command.range(111,96);
     ap_uint<16> size_y = command.range(127,112);
+    {% if not ndim == 3 %}
+    ap_uint<16> avoid_x = command.range(143,128);
+    {% else %}
     ap_uint<16> stride_z = command.range(143,128);
     ap_uint<16> size_z = command.range(159,144);
 	ap_uint<16> avoid_x = command.range(175,160);
@@ -251,12 +265,12 @@ static void stridedTileStream2memWithAvoid(
     for (ap_uint<16> z = 0; z < size_z; z++)
     {
         unsigned short z_row_id_offset = abs_row_offset + z * z_row_stride;
-
+    {% endif %}
         for (ap_uint<16> y = 0; y < size_y; y++)
         {
             #pragma HLS PIPELINE
             // ap_uint<64> s2 = s3 + y * stride_y;
-            unsigned short abs_row_id_of_y = z_row_id_offset + y;
+            unsigned short abs_row_id_of_y = y {% if ndim == 3%}+ z_row_id_offset{% endif %};
             unsigned short bank_id = abs_row_id_of_y % NUM_BANKS;
             // unsigned short j_shifted = abs_row_id_of_y >> NUM_BANKS_SHIFT;
             // unsigned short j_floor = j_shifted << NUM_BANKS_SHIFT;
@@ -264,39 +278,55 @@ static void stridedTileStream2memWithAvoid(
             ap_uint<64> per_bank_row = (ap_uint<64>)(abs_row_id_of_y >> NUM_BANKS_SHIFT);
             ap_uint<64> s2 = offset_x + per_bank_row * stride_y;
             #ifdef DEBUG_LOG
-                printf("|HLS DEBUG_LOG|%s| offset:%llu, size_x:%u, stride_y:%u, size_y:%u, stride_z:%u, size_z:%u avoid_x:%u avoid_y:%u z:%u y:%u\n", 
-                       __func__, (unsigned long long)s2, (unsigned int)size_x, (unsigned int)stride_y, (unsigned int)size_y, 
-                       (unsigned int)stride_z, (unsigned int)size_z, (unsigned int)avoid_x, (unsigned int)avoid_y, (unsigned int)z, (unsigned int)y);
+            {% if ndim == 3 %}
+                printf("|HLS DEBUG_LOG|%s| z:%u y:%u offset:%llu, size_x:%u, stride_y:%u, size_y:%u, stride_z:%u, size_z:%u avoid_x:%u avoid_y:%u\n", 
+                       __func__, (unsigned int)z, (unsigned int)y, (unsigned long long)s2, (unsigned int)size_x, (unsigned int)stride_y, (unsigned int)size_y, 
+                       (unsigned int)stride_z, (unsigned int)size_z, (unsigned int)avoid_x, (unsigned int)avoid_y);
+            {% else %}
+                printf("|HLS DEBUG_LOG|%s| y:%u offset:%llu, size_x:%u, stride_y:%u, size_y:%u, avoid_x:%u \n", 
+                       __func__, (unsigned int)y, (unsigned long long)s2, (unsigned int)size_x, (unsigned int)stride_y, (unsigned int)size_y, 
+                        (unsigned int)avoid_x);
+            {% endif %}
             #endif
+    {% if ndim == 3 %}
 			if (y < avoid_y)
 				ops::hls::hlsTerminate<MEM_DATA_WIDTH, IN_ITR>(strm_in, size_x);
 			else {
+    {% endif %}
     {% for i in range(config["tile_banks"]) %}
                 if (bank_id == {{i}}) 
             	    ops::hls::stream2memWithAvoid<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(arg_b{{i}} + s2, strm_in, size_x, avoid_x);
     {% endfor %}
+    {% if ndim == 3 %}
             }
+    {% endif %}
         }
+    {% if ndim == 3 %}
     }
+    {% endif %}
 }
 {% endif %}
 
 static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         const unsigned int num_pkts,
-    {#{% if ilh.isMultiDim() %}
-        {% for m_dim in ilh.getMultidimList() %}
+    {% if not isTiling %}
+        {% if ilh.isMultiDim() %}
+            {% for m_dim in ilh.getMultidimList() %}
         const unsigned int num_pkts_d{{m_dim}},
-        {% endfor %}
-    {% endif %}#}
+            {% endfor %}
+        {% endif %}
+    {% endif %}
     {% if isTiling %}
         const unsigned int num_beats,
         {% if ndim == 3 %}
         ap_uint<192>& command,
         {% else %}
-        ap_uint<160>& command,
+        ap_uint<144>& command,
         {% endif %}
         {% if config["tile_banks"] > 1 %}
+            {% if ndim == 3 %}
         unsigned short abs_row_offset,
+            {% endif %}
         unsigned short z_row_stride,
         {% endif %}
     {% else %}
@@ -385,9 +415,11 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
                     {% for i in range(config["tile_banks"]) %}
                 arg{{arg.id}}_b{{i}},
                     {% endfor %}
+                    {% if ndim == 3 %}
                 abs_row_offset,
+                    {% endif %}
                 z_row_stride,
-                arg{{arg.id}}_read_mem_strm, command.range(159,0));
+                arg{{arg.id}}_read_mem_strm, command.range({%if ndim == 3 %}159{%else%}127{%endif%},0));
                 {% else %}
         ops::hls::tileMem2stream<mem_data_width, {{config["maxi_read_burst_length"]}}, 1>(arg{{arg.id}}, arg{{arg.id}}_read_mem_strm, command.range(159,0));
                 {% endif %}
@@ -460,7 +492,9 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
                         {% for i in range(config["tile_banks"]) %}
                 arg{{arg.id}}_b{{i}},
                         {% endfor %}
+                        {% if ndim == 3 %}
                 abs_row_offset,
+                        {% endif %}
                 z_row_stride,
                 arg{{arg.id}}_write_mem_strm, command);
                     {% else %}
@@ -478,11 +512,14 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
 
 static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
         const unsigned int iter,
-    {#{% if ilh.isMultiDim() %}
-        {% for m_dim in ilh.getMultidimList() %}
+    {% if not isTiling%}
+        const unsigned int num_pkts,
+        {% if ilh.isMultiDim() %}
+            {% for m_dim in ilh.getMultidimList() %}
         const unsigned int num_pkts_d{{m_dim}},
-        {% endfor %}
-    {% endif %}#}
+            {% endfor %}
+        {% endif %}
+    {% endif %}
     {% if isTiling %}
         const ops::hls::MemConfigTile& memconfig,
     {% else %}
@@ -559,7 +596,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
             const ap_uint<64> offset = memconfig.start_offset + tile_x_offset {%if not config["tile_banks"] > 1 %}+ tile_y_offset{% endif %};
             const unsigned int total_beats = tile_size_x * tile_size_y * z_diff;
         {% else %}
-            onst ap_uint<64> offset = memconfig.start_offset + tile_x_offset;
+            const ap_uint<64> offset = memconfig.start_offset + tile_x_offset;
             const unsigned int total_beats = tile_size_x * y_diff;
         {% endif %}
 			const unsigned int total_pkts = total_beats * num_of_pkts_per_beat;
@@ -572,7 +609,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
 
         {% else %}
             const unsigned int avoid_x = tile_x == 0 ? 0 : memconfig.tile_overlap_size_x >> 1;
-            auto command = ops::hls::commandGen2D(offset, 1, (ap_uint<16>)tile_size_x, (ap_uint<16>)stride_y, (ap_uint<16>)avoid_x);
+            auto command = ops::hls::commandGen2D(offset, 1, (ap_uint<16>)tile_size_x, (ap_uint<16>)stride_y, (ap_int<16>)y_diff, (ap_uint<16>)avoid_x);
             
 		{% endif %}
     {% endif %}
@@ -591,7 +628,9 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
     {% if isTiling %}
                     command,
         {% if config["tile_banks"] > 1 %}
+            {% if ndim == 3 %}
                     abs_row_offset,
+            {% endif %}
                     memconfig.grid_size_y,
         {% endif %}
     {% else %}
@@ -649,7 +688,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
             const ap_uint<64> offset = memconfig.start_offset + tile_x_offset {%if not config["tile_banks"] > 1 %}+ tile_y_offset{% endif %};
             const unsigned int total_beats = tile_size_x * tile_size_y * z_diff;
         {% else %}
-            onst ap_uint<64> offset = memconfig.start_offset + tile_x_offset;
+            const ap_uint<64> offset = memconfig.start_offset + tile_x_offset;
             const unsigned int total_beats = tile_size_x * y_diff;
         {% endif %}
 			const unsigned int total_pkts = total_beats * num_of_pkts_per_beat;
@@ -681,7 +720,9 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
     {% if isTiling %}
                     command,
         {% if config["tile_banks"] > 1 %}
+            {% if ndim == 3 %}
                     abs_row_offset,
+            {% endif %}
                     memconfig.grid_size_y,
         {% endif %}
     {% else %}
@@ -980,14 +1021,14 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
     const unsigned int num_pkts_d{{m_dim}} = num_of_pkts_per_bytes_d{{m_dim}} * config_d{{m_dim}}.total_xblocks;
         {% endfor %}
     {% endif %}#}
-
+    {% if not isTiling%}
 #ifdef DEBUG_LOG
     printf("[KERNEL_DEBUG]|%s| REALIZED numbers: num_beats: %d, num_pkts: %d,\n", __func__,
          num_beats, num_pkts);
-    {% if not isTiling%}
+
     printf("[KERNEL_DEBUG]|%s| batch_size: %d \n", __func__, batch_size);
-    {% endif %}
 #endif 
+    {% endif %}
     {% if config["datamover_mode"] == 3 %}
     if (is_loopback)
     {
@@ -1070,11 +1111,14 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
     {% if config["datamover_mode"] == 3 or config["datamover_mode"] == 2 %}
         datamover_outerloop_{{ilh.id}}_dataflow_read_write(
                 outer_itr,
-        {#{% if ilh.isMultiDim() %}
-            {% for m_dim in ilh.getMultidimList() %}
+        {% if not isTiling %}
+                num_pkts,
+            {% if ilh.isMultiDim() %}
+                {% for m_dim in ilh.getMultidimList() %}
                 num_pkts_d{{m_dim}},
-            {% endfor %}
-        {% endif %}#}
+                {% endfor %}
+            {% endif %}
+        {% endif %}
                 config,
         {% if ilh.isMultiDim() %}
                 {% for m_dim in ilh.getMultidimList() %}
