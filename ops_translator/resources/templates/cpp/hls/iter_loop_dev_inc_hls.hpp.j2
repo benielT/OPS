@@ -68,7 +68,12 @@ constexpr unsigned short multidim_axis_data_width_{{ilh.id}}_{{dat.ptr}} = data_
 {% block kernel_main_loop_region %}
 {% endblock %}
 {% block kernel_top_prototype %}
-extern "C" void kernel_outerloop_{{ilh.id}}(
+{% if slr_iter_par_fact is defined %}
+extern "C" void kernel_outerloop_{{ilh.id}}_{{slr_iter_par_fact}}
+{% else %}
+extern "C" void kernel_outerloop_{{ilh.id}}
+{% endif %}
+(
         const unsigned short slr_region,
         const unsigned int outer_itr,
     {% for i in range(ndim)%}

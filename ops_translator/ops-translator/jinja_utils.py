@@ -5,6 +5,7 @@ from jinja2 import Environment, FileSystemLoader
 import re
 import ops
 import logging
+from typing import Union, List
 
 env = Environment(
     loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), "../resources/templates")),
@@ -124,17 +125,21 @@ def getAdjustedLineBufferSize(buf_size: int, half_span: int, vec_fac: int) -> in
     return ((int)((buf_size + 2*half_span + vec_fac - 1)/vec_fac))
 
 def getAdjustedPlaneBufferSize(x_size: int, y_size: int, half_span: int, vec_fac: int) -> int:
-    print(f"x_size: {x_size}, y_size: {y_size}, half_span: {half_span}, vec_fac: {vec_fac}\n")
+    # print(f"x_size: {x_size}, y_size: {y_size}, half_span: {half_span}, vec_fac: {vec_fac}\n")
     adj_x_size = (int)((x_size + 2*half_span + vec_fac - 1)/vec_fac)
     adj_y_size = y_size + 2*half_span
     return (adj_x_size * adj_y_size)
 
 def getOverlapTileSize(n_slr: int, p_slr: int, half_span: int, mem_vec_fac: int) -> int:
-    print(f"n_slr: {n_slr}, p_slr: {p_slr}, half_span: {half_span}, mem_vec_fac: {mem_vec_fac}")
-    val = floor(((n_slr * p_slr) * half_span + mem_vec_fac - 1) / mem_vec_fac) * mem_vec_fac * 2
-    return int(val)
+    # print(f"n_slr: {n_slr}, p_slr: {p_slr}, half_span: {half_span}, mem_vec_fac: {mem_vec_fac}")
+    if isinstance(p_slr, list):
+        return (floor(((sum(p_slr)) * half_span + mem_vec_fac - 1) / mem_vec_fac) * mem_vec_fac * 2)
+    return(((n_slr * p_slr) * half_span + mem_vec_fac - 1) / mem_vec_fac) * mem_vec_fac * 2
 
-def getTotalPEs(n_slr: int, p_slr: int) -> int:
+
+def getTotalPEs(n_slr: int, p_slr: Union[int, List]) -> int:
+    if isinstance(p_slr, list):
+        return sum(p_slr)
     return (n_slr * p_slr)
 
 env.globals.update(get_read_arg_from_dat = lambda dat, loop: getReadArgFromDat(dat, loop))

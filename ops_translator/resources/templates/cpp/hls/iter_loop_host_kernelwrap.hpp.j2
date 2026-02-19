@@ -1,6 +1,8 @@
 {% set read_stencil = ilh.getReadStencil(prog) %}
 {% set span_x = (read_stencil.stencil_size.x - 1) | int %}
 {% set half_span_x = (span_x / 2) | int %}
+{%set is_slr_iter_par = config["iter_par_factor"] is iterable and (config["iter_par_factor"] is not string and config["iter_par_factor"] is not mapping) %}
+
 {% block prologue %}
 #pragma once 
 #include <ops_hls_rt_support.h>
@@ -16,12 +18,22 @@ class KernelWrapper_outerloop_{{ilh.id}} : public ops::hls::Kernel
 public:
     KernelWrapper_outerloop_{{ilh.id}}():
             Kernel("{{ilh.unique_name}}"),
+    {% if is_slr_iter_par %}
+        {% for slr_id in range(config["SLR_count"]) %}
+            m_kernelName{{slr_id}}("kernel_outerloop_{{ilh.id}}_{{slr_id}}"),
+        {% endfor %}
+    {% else %}
             m_kernelName("kernel_outerloop_{{ilh.id}}"),
+    {% endif %}
             m_datamoverName("datamover_outerloop_{{ilh.id}}")
     {
         cl_int err;
     {% for i in range(config["SLR_count"])%}
+        {% if is_slr_iter_par %}
+        OCL_CHECK(err, m_kernel_{{i}} = cl::Kernel(m_fpga->getProgram(), m_kernelName{{i}}.c_str(), &err));
+        {% else %}
         OCL_CHECK(err, m_kernel_{{i}} = cl::Kernel(m_fpga->getProgram(), m_kernelName.c_str(), &err));
+        {% endif %}
     {% endfor %}
         OCL_CHECK(err, m_datamover = cl::Kernel(m_fpga->getProgram(), m_datamoverName.c_str(), &err));    
     }
@@ -72,8 +84,13 @@ public:
         read_range_copy.end[2] = read_range.end[2];
         read_range_copy.dim = read_range.dim;
         ops::hls::SizeType2d tile_size = {m_fpga->getOPSTileSizeX(), {% if ndim == 3 %} m_fpga->getOPSTileSizeY(){% else %}1{% endif %}};
+        {% if is_slr_iter_par %}
+        ops::hls::SizeType2d overlap_size = {get_overlap_size<{{get_total_PEs(config["SLR_count"],config["iter_par_factor"])}}, {{half_span_x}}, mem_vector_factor>(), 
+                {% if ndim == 3 %}get_overlap_size<{{get_total_PEs(config["SLR_count"],config["iter_par_factor"])}}, {{half_span_x}}, vector_factor>(){%else %}0{% endif %}};
+        {% else %}
         ops::hls::SizeType2d overlap_size = {get_overlap_size<{{config["SLR_count"]}}, {{config["iter_par_factor"]}}, {{half_span_x}}, mem_vector_factor>(), 
                 {% if ndim == 3 %}get_overlap_size<{{config["SLR_count"]}}, {{config["iter_par_factor"]}}, {{half_span_x}}, vector_factor>(){%else %}0{% endif %}};
+        {% endif %}
         ops::hls::SizeType2d tile_count;
         ops::hls::SizeType2d effective_tile_size;
         ops::hls::SizeType2d last_tile_size;
@@ -118,7 +135,7 @@ public:
         printStencilConfig(read_stencilConfig, "read_stencilConfig");
 #endif
 
-		unsigned int total_iter_par_factor = iter_par_factor * {{config["SLR_count"]}};
+		unsigned int total_iter_par_factor = {{get_total_PEs(config["SLR_count"],config["iter_par_factor"])}};
 		unsigned int adjusted_outer_iter = (outer_iter + total_iter_par_factor - 1) / total_iter_par_factor;
         {#
         ops::hls::MemConfig memconfig;
@@ -379,7 +396,14 @@ public:
 */
     }
 private:
+{% if is_slr_iter_par %}
+    {% for slr_id in range(config["SLR_count"]) %}
+    std::string m_kernelName{{slr_id}};
+    {% endfor %}
+{% else %}
     std::string m_kernelName;
+{% endif %}
+
     std::string m_datamoverName;
 {% for slr_id in range(config["SLR_count"]) %}
     cl::Kernel m_kernel_{{slr_id}};

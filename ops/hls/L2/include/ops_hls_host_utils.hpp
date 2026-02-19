@@ -604,6 +604,11 @@ const unsigned short get_overlap_size() {
 	return val;
 }
 
+template<unsigned short TOTAL_SLR, unsigned short HALF_SPAN, unsigned short MEM_VECTOR_SIZE>
+const unsigned short get_overlap_size() {
+    auto val =  (((TOTAL_SLR) * HALF_SPAN  + MEM_VECTOR_SIZE - 1) / MEM_VECTOR_SIZE) * MEM_VECTOR_SIZE * 2;
+	return val;
+}
 // /**
 //  * @brief Generates tile metadata for memory access patterns with configurable data width and memory width.
 //  * 

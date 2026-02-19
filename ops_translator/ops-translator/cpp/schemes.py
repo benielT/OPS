@@ -350,10 +350,18 @@ class CppHLS(Scheme):
                 consts_map[kernel_idx] = kernel_consts
                 consts.extend(x for x in kernel_consts if x not in consts)
         
-        return [(iterloop_datamover_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_datamover_inc_extension),
-                (iterLoop_datamover_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_datamover_src_extension),
-                (iterLoop_kernel_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_device_inc_extension),
-                (iterLoop_kernel_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, consts_map = consts_map, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_device_src_extension)]
+        output = [(iterloop_datamover_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_datamover_inc_extension),
+                (iterLoop_datamover_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_datamover_src_extension)]
+        
+        if not isinstance(config["iter_par_factor"],list):
+                output.extend([(iterLoop_kernel_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_device_inc_extension),
+                (iterLoop_kernel_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, consts_map = consts_map, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_device_src_extension)])    
+        else:
+            for iter_par_fact_id in range(len(config["iter_par_factor"])):
+                output.extend([(iterLoop_kernel_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, isTiling = program.isTiling(), tiles=program.getTileSizes(), slr_iter_par_fact = iter_par_fact_id), self.iterloop_device_inc_extension),
+                (iterLoop_kernel_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, consts_map = consts_map, isTiling = program.isTiling(), tiles=program.getTileSizes(), slr_iter_par_fact = iter_par_fact_id), self.iterloop_device_src_extension)])    
+            
+        return output
     
     def gen_local_dependancy_map(self, node: ops.DataflowNode) -> List[int]:
         datMap = [x for x in range(len(node.loop.dats))]

@@ -230,7 +230,6 @@ class HLS(Target):
         "SLR_count" : ("numeric", (1, config["max_SLR_count"])),
         "vector_factor" : ("numeric", (1, None)),
         "mem_vector_factor": ("numeric", (1, None)),
-        "iter_par_factor": ("numeric", (1, None)),
         "data_width" : ("select", {8,16,32,64}),
         "mem_data_width" : ("select", {8,16,32,64}),
         "maxi_depth" : ("numeric", (1, None)),
@@ -272,7 +271,18 @@ class HLS(Target):
              print(CodeGenWarning(f"Target {self.name} config warining: maxi_write_burst_length x num_write_outstanding is higher than 128. Might cause high resource utility \n \
                                   in internal HLS stream of the datamover"))
         
-        
+        # SLR unique iter_par_factor
+        if isinstance(self.config["iter_par_factor"],list):
+            if not len(self.config["iter_par_factor"]) == self.config["SLR_count"]:
+                raise CodegenError(f'"iter_par_factor" set as ({self.config["iter_par_factor"]}) in config as list for each SLR region which does not match with "SLR_count"={self.config["SLR_count"]}. \
+                                   Please make sure the number of items in the "iter_par_factor" config match')
+            for idx,iter_par_fact in enumerate(self.config["iter_par_factor"]):
+                if iter_par_fact < 1:
+                    raise CodegenError(f"iter_par_factor of SLR {idx} is invalid. It should be greater than or equal to 1")
+        else:
+            if self.config["iter_par_factor"] < 1:
+                raise CodegenError(f"iter_par_factor is invalid. It should be greater than or equal to 1")
+
         # Check platform specific constraints
         
         platform = self.config.get("platform", "")

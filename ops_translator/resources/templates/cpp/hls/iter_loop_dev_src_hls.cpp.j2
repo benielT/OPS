@@ -4,9 +4,21 @@
 arg{{ilh.getOrderedSwapPairIds(arg.dat_id)[0]}}_arg{{ilh.getOrderedSwapPairIds(arg.dat_id)[1]}}_streams
 {%- endmacro -%}
 
+{% macro iter_par_factor() -%}
+{%- if slr_iter_par_fact is defined -%}
+iter_par_factor_{{slr_iter_par_fact}}
+{%- else -%}
+iter_par_factor
+{%- endif -%}
+{%- endmacro -%}
+
 {% block header_block %}
 #include <ops_hls_kernel_support.h>
+    {% if slr_iter_par_fact is defined %}
+#include <kernel_outerloop_{{ilh.id}}_{{slr_iter_par_fact}}.hpp>
+    {% else %}
 #include <kernel_outerloop_{{ilh.id}}.hpp>
+    {% endif %} 
 {% endblock %}
 
 {% block joint_PE %}
@@ -67,7 +79,7 @@ static void joint_PE_outerloop_{{ilh.id}}(const unsigned short PEId, const ops::
 
 static void kernel_outerloop_{{ilh.id}}_dataflow_region_cascaded(const unsigned short& slr_region, const ops::hls::{{"StencilConfigCoreSingleTile" if isTiling else "StencilConfigCore"}}& stencilConfig,
     {% for swap_pair in ilh.getUniqueDatSwapsIds() %}
-    ::hls::stream<ap_uint<{{axis_data_width_datid(swap_pair[0])}}>> arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams[iter_par_factor + 1]{{", " if (not loop.last or consts or ilh.joint_args|ops_gbl)}}
+    ::hls::stream<ap_uint<{{axis_data_width_datid(swap_pair[0])}}>> arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams[{{(iter_par_factor())}} + 1]{{", " if (not loop.last or consts or ilh.joint_args|ops_gbl)}}
     {% endfor %}
     {% for const_arg in ilh.joint_args|ops_gbl%}
     const {{const_arg.typ}}& {{get_arg_gbl_name(const_arg)}}{{", " if (not loop.last or consts)}}
@@ -78,11 +90,15 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region_cascaded(const unsigned 
 {
 #pragma HLS INLINE 
 
-    const unsigned short PEId_offset = slr_region * iter_par_factor;
+    {% if slr_iter_par_fact is defined %}
+    const unsigned short PEId_offset = {{config["iter_par_factor"][:slr_iter_par_fact]|sum}};
+    {% else %}
+    const unsigned short PEId_offset = slr_region * {{iter_par_factor()}};
+    {% endif %}
 
-    for (int i = 0; i < iter_par_factor; i++)
+    for (int i = 0; i < {{iter_par_factor()}}; i++)
     {
-#pragma HLS UNROLL factor=iter_par_factor
+#pragma HLS UNROLL factor={{iter_par_factor()}}
         joint_PE_outerloop_{{ilh.id}}(PEId_offset + i, stencilConfig,
     {% for arg in ilh.joint_args|ops_dat -%}
         {% if loop.last %}
@@ -123,7 +139,7 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& sl
 {
 #pragma HLS DATAFLOW
     {% for swap_pair in ilh.getUniqueDatSwapsIds() -%}
-    ::hls::stream<ap_uint<{{axis_data_width_datid(swap_pair[0])}}>> arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams[iter_par_factor + 1];
+    ::hls::stream<ap_uint<{{axis_data_width_datid(swap_pair[0])}}>> arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams[{{iter_par_factor()}} + 1];
     #pragma HLS STREAM variable = arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams depth = {{config["maxi_read_burst_length"] * config["num_read_outstanding"] + 2}}
     {% endfor %}
     
@@ -157,9 +173,9 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& sl
 
     {% for arg in ilh.joint_args|ops_dat -%}
         {% if arg is ops_write %}
-        ops::hls::stream2axis<{{axis_data_width(arg)}}>({{internal_stream_name(arg)}}[iter_par_factor], {{axis_name(arg)-}},  {{num_pkts(arg)}});
+        ops::hls::stream2axis<{{axis_data_width(arg)}}>({{internal_stream_name(arg)}}[{{iter_par_factor()}}], {{axis_name(arg)-}},  {{num_pkts(arg)}});
         {% elif arg is ops_rw %}
-        ops::hls::stream2axis<{{axis_data_width(arg)}}>({{internal_stream_name(arg)}}[iter_par_factor], {{axis_name_t2(arg, "out")-}}, {{num_pkts(arg)}});
+        ops::hls::stream2axis<{{axis_data_width(arg)}}>({{internal_stream_name(arg)}}[{{iter_par_factor()}}], {{axis_name_t2(arg, "out")-}}, {{num_pkts(arg)}});
         {% endif %}
     {% endfor %}
 

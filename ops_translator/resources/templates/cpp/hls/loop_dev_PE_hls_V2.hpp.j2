@@ -59,7 +59,8 @@ widen_stream_{{lh.kernel}}_{{arg.id}}_dt
 {% set widen_half_span_x = (widen_span_x / 2) | int %}
 
 {% block header_block %}
-#pragma once
+#ifndef __LOOP_PE_{{lh.kernel|upper}}__
+#define __LOOP_PE_{{lh.kernel|upper}}__
 #include <ops_hls_kernel_support.h>
 #include "../../common/include/common_config.hpp"
 
@@ -1003,7 +1004,7 @@ public:
 {% endblock %}
 
 {% block kernel_PE %}
-void kernel_{{lh.kernel}}_PE(const short& PEId, const ops::hls::{{"StencilConfigCoreSingleTile" if isTiling else "StencilConfigCore"}}& stencilConfig,
+static void kernel_{{lh.kernel}}_PE(const short& PEId, const ops::hls::{{"StencilConfigCoreSingleTile" if isTiling else "StencilConfigCore"}}& stencilConfig,
     {% for arg in lh.args|ops_not_idx %}
         {% if loop.last %}
             {% if consts or lh.args|ops_gbl|length > 0 %}
@@ -1089,4 +1090,6 @@ void kernel_{{lh.kernel}}_PE(const short& PEId, const ops::hls::{{"StencilConfig
     printf("[KERNEL_DEBUG]|%s| Ending stencil kernel PE\n", __func__);
 #endif
 } 
+
+#endif // __LOOP_PE_{{lh.kernel|upper}}__
 {% endblock %}
