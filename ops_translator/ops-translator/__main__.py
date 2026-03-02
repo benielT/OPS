@@ -170,6 +170,9 @@ def main(argv=None) -> None:
     for [target] in args.target:
         target = Target.find(target)
 
+        # Verify any not-definable configs defined by user
+        target.verify_non_definables(args.config)
+        
         # Applying user defined configs to the target config
         for key in target.config:
             if key in args.config and key in target.config:

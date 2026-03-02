@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, List
 from util import Findable
 from enum import Enum
 from store import Application, CodegenError, CodeGenWarning
@@ -17,6 +17,7 @@ class Target(Findable):
     # if type is "illegal" contrains will be a set of illegal values
     
     __config_contrains__: Dict[str, Tuple[str,Any]] = {} 
+    __non_definables__: List[str] = [] 
     __config_verified__: bool = False
 
     def __str__(self) -> str:
@@ -31,6 +32,11 @@ class Target(Findable):
     def matches(self, key: str) -> bool:
         return self.name == key.lower()
     
+    def verify_non_definables(self, userConfig: Dict[str, Any]) -> bool:
+        for key in userConfig.keys():
+            if key in self.__non_definables__:
+                raise CodegenError(f"Target {self.name} config error: {key} is not user definable config. Please remove it from the user config file")
+
     def verify_config(self, app: Application) -> None:
         if self.__config_verified__:
             return
@@ -154,6 +160,69 @@ class FPGDatamoverLib(Enum):
     DATAMOVER_NATIVE = 1
     DATAMOVER_XF = 2
 
+class FPGABankPlacementPolicy(Enum):
+    DATAMOVER_TILE_HBM_ROUND_ROBIN = 1
+    DATAMOVER_TILE_HBM_RACK_LB = 2 #RACK BASED LOAD BALLANCING
+    DATAMOVER_TILE_HBM_RACK_LB_ARG_BASED = 3 #RACK BASED LOAD BALLANCING WITH MAKING AN ARG RECIDE IN SAME RACK
+    
+class FPGABankPlacer:
+    __policy: int
+    __num_banks: int
+    __num_bank_racks: int
+    __rack_current_bank: List = []
+    __current_rack: int = 0
+    __current_bank: int = 0
+    __previous_arg_id: int = None
+        
+    def __init__(self, policy: int, num_banks: int, num_bank_racks: int):
+        if policy in [e.value for e in FPGABankPlacementPolicy]:
+            self.__policy = policy
+            self.__num_banks = num_banks
+            self.__num_bank_racks = num_bank_racks
+            self.__rack_current_bank = [0 for i in range(num_bank_racks)]
+            if num_banks == 0:
+                 raise ValueError(f"FPGABankPlacer: num_banks cannot be zero")
+            if num_bank_racks == 0:
+                 raise ValueError(f"FPGABankPlacer: num_bank_racks cannot be zero")
+            assert (num_banks % num_bank_racks == 0, "FPGABankPlacer: num_bank_racks should be a divisor of num_banks")
+        else:
+            raise ValueError(f"Invalid policy: {policy}")
+    
+    def getBank(self, arg_id: int = None)->int:
+        if self.__policy == FPGABankPlacementPolicy.DATAMOVER_TILE_HBM_ROUND_ROBIN.value:
+            return self.__getBank_DATAMOVER_TILE_HBM_ROUND_ROBIN()
+        elif self.__policy == FPGABankPlacementPolicy.DATAMOVER_TILE_HBM_RACK_LB.value:
+            return self.__getBank_DATAMOVER_TILE_HBM_RACK_LB()
+        elif self.__policy == FPGABankPlacementPolicy.DATAMOVER_TILE_HBM_RACK_LB_ARG_BASED.value:
+            return self.__getBank_DATAMOVER_TILE_HBM_RACK_LB_ARG_BASED(arg_id)
+            
+    def __getBank_DATAMOVER_TILE_HBM_ROUND_ROBIN(self)->int:
+        # [{{(arg.id * config["tile_banks"]|int + i) % 32}}]
+        current_bank = self.__current_bank
+        self.__current_bank = (self.__current_bank + 1) % self.__num_banks
+        return current_bank
+    
+    def __getBank_DATAMOVER_TILE_HBM_RACK_LB(self)->int:
+        banks_per_rack = self.__num_banks / self.__num_bank_racks
+        current_bank = self.__rack_current_bank[self.__current_rack] + self.__current_rack * banks_per_rack
+        self.__rack_current_bank[self.__current_rack] =  (self.__rack_current_bank[self.__current_rack] + 1) % banks_per_rack
+        self.__current_rack = (self.__current_rack + 1) % self.__num_bank_racks
+        return int(current_bank)
+    
+    def __getBank_DATAMOVER_TILE_HBM_RACK_LB_ARG_BASED(self, arg_id: int) -> int:
+        banks_per_rack = self.__num_banks / self.__num_bank_racks
+        
+        if (self.__previous_arg_id is None or self.__previous_arg_id == arg_id):
+            current_bank = self.__rack_current_bank[self.__current_rack] + self.__current_rack * banks_per_rack
+            self.__rack_current_bank[self.__current_rack] =  (self.__rack_current_bank[self.__current_rack] + 1) % banks_per_rack
+        else:
+            self.__current_rack = (self.__current_rack + 1) % self.__num_bank_racks
+            current_bank = self.__rack_current_bank[self.__current_rack] + self.__current_rack * banks_per_rack
+            self.__rack_current_bank[self.__current_rack] =  (self.__rack_current_bank[self.__current_rack] + 1) % banks_per_rack
+            
+        self.__previous_arg_id = arg_id
+        return int(current_bank)       
+    
 class F2CSycl(Target):
     name = "f2c_sycl"
     suffix = "f2c"
@@ -199,7 +268,13 @@ class HLS(Target):
         "supported_internal_storage" : [],
         "default_tile_sizes" : [256,256],
         "max_grid_size" : [300,300,300],
-        "tile_banks" : 1
+        "tile_banks" : 1,
+        "tile_bank_placement_policy" : FPGABankPlacementPolicy.DATAMOVER_TILE_HBM_ROUND_ROBIN.value,
+        "global_clock" : -1,
+        "max_global_clock" : 300000000,
+        "HBM_tile_racks" : 2,
+        "HBM_banks" : 32,
+        "optimize_policy" : []
         }
     platforms = {
         "u280" : {
@@ -208,7 +283,10 @@ class HLS(Target):
             "platform_is_multi_slr" : True,
             "platform_is_sb_selectable" : True,
             "platform_is_ib_selectable" : True,
-            "supported_internal_storage" : ["URAM",  "BRAM"]
+            "supported_internal_storage" : ["URAM",  "BRAM"],
+            "max_global_clock" : 300000000,
+            "HBM_tile_racks" : 2,
+            "HBM_banks" : 32
         },
         "u55c" : {
             "SLR_count" : 3,
@@ -216,13 +294,18 @@ class HLS(Target):
             "platform_is_multi_slr" : True,
             "platform_is_sb_selectable" : True,
             "platform_is_ib_selectable" : True,
-            "supported_internal_storage" : ["URAM",  "BRAM"]
+            "supported_internal_storage" : ["URAM",  "BRAM"],
+            "max_global_clock" : 300000000,
+            "HBM_tile_racks" : 2,
+            "HBM_banks" : 32
         },
         "vck5000" : {
             "SLR_count" : 1,
             "max_SLR_count" : 1,
             "platform_is_multi_slr" : False,
-            "platform_is_sb_selectable" : False
+            "platform_is_sb_selectable" : False,
+            "max_global_clock" : 300000000,
+            "HBM_tile_racks" : 0
         }
     }
     __config_contrains__ = {
@@ -242,8 +325,15 @@ class HLS(Target):
         "datamover_mode" : ("select", {1,2,3}),
         "datamover_lib" : ("select", {1,2}),
         "profile" : ("bool", (True, False)),
-        "tile_banks" : ("select", {1,2,4,8})
+        "tile_banks" : ("select", {1,2,4,8}),
+        "global_clock" : ("numeric", (-1, config["max_global_clock"]))
     }
+    
+    __non_definables__ = [
+        "max_global_clock",
+        "HBM_tile_racks",
+        "HBM_banks"
+    ]
     
     def verify_config(self, app: Application) -> None:
         super().verify_config(app)
