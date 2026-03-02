@@ -205,7 +205,7 @@ static void stridedTileMem2stream(
     {% endif %}
     for (ap_uint<16> y = 0; y < size_y; y++)
     {
-        #pragma HLS PIPELINE
+        // #pragma HLS PIPELINE
         unsigned short abs_row_id_of_y = y {% if ndim == 3 %}+ z_row_id_offset{% endif %};
         unsigned short bank_id = abs_row_id_of_y % NUM_BANKS;
         ap_uint<64> per_bank_row = (ap_uint<64>)(abs_row_id_of_y >> NUM_BANKS_SHIFT);
@@ -276,7 +276,7 @@ static void stridedTileStream2memWithAvoid(
     {% endif %}
         for (ap_uint<16> y = 0; y < size_y; y++)
         {
-            #pragma HLS PIPELINE
+            // #pragma HLS PIPELINE
             // ap_uint<64> s2 = s3 + y * stride_y;
             unsigned short abs_row_id_of_y = y {% if ndim == 3%}+ z_row_id_offset{% endif %};
             unsigned short bank_id = abs_row_id_of_y % NUM_BANKS;
@@ -299,23 +299,16 @@ static void stridedTileStream2memWithAvoid(
     {% if ndim == 3 %}
 			if (y < avoid_y)
 				ops::hls::hlsTerminate<MEM_DATA_WIDTH, IN_ITR>(strm_in, size_x);
-			else {
     {% endif %}
     {% for i in range(config["tile_banks"]) %}
-        {% if loop.first %}
-                if (bank_id == {{i}}) 
-            	    ops::hls::stream2memWithAvoid<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(arg_b{{i}} + s2, strm_in, size_x, avoid_x);
-        {% elif loop.last %}
-                else
-            	    ops::hls::stream2memWithAvoid<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(arg_b{{i}} + s2, strm_in, size_x, avoid_x);
+        {% if loop.last %}
+            else
+                ops::hls::stream2memWithAvoid<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(arg_b{{i}} + s2, strm_in, size_x, avoid_x);
         {% else %}
-                else if (bank_id == {{i}}) 
-            	    ops::hls::stream2memWithAvoid<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(arg_b{{i}} + s2, strm_in, size_x, avoid_x);
+            else if (bank_id == {{i}}) 
+                ops::hls::stream2memWithAvoid<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(arg_b{{i}} + s2, strm_in, size_x, avoid_x);
         {% endif %}
     {% endfor %}
-    {% if ndim == 3 %}
-            }
-    {% endif %}
         }
     {% if ndim == 3 %}
     }

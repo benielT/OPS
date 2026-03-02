@@ -5,7 +5,7 @@ import ops
 from language import Lang
 from scheme import Scheme
 from store import Application, CodegenError, Program
-from target import Target
+from target import Target, FPGABankPlacer
 from jinja2 import Environment
 from typing import List, Tuple, Set, Union, Optional
 from util import KernelProcess, findIdx, function_name
@@ -467,7 +467,9 @@ class CppHLS(Scheme):
         return (
             template.render(
                 config=config,
-                app=app
+                app=app,
+                FPGABankPlacer = FPGABankPlacer(config["tile_bank_placement_policy"], 
+                                                config["HBM_banks"], config["HBM_tile_racks"]),
             ), self.host_config_extension
         ) 
     
