@@ -3,7 +3,7 @@
 {% for ilh, program in app.uniqueOuterLoops() %}
     {% if config["SLR_count"] > 1 %}
         {% for slr_id in range(config["SLR_count"]) %}
-nk=kernel_outerloop_{{ilh.id}}{% if is_slr_iter_par %}_{{slr_id}}{% endif %}:1:kernel_outerloop_{{ilh.id}}_{{slr_id+1}}
+nk=kernel_outerloop_{{ilh.id}}{% if is_slr_iter_par %}_{{slr_id}}{% endif %}:1:kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}
         {% endfor %}
     {% endif %}
 {% endfor %}
@@ -11,14 +11,14 @@ nk=kernel_outerloop_{{ilh.id}}{% if is_slr_iter_par %}_{{slr_id}}{% endif %}:1:k
 {% for ilh, program in app.uniqueOuterLoops() %}
     {% for arg in ilh.joint_args|ops_dat %}
         {% if arg is ops_read or arg is ops_rw %}
-stream_connect=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_out:kernel_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+stream_connect=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_out:kernel_outerloop_inst_{{ilh.id}}_1.arg{{arg.id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
         {% endif %}
         {% if arg is ops_write or arg is ops_rw %}
             {% for slr_id in range(config["SLR_count"]) %}
                 {% if loop.last %}
-stream_connect=kernel_outerloop_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
                 {% else %}
-stream_connect=kernel_outerloop_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_out:kernel_outerloop_{{ilh.id}}_{{slr_id+2}}.arg{{ilh.getSwapArg(arg).id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_out:kernel_outerloop_inst_{{ilh.id}}_{{slr_id+2}}.arg{{ilh.getSwapArg(arg).id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
                 {% endif %}
             {% endfor %}
         {% endif %}
@@ -28,7 +28,7 @@ stream_connect=kernel_outerloop_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_out:k
 {% if config["platform_is_multi_slr"] %}
     {% for ilh, program in app.uniqueOuterLoops() %}
         {% for slr_id in range(config["max_SLR_count"] - config["SLR_count"], config["max_SLR_count"]) %}
-slr=kernel_outerloop_{{ilh.id}}_{{loop.index0+1}}:SLR{{slr_id}}
+slr=kernel_outerloop_inst_{{ilh.id}}_{{loop.index0+1}}:SLR{{slr_id}}
         {% endfor %}
     {% endfor %}
 {% endif %}
