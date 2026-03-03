@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Union
 from util import flatten, uniqueBy
 import logging
 import ops
-from ops import OpsError
+from ops import OpsError, OpsWarning
 
 if TYPE_CHECKING:
     from language import Lang
@@ -37,6 +37,31 @@ class ParseError(Exception):
             logging.error(f"[PARSE_ERROR]: {self.message}")
             return f"Parse error: {self.message}"
 
+@dataclass
+class CodegenError(Exception):
+    message: str
+    loc: Optional[Location] = None
+
+    def __str__(self) -> str:
+        if self.loc:
+            logging.error(f"[CODEGEN_ERROR] at {self.loc}: {self.message}")
+            return f"Codegen error at {self.loc}: {self.message}"
+        else:
+            logging.error(f"[CODEGEN_ERROR]: {self.message}")
+            return f"Codegen error: {self.message}"
+
+@dataclass
+class CodeGenWarning(Warning):
+    message: str
+    loc: Optional[Location] = None
+
+    def __str__(self) -> str:
+        if self.loc:
+            logging.warning(f"[CODEGEN_WARNING] at {self.loc}: {self.message}")
+            return f"CODEGEN_WARNING] at {self.loc}: {self.message}"
+        else:
+            logging.warning(f"[CODEGEN_WARNING]: {self.message}")
+            return f"CODEGEN_WARNING]: {self.message}"
 
 @dataclass
 class Entity:
@@ -113,7 +138,22 @@ class Program:
     ndim: Optional[int] = None
     soa_val: Optional[bool] = False
     init_flag: Optional[bool] = False
+    tiling: Optional[bool] = False
+    tile_sizes: List[int] = field(default_factory=lambda: [-1, -1, -1])  # x,y,z
 
+    def isTiling(self) -> bool:
+        return self.tiling
+    
+    def getTileSizes(self) -> Union[List[int], None]:
+        if self.isTiling():
+            tileSizes = self.tile_sizes[:self.ndim]
+            for i in range(len(tileSizes)):
+                if tileSizes[i] == -1:
+                    OpsWarning(f"Tile size for dimension {i} not set in program {self.path} setting the default tile size from the config will be used")
+            return self.tile_sizes[:self.ndim]
+        else:
+            return None
+        
     def findEntities(self, name: str, scope: List[str] = []) -> List[Entity]:
         def in_scope(entity: Entity):
             return len(entity.scope) <= len(scope) and all(map(lambda s1, s2: s1 == s2, zip(entity.scope, scope)))
@@ -141,6 +181,8 @@ class Program:
     def __str__(self) -> str:
         outString = "\nprogram path=" + str(self.path)  + ",\n"
         outString += "ndim=" + str(self.ndim) + ",\n"
+        outString += "soa=" + str(self.soa_val) + ",\n"
+        outString += "tiling=" + str(self.tiling) + ", tile_sizes=" + str(self.tile_sizes) + "\n"
         outString += "\n---------------------\n"
         outString += "       consts        \n"
         outString += "---------------------\n"

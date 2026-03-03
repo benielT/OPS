@@ -1,8 +1,9 @@
 [connectivity]
+{%set is_slr_iter_par = config["iter_par_factor"] is iterable and (config["iter_par_factor"] is not string and config["iter_par_factor"] is not mapping) %}
 {% for ilh, program in app.uniqueOuterLoops() %}
     {% if config["SLR_count"] > 1 %}
         {% for slr_id in range(config["SLR_count"]) %}
-nk=kernel_outerloop_{{ilh.id}}:1:kernel_outerloop_{{ilh.id}}_{{slr_id+1}}
+nk=kernel_outerloop_{{ilh.id}}{% if is_slr_iter_par %}_{{slr_id}}{% endif %}:1:kernel_outerloop_{{ilh.id}}_{{slr_id+1}}
         {% endfor %}
     {% endif %}
 {% endfor %}
@@ -35,9 +36,25 @@ slr=kernel_outerloop_{{ilh.id}}_{{loop.index0+1}}:SLR{{slr_id}}
 {% if config["platform_is_sb_selectable"] %}
     {% for ilh, program in app.uniqueOuterLoops() %}
         {% for arg in ilh.joint_args|ops_dat %}
-sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{arg.id}}]
+            {% if program.tiling %}
+                {% if config["tile_banks"] > 1 %}
+                    {% for i in range(config["tile_banks"]) %}
+sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b{{i}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+                    {% endfor %}
+                {% else %}
+sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+                {% endif %}
+{#sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b2:HBM[{{arg.id * 2 + 1}}]#}
+            {% else %}
+sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+            {% endif %}
         {% endfor %}
     {% endfor %}
+{% endif %}
+
+{% if not config["global_clock"] == -1 %}
+[clock]
+defaultFreqHz={{config["global_clock"]}}
 {% endif %}
 
 {% if config["profile"] %}

@@ -8,8 +8,7 @@ from util import ABDC, findIdx, function_name, find, str_add_prefix
 from functools import cmp_to_key
 import logging
 import rustworkx as rx
-if logging.DEBUG >= logging.root.level:
-    from rustworkx.visualization import graphviz_draw
+from rustworkx.visualization import graphviz_draw
     
 # import pygraphviz
 if TYPE_CHECKING:
@@ -63,6 +62,19 @@ class OpsError(Exception):
         else:
             return f"OPS error: {self.message}"
 
+class OpsWarning(Warning):
+    message: str
+    loc: Location
+
+    def __init__(self, message: str, loc: Location = None) -> None:
+        self.message = message
+        self.loc = loc
+
+    def __str__(self) -> str:
+        if self.loc:
+            return f"{self.loc}: OPS Warning: {self.message}"
+        else:
+            return f"OPS Warning: {self.message}"
 
 class Type:
     formatter: Callable[["Type"], str]

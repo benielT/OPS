@@ -29,14 +29,19 @@ class Preprocessor(pcpp.Preprocessor):
         super(Preprocessor, self).__init__(lexer)
         self.__iter_parloop_directives = []
         self.line_directive = None
+        self.__is_ops_tiled_flag = False
+        self.__ops_tile_sizes = [-1,-1,-1]  # x,y,z
 
+    # preprocessor hook
     def on_comment(self, tok: str) -> bool:
         return True
 
+    # preprocessor hook
     def on_error(self, file: str, line: int, msg: str) -> None:
         loc = Location(file, line, 0)
         raise ParseError("[PREPORC] " + msg, loc)
 
+    # preprocessor hook
     def on_include_not_found(self, is_malformed, is_system_include, curdir, includepath) -> None:
         if is_system_include:
             raise pcpp.OutputDirective(pcpp.Action.IgnoreAndPassThrough)
@@ -50,7 +55,8 @@ class Preprocessor(pcpp.Preprocessor):
             if not tok.type == "CPP_WS":
                 cleaned_precedingtoks.append(tok)
         return cleaned_precedingtoks
-            
+    
+    # preprocessor hook      
     def on_directive_unknown(self ,directive, toks, ifpassthru, precedingtoks):
                 
         if toks[0].value == "ISL":
@@ -78,3 +84,46 @@ class Preprocessor(pcpp.Preprocessor):
     
     def get_isl_directives(self) -> Any:
         return self.__iter_parloop_directives
+    
+    def is_ops_tiled(self)-> bool:
+        return self.__is_ops_tiled_flag
+    
+    def extract_macro_value(self, name: str, macro: Any) -> Any:
+        if isinstance(macro.value, list) and len(macro.value) > 0:
+            token = macro.value[0]
+            if token.type == "CPP_INTEGER":
+                return int(token.value)
+            elif token.type == "CPP_STRING":
+                return token.value[1:-1]
+            else:
+                logging.error(f"[PREPROC] Unsupported macro type for {name}: {token.type}")
+                return None
+        else:
+            logging.error(f"[PREPROC] Macro {name} has no value or unsupported format")
+            return None
+    
+    def post_process(self):
+        for name, macro in self.macros.items():
+            if name == "OPS_TILING":
+                self.__is_ops_tiled_flag = True
+            elif name == "OPS_MAXTILESIZE_X": 
+                self.__ops_tile_sizes[0] = self.extract_macro_value(name, macro)
+                print(f"X tile size: {self.__ops_tile_sizes[0]}")
+                
+            elif name == "OPS_MAXTILESIZE_Y":
+                self.__ops_tile_sizes[1] = self.extract_macro_value(name, macro)
+                print(f"Y tile size: {self.__ops_tile_sizes[1]}")
+
+            elif name == "OPS_MAXTILESIZE_Z":
+                self.__ops_tile_sizes[2] = self.extract_macro_value(name, macro)
+                print(f"Z tile size: {self.__ops_tile_sizes[2]}")
+
+    def parse(self, input, source) -> None:
+        super().parse(input, source)
+        self.post_process()
+                    
+    def get_ops_tile_sizes(self) -> List[int]:
+        return self.__ops_tile_sizes
+ 
+    def list_defines(self) -> List[str]:
+        return [f"{name}={macro.value}" for name, macro in self.macros.items()]

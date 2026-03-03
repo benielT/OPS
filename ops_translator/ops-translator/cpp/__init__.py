@@ -3,7 +3,7 @@ from functools import lru_cache
 from io import StringIO
 from pathlib import Path
 from typing import FrozenSet, List, Set, Tuple, Any, Dict
-
+import logging
 import clang.cindex
 
 import cpp.optimizer
@@ -51,8 +51,12 @@ class Cpp(Lang):
                 preprocessor.define(define.replace("=", " ", 1))
 
             preprocessor.parse(source, str(path.resolve()))
-                
             source_io = StringIO()
+            
+            if preprocessor.is_ops_tiled():
+                print("[PREPROC] OPS tiled detected")
+                print(f"[PREPROC] OPS tile sizes: {preprocessor.get_ops_tile_sizes()}")
+                
             preprocessor.write(source_io)
 
             source_io.seek(0)
@@ -76,13 +80,13 @@ class Cpp(Lang):
             )
 
         if isl_directives is not None:
-            return translation_unit, source, isl_directives
+            return translation_unit, source, isl_directives, preprocessor.is_ops_tiled(), preprocessor.get_ops_tile_sizes()
         else:
             return translation_unit, source,  
 
     def parseProgram(self, path: Path, include_dirs: Set[Path], defines: List[str]) -> Program:
         ast, source = self.parseFile(path, frozenset(include_dirs), frozenset(defines))
-        ast_pp, source_pp, isl_directives =  self.parseFile(path, frozenset(include_dirs), frozenset(defines), preprocess = True)
+        ast_pp, source_pp, isl_directives, is_tiled, tile_sizes =  self.parseFile(path, frozenset(include_dirs), frozenset(defines), preprocess = True)
 
         with open("./source_pp.txt", "w") as f:        
             f.write("=================================================================================")
@@ -93,7 +97,7 @@ class Cpp(Lang):
             f.write("=================================================================================")
                 
         # TODO: Find the global ndim programatically
-        program = Program(path, ast, ast_pp, source_pp, isl_directives)
+        program = Program(path, ast, ast_pp, source_pp, isl_directives, tiling=is_tiled, tile_sizes=tile_sizes)
 
         cpp.parser.parseLoops(ast, program)
         cpp.parser.parseMeta(ast_pp.cursor, program)

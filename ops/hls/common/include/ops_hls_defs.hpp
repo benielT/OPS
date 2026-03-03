@@ -91,6 +91,8 @@ typedef union
 
 
 typedef unsigned short SizeType[ops_max_dim];
+typedef unsigned short SizeType2d[2];
+typedef bool BoolType2d[2];
 typedef int IdxType[ops_max_dim];
 
 constexpr unsigned short size_singleIndex = sizeof(unsigned short) * 8;
@@ -142,6 +144,31 @@ struct StencilConfigCore
     unsigned short batch_size;
 };
 
+struct StencilConfigCoreSingleTile
+{
+    SizeType tile_size; // {xblocks, y, z} this is the grid size for tile 
+    unsigned short dim;
+    unsigned short outer_loop_limit;
+    unsigned short last_tile_upper_limit_x;
+    // BoolType2d is_tiled;
+    BoolType2d is_first;
+    BoolType2d is_last;
+};
+
+struct StencilConfigCoreTiled // : public StencilConfigCore
+{
+    SizeType grid_size; //{xblocks, y, z, ...}
+    unsigned short dim;
+    unsigned short tiling_dim; //number of tiled dimensions
+    unsigned short outer_loop_limit;
+    SizeType2d tile_size; //{xblocks, y}
+    SizeType2d last_tile_size; //{xblocks, y}
+    unsigned short last_tile_upper_limit_x;
+    // SizeType2d tile_overlap_size; //{xblocks, y}
+    // SizeType2d effective_tile_size; //{xblocks, y}
+    SizeType2d tile_count; //{xblocks, y}   
+};
+
 struct AccessRange
 {
 	SizeType start;
@@ -155,6 +182,24 @@ enum CoefTypes
     DYNAMIC_COEF=1
 };
 
+// Custom tags for template specialization
+//1. Define BoolType tag
+template<bool v>
+struct BoolType {};
+
+typedef BoolType<true> TrueTag;
+typedef BoolType<false> FalseTag;
+
+//2. Define a tyoe selector
+template<bool flag, typename T, typename F>
+struct TypeSelector {
+    typedef T Result;
+};
+
+template<typename T, typename F>
+struct TypeSelector<false, T, F> {
+    typedef F Result;
+};
 
 }
 }

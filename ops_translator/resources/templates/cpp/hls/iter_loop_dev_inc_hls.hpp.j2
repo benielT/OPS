@@ -35,6 +35,13 @@ total_bytes_d{{ilh.dats[arg.dat_id][0].dim}}
 total_bytes
     {%- endif -%}
 {%- endmacro -%}
+{% macro num_pkts(arg) -%}
+    {%- if ilh.dats[arg.dat_id][0].isMultiDim() -%}
+num_pkts_d{{ilh.dats[arg.dat_id][0].dim}}
+    {%- else -%}
+num_pkts
+    {%- endif -%}
+{%- endmacro -%}
 {% block header_block %}
 #pragma once
     {% for df_node in ilh.get_active_df_graph().getAllLoopNodes() %}
@@ -58,8 +65,15 @@ constexpr unsigned short multidim_axis_data_width_{{ilh.id}}_{{dat.ptr}} = data_
 {% block kernel_dataflow_region %}
 {% endblock %}
 
+{% block kernel_main_loop_region %}
+{% endblock %}
 {% block kernel_top_prototype %}
-extern "C" void kernel_outerloop_{{ilh.id}}(
+{% if slr_iter_par_fact is defined %}
+extern "C" void kernel_outerloop_{{ilh.id}}_{{slr_iter_par_fact}}
+{% else %}
+extern "C" void kernel_outerloop_{{ilh.id}}
+{% endif %}
+(
         const unsigned short slr_region,
         const unsigned int outer_itr,
     {% for i in range(ndim)%}
@@ -73,14 +87,33 @@ extern "C" void kernel_outerloop_{{ilh.id}}(
     {% endfor %}#}
         const unsigned short stencilConfig_dim,
         const unsigned int stencilConfig_total_itr,
+#ifndef OPS_TILING
     {% for i in range(ndim)%}
         const unsigned short stencilConfig_lower_limit_{{i}},
     {% endfor %}
     {% for i in range(ndim)%}
         const unsigned short stencilConfig_upper_limit_{{i}},
     {% endfor %}
+#endif
         const unsigned short stencilConfig_outer_loop_limit,
+#ifndef OPS_TILING
         const unsigned short stencilConfig_batch_size,
+#else
+    {% if ndim == 3 %}
+        const unsigned short tile_size_x,
+        const unsigned short tile_size_y,
+        const unsigned short last_tile_size_x,
+        const unsigned short last_tile_size_y,
+        const unsigned short tile_count_x,
+        const unsigned short tile_count_y,
+    {% else %}
+        const unsigned short tile_size_x,
+        const unsigned short last_tile_size_x,
+        const unsigned short tile_count_x,
+    {% endif %}
+        const unsigned int total_xblocks,
+        const unsigned short last_tile_upper_limit_x,
+#endif
     {% for const_arg in ilh.joint_args|ops_gbl%}
         const {{const_arg.typ}} {{get_arg_gbl_name(const_arg)}},
     {% endfor %}

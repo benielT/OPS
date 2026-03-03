@@ -3,14 +3,23 @@
 {% endblock %}
 
 {% block config_body %}
+{%set is_slr_iter_par = config["iter_par_factor"] is iterable and (config["iter_par_factor"] is not string and config["iter_par_factor"] is not mapping) %}
 typedef {{config["stencil_type"]}} stencil_type;
+//#define OPS_HLS_ROW_TILES {{config["tile_banks"]}}
+
 constexpr unsigned short data_width = sizeof(stencil_type) * 8;
 constexpr unsigned short max_depth = max_depth_bytes / data_width;
 constexpr unsigned short line_buff_2d_depth = max_depth;
 constexpr unsigned short line_buff_3d_depth = max_depth / 2;
 constexpr unsigned short vector_factor = {{config["vector_factor"]}};
 constexpr unsigned short mem_vector_factor = {{config["mem_vector_factor"]}};
+{% if is_slr_iter_par %}
+    {% for slr_iter_par in config["iter_par_factor"]%}
+constexpr unsigned short iter_par_factor_{{loop.index0}} = {{slr_iter_par}};
+    {% endfor %}
+{% else %}
 constexpr unsigned short iter_par_factor = {{config["iter_par_factor"]}};
+{% endif %}
 constexpr unsigned short mem_data_width = data_width * mem_vector_factor;
 constexpr unsigned short shift_bits = {{shift_bits(config["mem_data_width"] * config["vector_factor"], config["data_width"])}}; 
 constexpr unsigned short axis_data_width = data_width * vector_factor;

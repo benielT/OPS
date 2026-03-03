@@ -40,6 +40,9 @@
 // This file is required for OpenCL C++ wrapper APIs
 #include "../../ext/xcl2/xcl2.hpp"
 
+#ifndef OPS_HLS_ROW_TILES
+    #define OPS_HLS_ROW_TILES 1
+#endif
 namespace ops
 {
 namespace hls
@@ -101,12 +104,23 @@ public:
 	GridPropertyCoreV2 originalProperty;
 	unsigned short vector_factor = 8; //grid vector factor considered for adjustements
 	host_buffer_t<T> hostBuffer;
-	cl::Buffer deviceBuffer;
+    #ifdef OPS_TILING
+    std::vector<host_buffer_t<T>> altHostBuffers = std::vector<host_buffer_t<T>>(OPS_HLS_ROW_TILES);
+    std::vector<cl::Buffer> deviceBuffer;
+    #else
+    cl::Buffer deviceBuffer;
+    #endif
 	std::vector<cl::Event> activeEvents;
 	std::vector<std::pair<cl::Event, std::string>> allEvents;
 	bool isHostBufDirty;
 	bool isDevBufDirty;
 	bool isSetAsArg;
+    #ifdef OPS_TILING
+    static const unsigned short alt_banks = OPS_HLS_ROW_TILES;
+    #else
+    static const unsigned short alt_banks = 1;
+    #endif
+    typedef T type;
 
 	void* get_raw_pointer()
 	{
@@ -121,6 +135,87 @@ public:
 		isSetAsArg = false;
         return event;
 	}
+    #ifdef OPS_TILING
+    std::vector<size_t> getAltBufferRowsCounts() {
+        std::vector<size_t> alt_buffer_row_counts(alt_banks);
+        if (alt_banks > 1 && originalProperty.dim >= 2) {
+            for (int bank = 0; bank < alt_banks; bank++) {
+                alt_buffer_row_counts[bank] = originalProperty.grid_size[1] / alt_banks + ((bank < (originalProperty.grid_size[1] % alt_banks)) ? 1 : 0);
+            }
+        }
+        return alt_buffer_row_counts;
+    }
+
+    std::vector<size_t> getAltBufferSizes() {
+        std::vector<size_t> alt_buffer_sizes(alt_banks);
+        auto alt_buffer_row_counts = getAltBufferRowsCounts();
+        for (int bank = 0; bank < alt_banks; bank++) {
+            size_t row_size = originalProperty.grid_size[0] * sizeof(T);
+            alt_buffer_sizes[bank] = row_size * alt_buffer_row_counts[bank] * originalProperty.grid_size[2];
+            alt_buffer_sizes[bank] *= originalProperty.batch_size;
+        }
+        return alt_buffer_sizes;
+    }
+
+    void splitGrid()
+    {
+        if (alt_banks > 1 && originalProperty.dim >=2) {
+            for (unsigned int k = 0; k < originalProperty.grid_size[2]; k++) {
+                for (unsigned int j = 0; j < originalProperty.grid_size[1]; j++) {
+                    for (unsigned int b = 0; b < originalProperty.batch_size; b++) {
+                        unsigned int abs_row_id = j + k * originalProperty.grid_size[1];
+                        unsigned int bank = abs_row_id % alt_banks;
+                        unsigned int bank_row = abs_row_id / alt_banks;
+                        
+                        size_t src_offset = b * originalProperty.grid_size[0] * originalProperty.grid_size[1] * originalProperty.grid_size[2]
+                                        + k * originalProperty.grid_size[0] * originalProperty.grid_size[1]
+                                        + j * originalProperty.grid_size[0];
+                        
+                        size_t dst_offset = b * getAltBufferSizes()[bank] / sizeof(T) + (bank_row * originalProperty.grid_size[0]);
+                        // size_t dst_offset = b * getAltBufferSizes()[bank] / sizeof(T)
+                        //                 + k * (originalProperty.grid_size[0] * (originalProperty.grid_size[1] / alt_banks + ((bank < (originalProperty.grid_size[1] % alt_banks)) ? 1 : 0)))
+                        //                 + bank_row * originalProperty.grid_size[0];
+                        
+// #ifdef DEBUG_LOG
+// 		                printf("j: %d, k: %d, bank: %d, bank_row: %d, src_offset: %d dst_offset: %d\n", j, k, bank, bank_row, src_offset, dst_offset);
+// #endif
+                        std::memcpy(&altHostBuffers[bank][dst_offset],
+                                    &hostBuffer[src_offset],
+                                    originalProperty.grid_size[0] * sizeof(T));
+                    }
+                }
+            }
+        }
+    }
+
+    void mergeGrid() 
+    {
+        if (alt_banks > 1 && originalProperty.dim >=2) {
+            for (unsigned int k = 0; k < originalProperty.grid_size[2]; k++) {
+                for (unsigned int j = 0; j < originalProperty.grid_size[1]; j++) {
+                    for (unsigned int b = 0; b < originalProperty.batch_size; b++) {
+                        unsigned int abs_row_id = j + k * originalProperty.grid_size[1];
+                        unsigned int bank = abs_row_id % alt_banks;
+                        unsigned int bank_row = abs_row_id / alt_banks;
+                        
+                        size_t src_offset = b * originalProperty.grid_size[0] * originalProperty.grid_size[1] * originalProperty.grid_size[2]
+                                        + k * originalProperty.grid_size[0] * originalProperty.grid_size[1]
+                                        + j * originalProperty.grid_size[0];
+                        
+                        size_t dst_offset = b * getAltBufferSizes()[bank] / sizeof(T) + (bank_row * originalProperty.grid_size[0]);
+                        // size_t dst_offset = b * getAltBufferSizes()[bank] / sizeof(T)
+                        //                 + k * (originalProperty.grid_size[0] * (originalProperty.grid_size[1] / alt_banks + ((bank < (originalProperty.grid_size[1] % alt_banks)) ? 1 : 0)))
+                        //                 + bank_row * originalProperty.grid_size[0];
+                        
+                        std::memcpy(&hostBuffer[src_offset],
+                                    &altHostBuffers[bank][dst_offset],
+                                    originalProperty.grid_size[0] * sizeof(T));
+                    }
+                }
+            }
+        }
+    }
+    #endif  //OPS_TILING
 };
 #endif
 
@@ -147,17 +242,34 @@ cl::Event getGrid(Grid<T>& p_grid, bool force_sync = false)
 	{
 		cl_int err;
 		cl::Event event;
+#ifndef OPS_TILING
 		OCL_CHECK(err, err = FPGA::getInstance()->getCommandQueue().enqueueMigrateMemObjects({p_grid.deviceBuffer}, CL_MIGRATE_MEM_OBJECT_HOST, &p_grid.activeEvents, &event));
+#else
+        if (p_grid.alt_banks == 1) {
+            OCL_CHECK(err, err = FPGA::getInstance()->getCommandQueue().enqueueMigrateMemObjects({p_grid.deviceBuffer[0]}, CL_MIGRATE_MEM_OBJECT_HOST, &p_grid.activeEvents, &event));
+        }
+        else {
+            //temp std::vetor<cl::Memory>
+            std::vector<cl::Memory> tmp;
+            for (auto buf : p_grid.deviceBuffer)
+                tmp.push_back(buf);
+            OCL_CHECK(err, err = FPGA::getInstance()->getCommandQueue().enqueueMigrateMemObjects(tmp, CL_MIGRATE_MEM_OBJECT_HOST, &p_grid.activeEvents, &event));
+        }
+#endif
 		addEvent(p_grid, event, __func__);
 		p_grid.activeEvents.resize(0);
 		p_grid.activeEvents.push_back(event);
 		p_grid.isDevBufDirty = false;
 #ifndef ASYNC_DISPATCH
 		event.wait();
+    #if defined(OPS_TILING)
+        p_grid.mergeGrid();
+    #endif
 #else
         if (force_sync)
         {
             event.wait();
+            p_grid.mergeGrid();
         }
 #endif
         return event;
@@ -175,7 +287,21 @@ cl::Event sendGrid(Grid<T>& p_grid)
 #endif
 		cl_int err;
 		cl::Event event;
+#ifndef OPS_TILING
 		OCL_CHECK(err, err = FPGA::getInstance()->getCommandQueue().enqueueMigrateMemObjects({p_grid.deviceBuffer}, 0, &p_grid.activeEvents, &event));
+#else
+        if (p_grid.alt_banks == 1) {
+            OCL_CHECK(err, err = FPGA::getInstance()->getCommandQueue().enqueueMigrateMemObjects({p_grid.deviceBuffer[0]}, 0, &p_grid.activeEvents, &event));
+        }
+        else {
+            //temp std::vetor<cl::Memory>
+            p_grid.splitGrid();
+            std::vector<cl::Memory> tmp;
+            for (auto buf : p_grid.deviceBuffer)
+                tmp.push_back(buf);
+            OCL_CHECK(err, err = FPGA::getInstance()->getCommandQueue().enqueueMigrateMemObjects(tmp, 0, &p_grid.activeEvents, &event));
+        }
+#endif
 //		addEvent(p_grid, event, __func__);
 		p_grid.activeEvents.resize(0);
 		p_grid.activeEvents.push_back(event);
@@ -194,8 +320,6 @@ cl::Event sendGrid(Grid<T>& p_grid)
 	}
     return cl::Event();
 }
-
-
 class Kernel
 {
 	public:

@@ -4,13 +4,25 @@
 arg{{ilh.getOrderedSwapPairIds(arg.dat_id)[0]}}_arg{{ilh.getOrderedSwapPairIds(arg.dat_id)[1]}}_streams
 {%- endmacro -%}
 
+{% macro iter_par_factor() -%}
+{%- if slr_iter_par_fact is defined -%}
+iter_par_factor_{{slr_iter_par_fact}}
+{%- else -%}
+iter_par_factor
+{%- endif -%}
+{%- endmacro -%}
+
 {% block header_block %}
 #include <ops_hls_kernel_support.h>
+    {% if slr_iter_par_fact is defined %}
+#include <kernel_outerloop_{{ilh.id}}_{{slr_iter_par_fact}}.hpp>
+    {% else %}
 #include <kernel_outerloop_{{ilh.id}}.hpp>
+    {% endif %} 
 {% endblock %}
 
 {% block joint_PE %}
-static void joint_PE_outerloop_{{ilh.id}}(const unsigned short PEId, const ops::hls::StencilConfigCore& stencilConfig, 
+static void joint_PE_outerloop_{{ilh.id}}(const unsigned short PEId, const ops::hls::{{"StencilConfigCoreSingleTile" if isTiling else "StencilConfigCore"}} & stencilConfig, 
     {% for arg in ilh.joint_args|ops_not_idx %}
         {% if arg is ops_dat %}
             {% if arg is not ops_rw %}
@@ -65,9 +77,9 @@ static void joint_PE_outerloop_{{ilh.id}}(const unsigned short PEId, const ops::
 
 {% block kernel_dataflow_region %}
 
-static void kernel_outerloop_{{ilh.id}}_dataflow_region_cascaded(const unsigned short& slr_region, const ops::hls::StencilConfigCore& stencilConfig,
+static void kernel_outerloop_{{ilh.id}}_dataflow_region_cascaded(const unsigned short& slr_region, const ops::hls::{{"StencilConfigCoreSingleTile" if isTiling else "StencilConfigCore"}}& stencilConfig,
     {% for swap_pair in ilh.getUniqueDatSwapsIds() %}
-    ::hls::stream<ap_uint<{{axis_data_width_datid(swap_pair[0])}}>> arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams[iter_par_factor + 1]{{", " if (not loop.last or consts or ilh.joint_args|ops_gbl)}}
+    ::hls::stream<ap_uint<{{axis_data_width_datid(swap_pair[0])}}>> arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams[{{(iter_par_factor())}} + 1]{{", " if (not loop.last or consts or ilh.joint_args|ops_gbl)}}
     {% endfor %}
     {% for const_arg in ilh.joint_args|ops_gbl%}
     const {{const_arg.typ}}& {{get_arg_gbl_name(const_arg)}}{{", " if (not loop.last or consts)}}
@@ -78,11 +90,15 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region_cascaded(const unsigned 
 {
 #pragma HLS INLINE 
 
-    const unsigned short PEId_offset = slr_region * iter_par_factor;
+    {% if slr_iter_par_fact is defined %}
+    const unsigned short PEId_offset = {{config["iter_par_factor"][:slr_iter_par_fact]|sum}};
+    {% else %}
+    const unsigned short PEId_offset = slr_region * {{iter_par_factor()}};
+    {% endif %}
 
-    for (int i = 0; i < iter_par_factor; i++)
+    for (int i = 0; i < {{iter_par_factor()}}; i++)
     {
-#pragma HLS UNROLL factor=iter_par_factor
+#pragma HLS UNROLL factor={{iter_par_factor()}}
         joint_PE_outerloop_{{ilh.id}}(PEId_offset + i, stencilConfig,
     {% for arg in ilh.joint_args|ops_dat -%}
         {% if loop.last %}
@@ -111,10 +127,10 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region_cascaded(const unsigned 
         );
     }
 }
-static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& slr_region, const ops::hls::StencilConfigCore& stencilConfig, const unsigned int total_bytes,
+static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& slr_region, const ops::hls::{{"StencilConfigCoreSingleTile" if isTiling else "StencilConfigCore"}}& stencilConfig, const unsigned int num_pkts,
     {% if ilh.isMultiDim() %}
         {% for m_dim in ilh.getMultidimList() %}
-    const unsigned int total_bytes_d{{m_dim}},
+    const unsigned int num_pkts_d{{m_dim}},
         {% endfor %}
     {% endif %}
     {% for arg in ilh.joint_args|ops_dat -%}{% if arg is not ops_rw %}hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name(arg)-}}{{", " if not loop.last or consts or ilh.joint_args|ops_gbl }}{% else %} hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name_t2(arg, "in")-}}, hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name_t2(arg, "out")-}}{{", " if not loop.last or consts or ilh.joint_args|ops_gbl}}{% endif %}{% endfor %}
@@ -123,15 +139,15 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& sl
 {
 #pragma HLS DATAFLOW
     {% for swap_pair in ilh.getUniqueDatSwapsIds() -%}
-    ::hls::stream<ap_uint<{{axis_data_width_datid(swap_pair[0])}}>> arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams[iter_par_factor + 1];
-    #pragma HLS STREAM variable = arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams depth = {{config["hls_interconnect_buff_size"]}}
+    ::hls::stream<ap_uint<{{axis_data_width_datid(swap_pair[0])}}>> arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams[{{iter_par_factor()}} + 1];
+    #pragma HLS STREAM variable = arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams depth = {{config["maxi_read_burst_length"] * config["num_read_outstanding"] + 2}}
     {% endfor %}
     
     {% for arg in ilh.joint_args|ops_dat -%}
         {% if arg is ops_read %}
-        ops::hls::axis2stream<{{axis_data_width(arg)}}, {{axis_data_width(arg)}}>({{axis_name(arg)-}}, {{internal_stream_name(arg)}}[0], {{total_bytes(arg)}});
+        ops::hls::axis2stream<{{axis_data_width(arg)}}>({{axis_name(arg)-}}, {{internal_stream_name(arg)}}[0], {{num_pkts(arg)}});
         {% elif arg is ops_rw %}
-        ops::hls::axis2stream<{{axis_data_width(arg)}}, {{axis_data_width(arg)}}>({{axis_name_t2(arg, "in")-}}, {{internal_stream_name(arg)}}[0], {{total_bytes(arg)}});
+        ops::hls::axis2stream<{{axis_data_width(arg)}}>({{axis_name_t2(arg, "in")-}}, {{internal_stream_name(arg)}}[0], {{num_pkts(arg)}});
         {% endif %}
     {% endfor %}
 
@@ -157,12 +173,135 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& sl
 
     {% for arg in ilh.joint_args|ops_dat -%}
         {% if arg is ops_write %}
-        ops::hls::stream2axis<{{axis_data_width(arg)}}, {{axis_data_width(arg)}}>({{axis_name(arg)-}}, {{internal_stream_name(arg)}}[iter_par_factor], {{total_bytes(arg)}});
+        ops::hls::stream2axis<{{axis_data_width(arg)}}>({{internal_stream_name(arg)}}[{{iter_par_factor()}}], {{axis_name(arg)-}},  {{num_pkts(arg)}});
         {% elif arg is ops_rw %}
-        ops::hls::stream2axis<{{axis_data_width(arg)}}, {{axis_data_width(arg)}}>({{axis_name_t2(arg, "out")-}}, {{internal_stream_name(arg)}}[iter_par_factor], {{total_bytes(arg)}});
+        ops::hls::stream2axis<{{axis_data_width(arg)}}>({{internal_stream_name(arg)}}[{{iter_par_factor()}}], {{axis_name_t2(arg, "out")-}}, {{num_pkts(arg)}});
         {% endif %}
     {% endfor %}
 
+}
+{% endblock %}
+
+{% block kernel_main_loop_region %}
+static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short& slr_region, const unsigned int& outer_itr, const ops::hls::{{"StencilConfigCoreTiled" if isTiling else "StencilConfigCore"}}& stencilConfig, 
+    {% if not isTiling -%}
+        const unsigned int num_pkts, 
+        {% if ilh.isMultiDim() -%}
+            {%- for m_dim in ilh.getMultidimList() -%}
+        const unsigned int num_pkts_d{{m_dim}}, 
+            {%- endfor -%}
+        {%- endif -%}
+    {%- endif %}
+    {% for arg in ilh.joint_args|ops_dat -%}
+        {% if arg is not ops_rw %}
+        hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name(arg)-}}{{", " if not loop.last or consts or ilh.joint_args|ops_gbl }}
+        {% else %}
+        hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name_t2(arg, "in")-}}, 
+        hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name_t2(arg, "out")-}}{{", " if not loop.last or consts or ilh.joint_args|ops_gbl}}
+        {% endif %}
+    {% endfor %}
+    {% for const_arg in ilh.joint_args|ops_gbl%}
+        const {{const_arg.typ}}& {{get_arg_gbl_name(const_arg)}}{{", " if not loop.last or consts}}
+    {% endfor %}
+    {% for const in consts %}
+        const {{const.typ}}& {{const.ptr}}{{", " if not loop.last }}
+    {% endfor %}
+    )
+{
+    {%if isTiling %}
+    const unsigned short total_tiles = stencilConfig.tile_count[0] * stencilConfig.tile_count[1];
+    unsigned short tile_x = 0;
+        {% if ndim == 3 %}
+    unsigned short tile_y = 0;
+	const unsigned short z_diff = stencilConfig.outer_loop_limit - 1;
+        {% else %}
+    const unsigned short y_diff = stencilConfig.outer_loop_limit - 1;
+        {% endif %}
+    {% endif %}
+
+    for (unsigned int i = 0; i < outer_itr/2; i++)
+    {
+    {% if isTiling %}
+        for (unsigned short tile_id = 0; tile_id < total_tiles; tile_id++)
+        {
+    //#pragma HLS PIPELINE
+            if (tile_id > 0) {
+                tile_x++;
+                if (tile_x >= stencilConfig.tile_count[0]) {
+                    tile_x = 0;
+        {% if ndim == 3 %}
+                    tile_y++;
+        {% endif %}
+                }
+            } 
+        
+            const unsigned short tile_size_x = tile_x == (stencilConfig.tile_count[0] -1) ? stencilConfig.last_tile_size[0] : stencilConfig.tile_size[0];
+        {% if ndim == 3 %}
+            const unsigned short tile_size_y = tile_y == (stencilConfig.tile_count[1] -1) ? stencilConfig.last_tile_size[1] : stencilConfig.tile_size[1];
+            const unsigned int num_pkts = tile_size_x * tile_size_y * z_diff;
+        {% else %}
+            const unsigned int num_pkts = tile_size_x * y_diff;
+        {% endif %}
+        {% if ilh.isMultiDim() %}
+            {% for m_dim in ilh.getMultidimList() %}
+            const unsigned int num_pkts_d{{m_dim}} = num_pkts * {{m_dim}};
+            {% endfor %}
+        {% endif %}
+            const ops::hls::StencilConfigCoreSingleTile tileConfig = ops::hls::stencilConfigCoreSingleTileGen{%if ndim == 3 %}3D{%else%}2D{%endif%}(stencilConfig, tile_x{%if ndim == 3 %}, tile_y{%endif%});
+    {% endif %}
+
+            kernel_outerloop_{{ilh.id}}_dataflow_region(slr_region, {% if isTiling %}tileConfig{% else %}stencilConfig{% endif %}, 
+                num_pkts, {%if ilh.isMultiDim() -%}{% for m_dim in ilh.getMultidimList() -%}num_pkts_d{{m_dim}}, {% endfor -%} {% endif -%}{% for arg in ilh.joint_args|ops_dat -%}{% if arg is not ops_rw %}{{axis_name(arg)-}}{{", " if not loop.last or consts or ilh.joint_args|ops_gbl }}{% else %}{{axis_name_t2(arg, "in")-}}, {{axis_name_t2(arg, "out")-}}{{", " if not loop.last or consts or ilh.joint_args|ops_gbl}}{% endif %}{% endfor %}
+                {% for const_arg in ilh.joint_args|ops_gbl %}{{get_arg_gbl_name(const_arg)}}{{", " if not loop.last or consts }}{% endfor %}
+                {% for const in consts %}{{const.ptr}}{{", " if not loop.last }}{% endfor %});
+    {% if isTiling %}
+        }
+
+        tile_x = 0;
+    {% if ndim == 3 %}
+        tile_y = 0; 
+    {% endif %}
+
+        for (unsigned short tile_id = 0; tile_id < total_tiles; tile_id++)
+        {
+    //#pragma HLS PIPELINE
+            if (tile_id > 0) {
+                tile_x++;
+                if (tile_x >= stencilConfig.tile_count[0]) {
+                    tile_x = 0;
+        {% if ndim == 3 %}
+                    tile_y++;
+        {% endif %}
+                }
+            } 
+        
+            const unsigned short tile_size_x = tile_x == (stencilConfig.tile_count[0] -1) ? stencilConfig.last_tile_size[0] : stencilConfig.tile_size[0];
+        {% if ndim == 3 %}
+            const unsigned short tile_size_y = tile_y == (stencilConfig.tile_count[1] -1) ? stencilConfig.last_tile_size[1] : stencilConfig.tile_size[1];
+            const unsigned int num_pkts = tile_size_x * tile_size_y * z_diff;
+        {% else %}
+            const unsigned int num_pkts = tile_size_x * y_diff;
+        {% endif %}
+        {% if ilh.isMultiDim() %}
+            {% for m_dim in ilh.getMultidimList() %}
+            const unsigned int num_pkts_d{{m_dim}} = num_pkts * {{m_dim}};
+            {% endfor %}
+        {% endif %}
+            const ops::hls::StencilConfigCoreSingleTile tileConfig = ops::hls::stencilConfigCoreSingleTileGen{%if ndim == 3 %}3D{%else%}2D{%endif%}(stencilConfig, tile_x{%if ndim == 3 %}, tile_y{%endif%});
+    {% endif %}
+            kernel_outerloop_{{ilh.id}}_dataflow_region(slr_region, {% if isTiling %}tileConfig{% else %}stencilConfig{% endif %}, 
+                num_pkts, {%if ilh.isMultiDim() -%}{% for m_dim in ilh.getMultidimList() -%}num_pkts_d{{m_dim}}, {% endfor -%} {% endif -%}{% for arg in ilh.joint_args|ops_dat -%}{% if arg is not ops_rw %}{{axis_name(arg)-}}{{", " if not loop.last or consts or ilh.joint_args|ops_gbl }}{% else %}{{axis_name_t2(arg, "in")-}}, {{axis_name_t2(arg, "out")-}}{{", " if not loop.last or consts or ilh.joint_args|ops_gbl}}{% endif %}{% endfor %}
+                {% for const_arg in ilh.joint_args|ops_gbl %}{{get_arg_gbl_name(const_arg)}}{{", " if not loop.last or consts }}{% endfor %}
+                {% for const in consts %}{{const.ptr}}{{", " if not loop.last }}{% endfor %});
+    {% if isTiling %}
+        }
+
+        tile_x = 0;
+        {% if ndim == 3 %}
+        tile_y = 0;
+        {% endif %}
+    {% endif %}
+    }
 }
 {% endblock %}
 
@@ -184,15 +323,35 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& sl
     {% endfor %}#}
     #pragma HLS INTERFACE s_axilite port = stencilConfig_dim bundle = control
     #pragma HLS INTERFACE s_axilite port = stencilConfig_total_itr bundle = control
+#ifndef OPS_TILING
     {% for i in range(ndim)%}
     #pragma HLS INTERFACE s_axilite port = stencilConfig_lower_limit_{{i}} bundle = control
     {% endfor %}
     {% for i in range(ndim)%}
     #pragma HLS INTERFACE s_axilite port = stencilConfig_upper_limit_{{i}} bundle = control
     {% endfor %}
+#endif
     #pragma HLS INTERFACE s_axilite port = stencilConfig_outer_loop_limit bundle = control
+#ifndef OPS_TILING
     #pragma HLS INTERFACE s_axilite port = stencilConfig_batch_size bundle = control
-
+#else
+    {% if ndim == 3 %}
+    #pragma HLS INTERFACE s_axilite port = tile_size_x bundle = control
+    #pragma HLS INTERFACE s_axilite port = tile_size_y bundle = control
+    #pragma HLS INTERFACE s_axilite port = last_tile_size_x bundle = control
+    #pragma HLS INTERFACE s_axilite port = last_tile_size_y bundle = control
+    #pragma HLS INTERFACE s_axilite port = tile_count_x bundle = control
+    #pragma HLS INTERFACE s_axilite port = tile_count_y bundle = control
+    #pragma HLS INTERFACE s_axilite port = total_xblocks bundle = control
+    #pragma HLS INTERFACE s_axilite port = last_tile_upper_limit_x bundle = control
+    {% else %}
+    #pragma HLS INTERFACE s_axilite port = tile_size_x bundle = control
+    #pragma HLS INTERFACE s_axilite port = last_tile_size_x bundle = control
+    #pragma HLS INTERFACE s_axilite port = tile_count_x bundle = control
+    #pragma HLS INTERFACE s_axilite port = total_xblocks bundle = control
+    #pragma HLS INTERFACE s_axilite port = last_tile_upper_limit_x bundle = control
+    {% endif %}
+#endif
     {% for const_arg in ilh.joint_args|ops_gbl%}
     #pragma HLS INTERFACE s_axilite port = {{get_arg_gbl_name(const_arg)}} bundle = control
     {% endfor %}    
@@ -212,43 +371,99 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& sl
     #pragma HLS INTERFACE ap_ctrl_chain port = return
     #pragma HLS INTERFACE s_axilite port = return bundle = control   
 
-
+    {% if not isTiling %}
     ops::hls::StencilConfigCore stencilConfig;
+    {% else %}
+    ops::hls::StencilConfigCoreTiled stencilConfig;
+    {% endif %}
 
     stencilConfig.dim = stencilConfig_dim;
     {% for i in range(ndim)%}
     stencilConfig.grid_size[{{i}}] = stencilConfig_grid_size_{{i}};
     {% endfor %}
-    {% for i in range(ndim)%}
+    {% if not isTiling %}
+        {% for i in range(ndim)%}
     stencilConfig.lower_limit[{{i}}] = stencilConfig_lower_limit_{{i}};
-    {% endfor %}
-    {% for i in range(ndim)%}
+        {% endfor %}
+        {% for i in range(ndim)%}
     stencilConfig.upper_limit[{{i}}] = stencilConfig_upper_limit_{{i}};
-    {% endfor %}
+        {% endfor %}
     stencilConfig.total_itr = stencilConfig_total_itr;
+    {% endif %}
     stencilConfig.outer_loop_limit = stencilConfig_outer_loop_limit;
+    {% if not isTiling %}
     stencilConfig.batch_size = stencilConfig_batch_size;
+    {% else %}
+    stencilConfig.tiling_dim = {{2 if ndim == 3 else 1}};
+    stencilConfig.tile_size[0] = tile_size_x;
+    stencilConfig.tile_size[1] = {% if ndim == 3 %}tile_size_y{% else %}1{% endif %};
+    stencilConfig.last_tile_size[0] = last_tile_size_x;
+    stencilConfig.last_tile_size[1] = {% if ndim == 3 %}last_tile_size_y{% else %}1{% endif %};
+    stencilConfig.tile_count[0] = tile_count_x;
+    stencilConfig.tile_count[1] = {% if ndim == 3 %}tile_count_y{% else %}1{% endif %};
+    stencilConfig.last_tile_upper_limit_x = last_tile_upper_limit_x;
+    {% endif %}
+    {% if not isTiling %}
+    constexpr unsigned short num_of_pkts_per_beat = mem_data_width / axis_data_width;
+    unsigned int tmp1 = stencilConfig_batch_size;
+    unsigned int tmp2 = stencilConfig_total_itr;
+    unsigned int num_pkts = tmp1 * tmp2;
+        {% if ilh.isMultiDim() %}
+            {% for m_dim in ilh.getMultidimList() %}
+    unsigned int num_pkts_d{{m_dim}} = num_pkts * {{m_dim}};
+            {% endfor %}
+        {% endif %}
+    {% else %}
+    constexpr unsigned short num_of_pkts_per_beat = mem_data_width / axis_data_width;
+    //constexpr unsigned short bytes_per_pkt = sizeof(stencil_type) * vector_factor;
+    const unsigned int num_beats = total_xblocks;
+    const unsigned int num_pkts = num_beats * num_of_pkts_per_beat;
+    //const unsigned int total_bytes = num_pkts * bytes_per_pkt;
+    {% endif %}
 
-    unsigned int tmp1 = stencilConfig_batch_size * vector_factor;
-    unsigned int tmp2 = stencilConfig_total_itr * sizeof(stencil_type);
-    unsigned int total_bytes = tmp1 * tmp2;
-    
+#ifdef DEBUG_LOG
+    {% if not isTiling %}
+    unsigned int num_beats = num_pkts / num_of_pkts_per_beat;
+    {% endif %}
+    printf("[KERNEL_DEBUG]|%s| num_beats: %d, num_pkts: %d\n", __func__,
+         num_beats, num_pkts);
     {% if ilh.isMultiDim() %}
         {% for m_dim in ilh.getMultidimList() %}
-    unsigned int total_bytes_d{{m_dim}} = total_bytes * {{m_dim}};
+    printf("[KERNEL_DEBUG]|%s| num_pkts_d{{m_dim}}: %d\n", __func__, num_pkts_d{{m_dim}});
         {% endfor %}
     {% endif %}
+    {% if not isTiling %}
+    printf("[KERNEL_DEBUG]|%s| stencilConfig: dim: %hu, grid_size:(%d,%d,%d), lower_limit:(%d,%d,%d), upper_limit:(%d,%d,%d), \
+            total_itr: %d, outer_loop_limit: %d, batch_size: %d\n", __func__,
+        stencilConfig.dim,
+        stencilConfig.grid_size[0], stencilConfig.grid_size[1], stencilConfig.grid_size[2],
+        stencilConfig.lower_limit[0], stencilConfig.lower_limit[1], stencilConfig.lower_limit[2],
+        stencilConfig.upper_limit[0], stencilConfig.upper_limit[1], stencilConfig.upper_limit[2],
+        stencilConfig.total_itr,
+        stencilConfig.outer_loop_limit,
+        stencilConfig.batch_size);
+    {% else %}
+
+    printf("[KERNEL_DEBUG]|%s| stencilConfig: dim: %hu, grid_size:(%d,%d,%d), outer_loop_limit: %d, tiling_dim: %hu, tile_size:(%d,%d),\
+        last_tile_size:(%d,%d), tile_count:(%d,%d)\n, total_xblocks: %d\n", __func__,
+        stencilConfig.dim,
+        stencilConfig.grid_size[0], stencilConfig.grid_size[1], stencilConfig.grid_size[2],
+        stencilConfig.outer_loop_limit,
+        stencilConfig.tiling_dim,
+        stencilConfig.tile_size[0], stencilConfig.tile_size[1],
+        stencilConfig.last_tile_size[0], stencilConfig.last_tile_size[1],
+        stencilConfig.tile_count[0], stencilConfig.tile_count[1], total_xblocks);
+    {% endif %}
+#endif
 
 #ifdef DEBUG_LOG
     printf("[KERNEL_DEBUG]|%s| Starting outerloop_{{ilh.id}} kernel TOP \n", __func__);
 #endif
 
-    for (unsigned int i = 0; i < outer_itr; i++)
-    {
-        kernel_outerloop_{{ilh.id}}_dataflow_region(slr_region, stencilConfig, total_bytes, {%if ilh.isMultiDim() -%}{% for m_dim in ilh.getMultidimList() -%}total_bytes_d{{m_dim}}, {% endfor -%} {% endif -%}{% for arg in ilh.joint_args|ops_dat -%}{% if arg is not ops_rw %}{{axis_name(arg)-}}{{", " if not loop.last or consts or ilh.joint_args|ops_gbl }}{% else %}{{axis_name_t2(arg, "in")-}}, {{axis_name_t2(arg, "out")-}}{{", " if not loop.last or consts or ilh.joint_args|ops_gbl}}{% endif %}{% endfor %}
+    kernel_outerloop_{{ilh.id}}_main_region(slr_region, outer_itr, stencilConfig, 
+            {%if not isTiling%}num_pkts, {%if ilh.isMultiDim() -%}{% for m_dim in ilh.getMultidimList() -%}num_pkts_d{{m_dim}}, {% endfor -%} {% endif -%}{%endif%}{% for arg in ilh.joint_args|ops_dat -%}{% if arg is not ops_rw %}{{axis_name(arg)-}}{{", " if not loop.last or consts or ilh.joint_args|ops_gbl }}{% else %}{{axis_name_t2(arg, "in")-}}, {{axis_name_t2(arg, "out")-}}{{", " if not loop.last or consts or ilh.joint_args|ops_gbl}}{% endif %}{% endfor %}
             {% for const_arg in ilh.joint_args|ops_gbl %}{{get_arg_gbl_name(const_arg)}}{{", " if not loop.last or consts }}{% endfor %}
             {% for const in consts %}{{const.ptr}}{{", " if not loop.last }}{% endfor %});
-    }
 
 #ifdef DEBUG_LOG
     printf("[KERNEL_DEBUG]|%s| Ending outerloop_{{ilh.id}} kernel TOP \n", __func__);

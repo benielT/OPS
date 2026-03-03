@@ -6,6 +6,7 @@ from argparse import ArgumentParser, ArgumentTypeError, Namespace
 from datetime import datetime
 from pathlib import Path
 import logging
+import re
 
 #custom implementation imports
 import cpp
@@ -56,10 +57,13 @@ def main(argv=None) -> None:
 
     #setting logger
     if (args.debug):
+        print("Log level DEBUG set")
         logging.basicConfig(filename=args.logfile, level=logging.DEBUG)
     elif (args.verbose):
+        print("Log level INFO set")
         logging.basicConfig(filename=args.logfile, level=logging.INFO)
     else:
+        print("Log level WARNING set")
         logging.basicConfig(filename=args.logfile, level=logging.WARNING)
     
     if os.environ.get("OPS_AUTO_SOA") is not None:
@@ -166,6 +170,9 @@ def main(argv=None) -> None:
     for [target] in args.target:
         target = Target.find(target)
 
+        # Verify any not-definable configs defined by user
+        target.verify_non_definables(args.config)
+        
         # Applying user defined configs to the target config
         for key in target.config:
             if key in args.config and key in target.config:
@@ -198,12 +205,20 @@ def main(argv=None) -> None:
         if args.verbose:
             print(f"Translation scheme: {scheme}")
             logging.info(f"Translation scheme: {scheme}")
-            
+        
+        #Target config update based on defines
+        captureDefines(args, target)
+        
         #Calling Optimizer for FPGA
         if target.name == "hls": 
+            logging.info("Code-gen : Starting optimization phase for target: " + target.name)
             for program in app.programs:
+                logging.info("Optimizing program: %s", str(program.path))
                 scheme.optimize(program, app)
 
+        # Check config and apply contrains and overides if any conflicts
+        target.verify_config(app)
+        
         logging.info("Code-gen : Generating target specific template, scheme - " + scheme.target.name)
         codegen(args, scheme, app, target.config, args.force_soa)
         
@@ -257,7 +272,21 @@ def main(argv=None) -> None:
         create_cpp_main()
         replace_fortran_program_with_subroutine(args.file_paths)
 
-
+def captureDefines(args: Namespace, target: Target) -> None:
+    defines = [define for [define] in args.D]
+    ops_hls_row_tiles_pat = re.compile("OPS_HLS_ROW_TILES=*")
+    
+    #Search for OPS_HLS_ROW_TILES
+    for d in defines:
+        if (ops_hls_row_tiles_pat.search(d)):
+            tile_banks = d.split("=")[1]
+            if not tile_banks.isnumeric():
+                break
+            if "tile_banks" in target.config:
+                target.config["tile_banks"] = int(tile_banks)
+            break
+    
+    
 def parse(args: Namespace, lang: Lang) -> Application:
     app = Application()
 
@@ -506,10 +535,25 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
                     
         translatedIterUIDs.append(iterloop.unique_id)
         
-        [(iter_datamov_inc_source, iter_datamov_inc_extension),
-         (iter_datemov_src_source, iter_datamov_src_extension),
-         (iter_kernel_inc_source, iter_kernel_inc_extension),
-         (iter_kernel_src_source, iter_kernel_src_extension)] = scheme.genIterLoopDevice(env, iterloop, program, app, target_config)
+        out = scheme.genIterLoopDevice(env, iterloop, program, app, target_config)
+
+        (iter_datamov_inc_source, iter_datamov_inc_extension) = out[0]
+        (iter_datemov_src_source, iter_datamov_src_extension) = out[1]
+            
+        iter_kernel_inc_tups=[]
+        iter_kernel_src_tups=[]
+        for i in range(2, len(out)):
+            if i % 2 == 0:
+                iter_kernel_inc_tups.append(out[i])
+            else:
+                iter_kernel_src_tups.append(out[i])
+            
+
+        # else:
+        #     [(iter_datamov_inc_source, iter_datamov_inc_extension),
+        #     (iter_datemov_src_source, iter_datamov_src_extension),
+        #     (iter_kernel_inc_source, iter_kernel_inc_extension),
+        #     (iter_kernel_src_source, iter_kernel_src_extension)] = scheme.genIterLoopDevice(env, iterloop, program, app, target_config)
         
         ## iterloop datamover include
         path = None
@@ -547,41 +591,79 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
             if args.verbose:
                 print(f"Generated loop device datamover src {i} of {len(app.uniqueOuterLoops())}: {path}")
 
-        ## iterloop kernel inc
-        path = None
-        if scheme.lang.kernel_dir:
-            Path(args.out, scheme.target.name, "device", "include").mkdir(parents=True, exist_ok=True)
-            path = Path(args.out, scheme.target.name, "device", "include", f"kernel_outerloop_{j}.{iter_kernel_inc_extension}")                
+        if len(out) > 4:
+            for k_ in range(len(iter_kernel_inc_tups)):
+                ## iterloop kernel inc
+                path = None
+                if scheme.lang.kernel_dir:
+                    Path(args.out, scheme.target.name, "device", "include").mkdir(parents=True, exist_ok=True)
+                    path = Path(args.out, scheme.target.name, "device", "include", f"kernel_outerloop_{j}_{k_}.{iter_kernel_inc_tups[k_][1]}")                
+                else:
+                    path = Path(args.out,f"outerloop_{j}_{k_}_{scheme.target.name}_kernel.{iter_kernel_inc_tups[k_][1]}")
+
+                logging.debug(f"writing kernel: outerloop_{j} include to {path}")
+                
+                # Write the gernerated source file
+                with open(path, "w") as file:
+                    file.write(f"{scheme.lang.com_delim} Auto-generated at {datetime.now()} by ops-translator\n")
+                    file.write(iter_kernel_inc_tups[k_][0])
+
+                    if args.verbose:
+                        print(f"Generated loop device kernel include {j} of {len(app.uniqueLoops())}: {path}")
+
+                ## iterloop kernel src
+                path = None
+                if scheme.lang.kernel_dir:
+                    Path(args.out, scheme.target.name, "device", "src").mkdir(parents=True, exist_ok=True)
+                    path = Path(args.out, scheme.target.name, "device", "src", f"kernel_outerloop_{j}_{k_}.{iter_kernel_src_tups[k_][1]}")                
+                else:
+                    path = Path(args.out,f"outerloop_{j}_{k_}_{scheme.target.name}_kernel.{iter_kernel_src_tups[k_][1]}")
+
+                logging.debug(f"writing kernel: outerloop_{j} src to {path}")
+                
+                # Write the gernerated source file
+                with open(path, "w") as file:
+                    file.write(f"{scheme.lang.com_delim} Auto-generated at {datetime.now()} by ops-translator\n")
+                    file.write(iter_kernel_src_tups[k_][0])
+
+                    if args.verbose:
+                        print(f"Generated loop device kernel src {j} of {len(app.uniqueLoops())}: {path}")
         else:
-            path = Path(args.out,f"outerloop_{j}_{scheme.target.name}_kernel.{iter_kernel_inc_extension}")
+            ## iterloop kernel inc
+            path = None
+            if scheme.lang.kernel_dir:
+                Path(args.out, scheme.target.name, "device", "include").mkdir(parents=True, exist_ok=True)
+                path = Path(args.out, scheme.target.name, "device", "include", f"kernel_outerloop_{j}.{iter_kernel_inc_tups[0][1]}")                
+            else:
+                path = Path(args.out,f"outerloop_{j}_{scheme.target.name}_kernel.{iter_kernel_inc_tups[1]}")
 
-        logging.debug(f"writing kernel: outerloop_{j} include to {path}")
-        
-        # Write the gernerated source file
-        with open(path, "w") as file:
-            file.write(f"{scheme.lang.com_delim} Auto-generated at {datetime.now()} by ops-translator\n")
-            file.write(iter_kernel_inc_source)
+            logging.debug(f"writing kernel: outerloop_{j} include to {path}")
+            
+            # Write the gernerated source file
+            with open(path, "w") as file:
+                file.write(f"{scheme.lang.com_delim} Auto-generated at {datetime.now()} by ops-translator\n")
+                file.write(iter_kernel_inc_tups[0][0])
 
-            if args.verbose:
-                print(f"Generated loop device kernel include {j} of {len(app.uniqueLoops())}: {path}")
+                if args.verbose:
+                    print(f"Generated loop device kernel include {j} of {len(app.uniqueLoops())}: {path}")
 
-        ## iterloop kernel src
-        path = None
-        if scheme.lang.kernel_dir:
-            Path(args.out, scheme.target.name, "device", "src").mkdir(parents=True, exist_ok=True)
-            path = Path(args.out, scheme.target.name, "device", "src", f"kernel_outerloop_{j}.{iter_kernel_src_extension}")                
-        else:
-            path = Path(args.out,f"outerloop_{j}_{scheme.target.name}_kernel.{iter_kernel_src_extension}")
+            ## iterloop kernel src
+            path = None
+            if scheme.lang.kernel_dir:
+                Path(args.out, scheme.target.name, "device", "src").mkdir(parents=True, exist_ok=True)
+                path = Path(args.out, scheme.target.name, "device", "src", f"kernel_outerloop_{j}.{iter_kernel_src_tups[0][1]}")                
+            else:
+                path = Path(args.out,f"outerloop_{j}_{scheme.target.name}_kernel.{iter_kernel_src_tups[0][1]}")
 
-        logging.debug(f"writing kernel: outerloop_{j} src to {path}")
-        
-        # Write the gernerated source file
-        with open(path, "w") as file:
-            file.write(f"{scheme.lang.com_delim} Auto-generated at {datetime.now()} by ops-translator\n")
-            file.write(iter_kernel_src_source)
+            logging.debug(f"writing kernel: outerloop_{j} src to {path}")
+            
+            # Write the gernerated source file
+            with open(path, "w") as file:
+                file.write(f"{scheme.lang.com_delim} Auto-generated at {datetime.now()} by ops-translator\n")
+                file.write(iter_kernel_src_tups[0][0])
 
-            if args.verbose:
-                print(f"Generated loop device kernel src {j} of {len(app.uniqueLoops())}: {path}")
+                if args.verbose:
+                    print(f"Generated loop device kernel src {j} of {len(app.uniqueLoops())}: {path}")
     
 
 if __name__ == "__main__":

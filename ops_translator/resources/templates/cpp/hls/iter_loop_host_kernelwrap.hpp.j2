@@ -1,3 +1,7 @@
+{% set read_stencil = ilh.getReadStencil(prog) %}
+{% set span_x = (read_stencil.stencil_size.x - 1) | int %}
+{% set half_span_x = (span_x / 2) | int %}
+{%set is_slr_iter_par = config["iter_par_factor"] is iterable and (config["iter_par_factor"] is not string and config["iter_par_factor"] is not mapping) %}
 
 {% block prologue %}
 #pragma once 
@@ -14,12 +18,22 @@ class KernelWrapper_outerloop_{{ilh.id}} : public ops::hls::Kernel
 public:
     KernelWrapper_outerloop_{{ilh.id}}():
             Kernel("{{ilh.unique_name}}"),
+    {% if is_slr_iter_par %}
+        {% for slr_id in range(config["SLR_count"]) %}
+            m_kernelName{{slr_id}}("kernel_outerloop_{{ilh.id}}_{{slr_id}}"),
+        {% endfor %}
+    {% else %}
             m_kernelName("kernel_outerloop_{{ilh.id}}"),
+    {% endif %}
             m_datamoverName("datamover_outerloop_{{ilh.id}}")
     {
         cl_int err;
     {% for i in range(config["SLR_count"])%}
+        {% if is_slr_iter_par %}
+        OCL_CHECK(err, m_kernel_{{i}} = cl::Kernel(m_fpga->getProgram(), m_kernelName{{i}}.c_str(), &err));
+        {% else %}
         OCL_CHECK(err, m_kernel_{{i}} = cl::Kernel(m_fpga->getProgram(), m_kernelName.c_str(), &err));
+        {% endif %}
     {% endfor %}
         OCL_CHECK(err, m_datamover = cl::Kernel(m_fpga->getProgram(), m_datamoverName.c_str(), &err));    
     }
@@ -59,14 +73,69 @@ public:
         auto read_stencilConfig = getStencilConfig(arg0.originalProperty, range, vector_factor, mem_vector_factor, read_stencil_d_m, read_stencil_d_p);
         ops::hls::AccessRange read_range;
         getAdjustedRange(arg0.originalProperty, range, read_range, read_stencil_d_m, read_stencil_d_p);
-
+#ifdef OPS_TILING
+        ops::hls::SizeType original_gridSize_copy = {arg0.originalProperty.grid_size[0], arg0.originalProperty.grid_size[1], arg0.originalProperty.grid_size[2]};
+        ops::hls::AccessRange read_range_copy;
+        read_range_copy.start[0] = read_range.start[0];
+        read_range_copy.start[1] = read_range.start[1];
+        read_range_copy.start[2] = read_range.start[2];
+        read_range_copy.end[0] = read_range.end[0];
+        read_range_copy.end[1] = read_range.end[1];
+        read_range_copy.end[2] = read_range.end[2];
+        read_range_copy.dim = read_range.dim;
+        ops::hls::SizeType2d tile_size = {m_fpga->getOPSTileSizeX(), {% if ndim == 3 %} m_fpga->getOPSTileSizeY(){% else %}1{% endif %}};
+        {% if is_slr_iter_par %}
+        ops::hls::SizeType2d overlap_size = {get_overlap_size<{{get_total_PEs(config["SLR_count"],config["iter_par_factor"])}}, {{half_span_x}}, mem_vector_factor>(), 
+                {% if ndim == 3 %}get_overlap_size<{{get_total_PEs(config["SLR_count"],config["iter_par_factor"])}}, {{half_span_x}}, vector_factor>(){%else %}0{% endif %}};
+        {% else %}
+        ops::hls::SizeType2d overlap_size = {get_overlap_size<{{config["SLR_count"]}}, {{config["iter_par_factor"]}}, {{half_span_x}}, mem_vector_factor>(), 
+                {% if ndim == 3 %}get_overlap_size<{{config["SLR_count"]}}, {{config["iter_par_factor"]}}, {{half_span_x}}, vector_factor>(){%else %}0{% endif %}};
+        {% endif %}
+        ops::hls::SizeType2d tile_count;
+        ops::hls::SizeType2d effective_tile_size;
+        ops::hls::SizeType2d last_tile_size;
+        unsigned int total_xblocks_widen;
+        unsigned short last_tile_upper_limit_x;
+    #ifdef DEBUG_LOG
+        std::cout << "[DEBUG][KERNEL_WRAPPER]|" << __func__ << "| TILE PARAMETERS BEFORE TILE METADATA GENERATION" << std::endl;
+        std::cout << "[DEBUG][KERNEL_WRAPPER]|" << __func__ << "| original_gridSize_copy: (" 
+                  << original_gridSize_copy[0] << ", " << original_gridSize_copy[1] << ", " << original_gridSize_copy[2] << ")\n";
+        std::cout << "[DEBUG][KERNEL_WRAPPER]|" << __func__ << "| read_range_copy: ( start: (" 
+                  << read_range_copy.start[0] << ", " << read_range_copy.start[1] << ", " << read_range_copy.start[2] << "), end: ("
+                  << read_range_copy.end[0] << ", " << read_range_copy.end[1] << ", " << read_range_copy.end[2] << "), dim: " << read_range_copy.dim << ")\n";
+        std::cout << "[DEBUG][KERNEL_WRAPPER]|" << __func__ << "| tile_size: (" 
+                  << tile_size[0] << ", " << tile_size[1] << ")\n";
+        std::cout << "[DEBUG][KERNEL_WRAPPER]|" << __func__ << "| overlap_size: (" 
+                  << overlap_size[0] << ", " << overlap_size[1] << ")\n";
+    #endif
+        ops::hls::genTileMetadata<mem_data_width, data_width, {{ndim - 1}}>(original_gridSize_copy, read_range_copy, tile_size, overlap_size,
+                effective_tile_size, last_tile_size, tile_count, last_tile_upper_limit_x, total_xblocks_widen);
+        // kernel tile sizes need to be adusted according to the axis_data_width
+        ops::hls::SizeType2d kernel_tile_size = {tile_size[0] * num_of_pkts_per_beat, tile_size[1]};
+        ops::hls::SizeType2d kernel_last_tile_size = {last_tile_size[0] * num_of_pkts_per_beat, last_tile_size[1]};
+    #ifdef DEBUG_LOG
+        std::cout << "[DEBUG][KERNEL_WRAPPER]|" << __func__ << "| TILE PARAMETERS AFTER TILE METADATA GENERATION" << std::endl;
+        std::cout << "[DEBUG][KERNEL_WRAPPER]|" << __func__ << "| effective_tile_size: (" 
+                  << effective_tile_size[0] << ", " << effective_tile_size[1] << ")\n";
+        std::cout << "[DEBUG][KERNEL_WRAPPER]|" << __func__ << "| last_tile_size: (" 
+                  << last_tile_size[0] << ", " << last_tile_size[1] << ")\n";
+        std::cout << "[DEBUG][KERNEL_WRAPPER]|" << __func__ << "| tile_count: (" 
+                  << tile_count[0] << ", " << tile_count[1] << ")\n";
+        std::cout << "[DEBUG][KERNEL_WRAPPER]|" << __func__ << "| total_xblocks_widen: " 
+                  << total_xblocks_widen << "\n";
+        std::cout << "[DEBUG][KERNEL_WRAPPER]|" << __func__ << "| kernel_tile_size: (" 
+                  << kernel_tile_size[0] << ", " << kernel_tile_size[1] << ")\n";
+        std::cout << "[DEBUG][KERNEL_WRAPPER]|" << __func__ << "| kernel_last_tile_size: (" 
+                  << kernel_last_tile_size[0] << ", " << kernel_last_tile_size[1] << ")\n";
+    #endif
+#endif
 #ifdef DEBUG_LOG
         printAccessRange(range, "common access range");
         printGridProp(arg0.originalProperty, "arg0_originalGridProp");
         printStencilConfig(read_stencilConfig, "read_stencilConfig");
 #endif
 
-		unsigned int total_iter_par_factor = iter_par_factor * {{config["SLR_count"]}};
+		unsigned int total_iter_par_factor = {{get_total_PEs(config["SLR_count"],config["iter_par_factor"])}};
 		unsigned int adjusted_outer_iter = (outer_iter + total_iter_par_factor - 1) / total_iter_par_factor;
         {#
         ops::hls::MemConfig memconfig;
@@ -95,14 +164,33 @@ public:
         {% endfor %}
         OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, read_stencilConfig.dim));
         OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, read_stencilConfig.total_itr));
-        {% for i in range(ndim)%}
+#ifndef OPS_TILING
+            {% for i in range(ndim)%}
         OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, read_stencilConfig.lower_limit[{{i}}]));
         {% endfor %}
         {% for i in range(ndim)%}
         OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, read_stencilConfig.upper_limit[{{i}}]));
         {% endfor %}
+ #endif
         OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, read_stencilConfig.outer_loop_limit));
+#ifndef OPS_TILING
         OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, read_stencilConfig.batch_size));
+#else
+        {% if ndim == 3 %}
+        OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, kernel_tile_size[0]));
+        OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, kernel_tile_size[1]));
+        OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, kernel_last_tile_size[0]));
+        OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, kernel_last_tile_size[1]));
+        OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, tile_count[0]));
+        OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, tile_count[1]));
+        {% else %}
+        OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, kernel_tile_size[0]));
+        OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, kernel_last_tile_size[0]));
+        OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, tile_count[0]));
+        {% endif %}
+        OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, total_xblocks_widen));
+        OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, last_tile_upper_limit_x));
+#endif
         {% for arg in ilh.joint_args|ops_gbl%}
         OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, *{{get_arg_gbl_name(arg)}}));
         {% endfor %}
@@ -132,7 +220,30 @@ public:
         {% endif %}
     {% endfor %} 
         OCL_CHECK(err, err = m_datamover.setArg(narg++, adjusted_outer_iter));
-        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.originalProperty.batch_size));    
+#ifndef OPS_TILING
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.originalProperty.batch_size)); 
+#else
+    {% if ndim == 3 %}   
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, tile_size[0]));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, tile_size[1]));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, overlap_size[0]));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, overlap_size[1]));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, effective_tile_size[0]));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, effective_tile_size[1]));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, last_tile_size[0]));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, last_tile_size[1]));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, tile_count[0]));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, tile_count[1]));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, total_xblocks_widen));
+    {% else %}
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, tile_size[0]));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, overlap_size[0]));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, effective_tile_size[0]));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, last_tile_size[0]));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, tile_count[0]));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, total_xblocks_widen));
+    {% endif %}
+#endif
         {#OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.start_x));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.end_x));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.start_y));    
@@ -153,7 +264,19 @@ public:
         OCL_CHECK(err, err = m_datamover.setArg(narg++, adjusted_outer_iter));#}
     {% for arg in ilh.joint_args %}
         {% if arg is ops_dat %}
+#ifdef OPS_TILING
+    printf("Tiles per grid: %d \n", arg0.alt_banks);
+    {% if config["tile_banks"] > 1 and config["datamover_lib"] == 1 %}
+        {% for i in range(config["tile_banks"]) %}
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.deviceBuffer[{{i}}]));
+        {% endfor %}
+    {% else %}
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.deviceBuffer[0]));
+    {% endif %}
+        {#OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.deviceBuffer[1]));#}
+#else
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.deviceBuffer));
+#endif
         {% endif%}
     {% endfor %}
 
@@ -184,10 +307,11 @@ public:
         {% endif %}
     {% endfor %}
 
-        OCL_CHECK(err, err = m_fpga->getCommandQueue().enqueueTask(m_datamover, &activeEvents, &event_datamover));
+    // enque in backward order
     {% for slr_id in range(config["SLR_count"]) %}
         OCL_CHECK(err, err = m_fpga->getCommandQueue().enqueueTask(m_kernel_{{slr_id}}, &activeEvents, &event_kernel_{{slr_id}}));
     {% endfor %}
+        OCL_CHECK(err, err = m_fpga->getCommandQueue().enqueueTask(m_datamover, &activeEvents, &event_datamover));
 
 {##ifdef DEBUG_LOG
     {% for arg in ilh.joint_args %}
@@ -272,7 +396,14 @@ public:
 */
     }
 private:
+{% if is_slr_iter_par %}
+    {% for slr_id in range(config["SLR_count"]) %}
+    std::string m_kernelName{{slr_id}};
+    {% endfor %}
+{% else %}
     std::string m_kernelName;
+{% endif %}
+
     std::string m_datamoverName;
 {% for slr_id in range(config["SLR_count"]) %}
     cl::Kernel m_kernel_{{slr_id}};
