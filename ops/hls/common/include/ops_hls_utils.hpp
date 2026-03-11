@@ -58,8 +58,22 @@ static T register_it(T x){
 #define INT_SUM(...) (add(NUMARGS(int, __VA_ARGS__), __VA_ARGS__))
 #define INT_MUL(...) (multiply(NUMARGS(int, __VA_ARGS__), __VA_ARGS__))
 
-#define LOG2(num) ((unsigned short)log2(num))
-#define POW2(num) ((unsigned int)powf(2,num))
+static inline unsigned short log2_int(unsigned int num) {
+    unsigned short res = 0;
+    while (num > 1) {
+        num >>= 1;
+        ++res;
+    }
+    return res;
+}
+
+#define LOG2(num) (log2_int(num))
+
+static inline unsigned int pow2_int(unsigned int num) {
+    return (num < sizeof(unsigned int)*8u) ? (1u << num) : 0u;
+}
+
+#define POW2(num) (pow2_int(num))
 #define DUMP_VAR_NAME(var)(#var);
 
 #endif /* DOXYGEN_SHOULD_SKIP_THIS */
