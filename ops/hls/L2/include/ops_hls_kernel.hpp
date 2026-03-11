@@ -139,8 +139,9 @@ public:
     std::vector<size_t> getAltBufferRowsCounts() {
         std::vector<size_t> alt_buffer_row_counts(alt_banks);
         if (alt_banks > 1 && originalProperty.dim >= 2) {
+            auto total_rows = originalProperty.grid_size[1] * originalProperty.grid_size[2];
             for (int bank = 0; bank < alt_banks; bank++) {
-                alt_buffer_row_counts[bank] = originalProperty.grid_size[1] / alt_banks + ((bank < (originalProperty.grid_size[1] % alt_banks)) ? 1 : 0);
+                alt_buffer_row_counts[bank] = total_rows / alt_banks + ((bank < (total_rows % alt_banks)) ? 1 : 0);
             }
         }
         return alt_buffer_row_counts;
@@ -151,7 +152,7 @@ public:
         auto alt_buffer_row_counts = getAltBufferRowsCounts();
         for (int bank = 0; bank < alt_banks; bank++) {
             size_t row_size = originalProperty.grid_size[0] * sizeof(T);
-            alt_buffer_sizes[bank] = row_size * alt_buffer_row_counts[bank] * originalProperty.grid_size[2];
+            alt_buffer_sizes[bank] = row_size * alt_buffer_row_counts[bank];
             alt_buffer_sizes[bank] *= originalProperty.batch_size;
         }
         return alt_buffer_sizes;
@@ -176,9 +177,9 @@ public:
                         //                 + k * (originalProperty.grid_size[0] * (originalProperty.grid_size[1] / alt_banks + ((bank < (originalProperty.grid_size[1] % alt_banks)) ? 1 : 0)))
                         //                 + bank_row * originalProperty.grid_size[0];
                         
-// #ifdef DEBUG_LOG
-// 		                printf("j: %d, k: %d, bank: %d, bank_row: %d, src_offset: %d dst_offset: %d\n", j, k, bank, bank_row, src_offset, dst_offset);
-// #endif
+#ifdef DEBUG_LOG
+		                printf("j: %d, k: %d, bank: %d, bank_row: %d, src_offset: %d dst_offset: %d\n", j, k, bank, bank_row, src_offset, dst_offset);
+#endif
                         std::memcpy(&altHostBuffers[bank][dst_offset],
                                     &hostBuffer[src_offset],
                                     originalProperty.grid_size[0] * sizeof(T));

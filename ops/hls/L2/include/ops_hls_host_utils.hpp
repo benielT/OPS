@@ -541,6 +541,50 @@ void printGrid3D(T* p_grid, ops::hls::GridPropertyCoreV2& gridProperty, std::str
 	}
 }
 
+#ifdef OPS_TILING
+template<typename T>
+void print3D_host_tiles(ops::hls::Grid<T>& grid, std::string prompt="")
+{
+	if (grid.alt_banks > 1)
+	{
+		std::cout << "----------------------------------------------" << std::endl;
+		std::cout << " [DEBUG] tile grid values: " << prompt << std::endl;
+		std::cout << "----------------------------------------------" << std::endl;
+
+		auto alt_buf_row_counts = grid.getAltBufferRowsCounts();
+
+		for (int tile_bank = 0; tile_bank < grid.alt_banks; tile_bank++)
+		{
+			std::cout << "		----------------------------------------------" << std::endl;
+			std::cout << " 		[DEBUG] bank: " << tile_bank << " row_count: " << alt_buf_row_counts[tile_bank] << std::endl;
+			std::cout << "		----------------------------------------------" << std::endl;
+
+			// for (int k = 0; k < grid.originalProperty.grid_size[2]; k++)
+			// {
+			// 	std::cout << "----------- plane: " << k <<"----------" << std::endl;
+
+				for (int j = 0; j < alt_buf_row_counts[tile_bank]; j++)
+				{
+					for (int i = 0; i < grid.originalProperty.grid_size[0]; i++)
+					{
+						int index = i + j * grid.originalProperty.grid_size[0]; // + k * grid.originalProperty.grid_size[0] * alt_buf_row_counts[tile_bank];
+						std::cout << std::setw(12) << grid.altHostBuffers[tile_bank][index];
+					}
+					std::cout << std::endl;
+				}
+			// }
+		}
+	}
+	else
+	{
+		// printGrid3D<float>(u_raw, u[bat].originalProperty, "u after computation");
+		printGrid3D<T>(grid.hostBuffer.data(), grid.originalProperty, prompt);
+	}
+}
+#else
+template<typename T>
+void print3D_host_tiles(ops::hls::Grid<T>& grid, std::string prompt="") {}
+#endif
 
 #ifndef OPS_HLS_V2
 void opsRange2hlsRange(int dim, int* ops_range, ops::hls::AccessRange& range, ops::hls::GridPropertyCore& p_grid)

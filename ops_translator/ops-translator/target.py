@@ -184,7 +184,7 @@ class FPGABankPlacer:
                  raise ValueError(f"FPGABankPlacer: num_banks cannot be zero")
             if num_bank_racks == 0:
                  raise ValueError(f"FPGABankPlacer: num_bank_racks cannot be zero")
-            assert (num_banks % num_bank_racks == 0, "FPGABankPlacer: num_bank_racks should be a divisor of num_banks")
+            assert num_banks % num_bank_racks == 0, "FPGABankPlacer: num_bank_racks should be a divisor of num_banks"
         else:
             raise ValueError(f"Invalid policy: {policy}")
     

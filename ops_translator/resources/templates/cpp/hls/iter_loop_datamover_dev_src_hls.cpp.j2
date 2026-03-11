@@ -188,6 +188,9 @@ static void stridedTileMem2stream(
         printf("|HLS DEBUG_LOG|%s| reading tile from mem to stream \n", __func__);
     #endif
 
+    //static ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_internal("strm_internal");
+	//#pragma HLS STREAM variable = strm_internal depth = {{(config["maxi_read_burst_length"] * config["num_read_outstanding"])|int}}
+
     const unsigned short NUM_BANKS_SHIFT = LOG2(NUM_BANKS);
 
     ap_uint<64> offset_x = command.range(63,0);
@@ -198,14 +201,15 @@ static void stridedTileMem2stream(
     ap_uint<16> stride_z = command.range(143,128);
     ap_uint<16> size_z = command.range(159,144);
 
-    for (ap_uint<16> z = 0; z < size_z; z++)
+    for (unsigned short z = 0; z < size_z; z++)
     {
+        #pragma HLS PIPELINE off
         unsigned short z_row_id_offset = abs_row_offset + z * z_row_stride;
 
     {% endif %}
-    for (ap_uint<16> y = 0; y < size_y; y++)
+    for (unsigned short y = 0; y < size_y; y++)
     {
-        // #pragma HLS PIPELINE
+        #pragma HLS PIPELINE off
         unsigned short abs_row_id_of_y = y {% if ndim == 3 %}+ z_row_id_offset{% endif %};
         unsigned short bank_id = abs_row_id_of_y % NUM_BANKS;
         ap_uint<64> per_bank_row = (ap_uint<64>)(abs_row_id_of_y >> NUM_BANKS_SHIFT);
@@ -272,11 +276,12 @@ static void stridedTileStream2memWithAvoid(
 
     for (ap_uint<16> z = 0; z < size_z; z++)
     {
+        #pragma HLS PIPELINE off
         unsigned short z_row_id_offset = abs_row_offset + z * z_row_stride;
     {% endif %}
         for (ap_uint<16> y = 0; y < size_y; y++)
         {
-            // #pragma HLS PIPELINE
+            #pragma HLS PIPELINE off
             // ap_uint<64> s2 = s3 + y * stride_y;
             unsigned short abs_row_id_of_y = y {% if ndim == 3%}+ z_row_id_offset{% endif %};
             unsigned short bank_id = abs_row_id_of_y % NUM_BANKS;
@@ -329,8 +334,10 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         const unsigned int num_beats,
         {% if ndim == 3 %}
         ap_uint<192>& command,
+        ap_uint<160>& short_command,
         {% else %}
         ap_uint<144>& command,
+        ap_uint<128>& short_command,
         {% endif %}
         {% if config["tile_banks"] > 1 %}
             {% if ndim == 3 %}
@@ -368,6 +375,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         {% endif %}
     {% endfor %})    
 {
+    #pragma HLS DATAFLOW
     {% for arg in ilh.joint_args|ops_dat %}
         {% if arg is ops_read_or_rw%}
             {% if isTiling and config["tile_banks"] > 1 and config["datamover_lib"] == 1 %}
@@ -411,7 +419,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         {% endif %}
     {% endfor %}
 
-#pragma HLS DATAFLOW
+
     {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw %}
         {% if isTiling %}
         //ops::hls::mem2streamTiled<mem_data_width, {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b1, arg{{arg.id}}_b2, arg{{arg.id}}_read_mem_strm, memconfig);
@@ -428,9 +436,9 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
                 abs_row_offset,
                     {% endif %}
                 z_row_stride,
-                arg{{arg.id}}_read_mem_strm, command.range({%if ndim == 3 %}159{%else%}127{%endif%},0));
+                arg{{arg.id}}_read_mem_strm, short_command);
                 {% else %}
-        ops::hls::tileMem2stream<mem_data_width, {{config["maxi_read_burst_length"]}}, 1>(arg{{arg.id}}, arg{{arg.id}}_read_mem_strm, command.range(159,0));
+        ops::hls::tileMem2stream<mem_data_width, {{config["maxi_read_burst_length"]}}, 1>(arg{{arg.id}}, arg{{arg.id}}_read_mem_strm, short_command);
                 {% endif %}
             {% else %}
         xf::data_mover::tiledMem2stream3D<mem_data_width, {{config["maxi_latency"]}}, {{config["maxi_read_burst_length"]}}, {{config["num_read_outstanding"]}},  {{II(arg)}}>(arg{{arg.id}}, arg{{arg.id}}_read_mem_strm, memconfig);
@@ -615,12 +623,12 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
             const unsigned int avoid_y = tile_y == 0 ? 0 : memconfig.tile_overlap_size_y >> 1;
             auto command = ops::hls::commandGen3D(offset, 1, (ap_uint<16>)tile_size_x, (ap_uint<16>)stride_y, (ap_int<16>)tile_size_y, 
                     (ap_int<16>)stride_z, (ap_uint<16>)z_diff, (ap_uint<16>)avoid_x, (ap_uint<16>)avoid_y);
-
         {% else %}
             const unsigned int avoid_x = tile_x == 0 ? 0 : memconfig.tile_overlap_size_x >> 1;
             auto command = ops::hls::commandGen2D(offset, 1, (ap_uint<16>)tile_size_x, (ap_uint<16>)stride_y, (ap_int<16>)y_diff, (ap_uint<16>)avoid_x);
-            
 		{% endif %}
+            ap_uint<{%if ndim == 3 %}160{%else%}128{%endif%}> short_command = command.range({%if ndim == 3 %}159{%else%}127{%endif%},0);
+
     {% endif %}
             datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
     {% if isTiling %}
@@ -636,6 +644,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
             {% endif %}#}
     {% if isTiling %}
                     command,
+                    short_command,
         {% if config["tile_banks"] > 1 %}
             {% if ndim == 3 %}
                     abs_row_offset,
@@ -707,12 +716,12 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
             const unsigned int avoid_y = tile_y == 0 ? 0 : memconfig.tile_overlap_size_y >> 1;
             auto command = ops::hls::commandGen3D(offset, 1, (ap_uint<16>)tile_size_x, (ap_uint<16>)stride_y, (ap_int<16>)tile_size_y, 
                     (ap_int<16>)stride_z, (ap_uint<16>)z_diff, (ap_uint<16>)avoid_x, (ap_uint<16>)avoid_y);
-
         {% else %}
             const unsigned int avoid_x = tile_x == 0 ? 0 : memconfig.tile_overlap_size_x >> 1;
             auto command = ops::hls::commandGen2D(offset, 1, (ap_uint<16>)tile_size_x, (ap_uint<16>)stride_y, (ap_int<16>)y_diff, (ap_uint<16>)avoid_x);
-
 		{% endif %}
+            ap_uint<{%if ndim == 3 %}160{%else%}128{%endif%}> short_command = command.range({%if ndim == 3 %}159{%else%}127{%endif%},0);
+
     {% endif %}
             datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
      {% if isTiling %}
@@ -728,6 +737,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
                 {% endif %}#}
     {% if isTiling %}
                     command,
+                    short_command,
         {% if config["tile_banks"] > 1 %}
             {% if ndim == 3 %}
                     abs_row_offset,

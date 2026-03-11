@@ -27,9 +27,51 @@
 #endif
 #endif
 
+
 namespace ops {
 namespace hls {
 
+#ifdef __SYNTHESIS__
+// Required because blackbox does not support double
+typedef union {
+    double d;
+    unsigned long long l;
+} convert;
+
+void print(const char* fmt) { 
+    // FIXME: replace with intrinsic call and first argument index into format table
+    _ssdm_op_PrintNone(fmt); 
+}
+template <typename _TYPE>
+void print(const char* fmt, _TYPE v) { 
+    // FIXME: replace with intrinsic call and first argument index into format table
+    _ssdm_op_PrintInt(fmt, (int) v); 
+}
+void print(const char* fmt, double v) { 
+    convert tmp;
+    tmp.d = v;
+    // FIXME: replace with intrinsic call and first argument index into format table
+    _ssdm_op_PrintDouble(fmt, tmp.l);
+}
+void print(const char* fmt, float v) { 
+    convert tmp;
+    tmp.d = v;
+    // FIXME: replace with intrinsic call and first argument index into format table
+    _ssdm_op_PrintDouble(fmt, tmp.l);
+}
+#else
+inline
+void print(const char* fmt) { 
+    printf("HLS_PRINT: ");
+    printf(fmt); 
+}
+template <typename _TYPE>
+inline
+void print(const char* fmt, _TYPE v) { 
+    printf("HLS_PRINT: ");
+    printf(fmt, v); 
+}
+#endif
 
 /**
  * @brief 	convMemBeat2axisPkt reads a memory location with index and generate into AXI4-stream. This works
@@ -397,14 +439,15 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
 	const unsigned int non_burst_beats = num_beats % BURST_SIZE;
     const unsigned int burst_beats = num_beats - non_burst_beats;
 
-#ifndef __SYTHESIS__
+
 #ifdef DEBUG_LOG
     const unsigned int num_bursts = num_beats / BURST_SIZE; 
-	printf("|HLS DEBUG_LOG| %s | num_beats: %d, num_burst: %d, non_burst_beats: %d\n"
-			, __func__, num_beats, num_bursts, non_burst_beats);
-	printf("====================================================================================\n");
+	print("|HLS DEBUG_LOG| mem2stream | num_beats: %d\n", num_beats);
+	print("|HLS DEBUG_LOG| mem2stream | num_burst: %d\n", num_bursts);
+	print("|HLS DEBUG_LOG| mem2stream | non_burst_beats: %d\n", non_burst_beats);
+	print("====================================================================================\n");
 #endif
-#endif
+
 
 	unsigned int index = 0;
 
@@ -415,17 +458,17 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
         ap_uint<MEM_DATA_WIDTH> tmp = mem_in[index];
         strm_out << tmp;
 
-#ifdef DEBUG_LOG
-        printf("|HLS DEBUG_LOG| %s | reading burst index: %d, val=(\n", __func__, index);
+ #ifdef DEBUG_LOG
+        print("|HLS DEBUG_LOG| mem2stream | reading burst index: %d, val=(\n", index);
 
         for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
         {
             DataConv conv;
             conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
-            printf("%f,", conv.f);
+            print("		%f,\n", conv.f);
         }
-        printf(")\n");
-#endif
+        print(")\n");
+ #endif
 
         index++;
 	}
@@ -436,15 +479,15 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
 		ap_uint<MEM_DATA_WIDTH> tmp = mem_in[index];
 		strm_out << tmp;
 #ifdef DEBUG_LOG
-        printf("|HLS DEBUG_LOG| %s | reading non-burst index: %d, val=(\n", __func__, index);
+        print("|HLS DEBUG_LOG| mem2stream | reading non-burst index: %d, val=(\n", index);
 
         for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
         {
             DataConv conv;
             conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
-            printf("%f,", conv.f);
+            print("		%f\n", conv.f);
         }
-        printf(")\n");
+        print(")\n");
 #endif
 		index++;
 	}
@@ -501,6 +544,17 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
+}
+
+template <unsigned short MEM_DATA_WIDTH, unsigned short IN_ITR=2>
+static void stream2streambuffered(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, const unsigned int num_beats)
+{
+	for (unsigned int i = 0; i < num_beats; i++)
+	{
+#pragma HLS PIPELINE II=IN_ITR
+		auto val = strm_in.read();
+		strm_out << val;
+	}
 }
 
 /**
