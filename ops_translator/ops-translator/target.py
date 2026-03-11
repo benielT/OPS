@@ -271,6 +271,7 @@ class HLS(Target):
         "tile_banks" : 1,
         "tile_bank_placement_policy" : FPGABankPlacementPolicy.DATAMOVER_TILE_HBM_ROUND_ROBIN.value,
         "global_clock" : -1,
+        "datamover_clock" : -1,
         "max_global_clock" : 300000000,
         "HBM_tile_racks" : 2,
         "HBM_banks" : 32,
@@ -326,7 +327,8 @@ class HLS(Target):
         "datamover_lib" : ("select", {1,2}),
         "profile" : ("bool", (True, False)),
         "tile_banks" : ("select", {1,2,4,8}),
-        "global_clock" : ("numeric", (-1, config["max_global_clock"]))
+        "global_clock" : ("numeric", (-1, config["max_global_clock"])),
+        "datamover_clock" : ("numeric", (-1, config["max_global_clock"]))
     }
     
     __non_definables__ = [

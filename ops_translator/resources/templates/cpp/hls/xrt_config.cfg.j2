@@ -52,9 +52,16 @@ sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{FPGABankPlacer.getBank(a
     {% endfor %}
 {% endif %}
 
-{% if not config["global_clock"] == -1 %}
+{% if not config["global_clock"] == -1 or not config["datamover_clock"] == -1%}
 [clock]
-defaultFreqHz={{config["global_clock"]}}
+    {% if not config["global_clock"] == -1 %}
+kernel_frequency={{config["global_clock"]}}
+    {% endif %}
+    {% if not config["datamover_clock"] == -1 %}
+        {% for ilh, program in app.uniqueOuterLoops() %}
+freqHz={{config["datamover_clock"]}}:datamover_outerloop_{{ilh.id}}_1
+        {% endfor %}
+    {% endif %}
 {% endif %}
 
 {% if config["profile"] %}
