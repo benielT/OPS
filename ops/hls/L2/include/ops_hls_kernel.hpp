@@ -142,6 +142,9 @@ public:
             auto total_rows = originalProperty.grid_size[1] * originalProperty.grid_size[2];
             for (int bank = 0; bank < alt_banks; bank++) {
                 alt_buffer_row_counts[bank] = total_rows / alt_banks + ((bank < (total_rows % alt_banks)) ? 1 : 0);
+    // #ifdef DEBUG_LOG
+            // printf("[DEBUG]| %s | Bank %d: %zu rows\n", __func__, bank, alt_buffer_row_counts[bank]);
+    // #endif
             }
         }
         return alt_buffer_row_counts;
@@ -151,9 +154,26 @@ public:
         std::vector<size_t> alt_buffer_sizes(alt_banks);
         auto alt_buffer_row_counts = getAltBufferRowsCounts();
         for (int bank = 0; bank < alt_banks; bank++) {
+            size_t row_size = originalProperty.grid_size[0];
+            alt_buffer_sizes[bank] = row_size * alt_buffer_row_counts[bank];
+            alt_buffer_sizes[bank] *= originalProperty.batch_size;
+    // #ifdef DEBUG_LOG
+            // printf("[DEBUG]| %s | Bank %d: %zu bank_buffer_size\n", __func__, bank, alt_buffer_sizes[bank]);
+    // #endif
+        }
+        return alt_buffer_sizes;
+    }
+
+    std::vector<size_t> getAltBufferSizesBytes() {
+        std::vector<size_t> alt_buffer_sizes(alt_banks);
+        auto alt_buffer_row_counts = getAltBufferRowsCounts();
+        for (int bank = 0; bank < alt_banks; bank++) {
             size_t row_size = originalProperty.grid_size[0] * sizeof(T);
             alt_buffer_sizes[bank] = row_size * alt_buffer_row_counts[bank];
             alt_buffer_sizes[bank] *= originalProperty.batch_size;
+    // #ifdef DEBUG_LOG
+            // printf("[DEBUG]| %s | Bank %d: %zu bank_buffer_size\n", __func__, bank, alt_buffer_sizes[bank]);
+    // #endif
         }
         return alt_buffer_sizes;
     }
@@ -172,8 +192,8 @@ public:
                                         + k * originalProperty.grid_size[0] * originalProperty.grid_size[1]
                                         + j * originalProperty.grid_size[0];
                         
-                        size_t dst_offset = b * getAltBufferSizes()[bank] / sizeof(T) + (bank_row * originalProperty.grid_size[0]);
-                        // size_t dst_offset = b * getAltBufferSizes()[bank] / sizeof(T)
+                        size_t dst_offset = b * getAltBufferSizes()[bank] + (bank_row * originalProperty.grid_size[0]);
+                        // size_t dst_offset = b * getAltBufferSizes()[bank] 
                         //                 + k * (originalProperty.grid_size[0] * (originalProperty.grid_size[1] / alt_banks + ((bank < (originalProperty.grid_size[1] % alt_banks)) ? 1 : 0)))
                         //                 + bank_row * originalProperty.grid_size[0];
                         
@@ -203,8 +223,8 @@ public:
                                         + k * originalProperty.grid_size[0] * originalProperty.grid_size[1]
                                         + j * originalProperty.grid_size[0];
                         
-                        size_t dst_offset = b * getAltBufferSizes()[bank] / sizeof(T) + (bank_row * originalProperty.grid_size[0]);
-                        // size_t dst_offset = b * getAltBufferSizes()[bank] / sizeof(T)
+                        size_t dst_offset = b * getAltBufferSizes()[bank] + (bank_row * originalProperty.grid_size[0]);
+                        // size_t dst_offset = b * getAltBufferSizes()[bank]
                         //                 + k * (originalProperty.grid_size[0] * (originalProperty.grid_size[1] / alt_banks + ((bank < (originalProperty.grid_size[1] % alt_banks)) ? 1 : 0)))
                         //                 + bank_row * originalProperty.grid_size[0];
                         

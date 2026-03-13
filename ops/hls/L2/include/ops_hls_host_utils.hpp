@@ -232,8 +232,25 @@ ops::hls::Grid<T> ops_hls_decl_dat(ops::hls::Block& block, int elem_size, int* s
 	
     data_size *= grid.originalProperty.batch_size;
 
+	
 	grid.hostBuffer.resize(data_size);
-
+#ifdef DEBUG_LOG
+	printf("[Host Buffer allocated] {\n");
+	printf("  grid_size : (");
+	for (int i = 0; i < ops_max_dim; ++i) {
+		printf("%d", grid.originalProperty.grid_size[i]);
+		if (i < ops_max_dim - 1) printf(", ");
+	}
+	printf(")\n");
+	printf("  total grid_elements: %u\n", data_size);
+	printf("  host_ptr  : %p\n",        static_cast<void*>(grid.hostBuffer.data()));
+	printf("  size      : %zu bytes\n", grid.hostBuffer.size() * sizeof(T));
+	printf("  size_mb   : %.3f MB\n",   (grid.hostBuffer.size() * sizeof(T)) / (1024.0 * 1024.0));
+	printf("  elements  : %zu\n",       grid.hostBuffer.size());
+	printf("  type_size : %zu bytes\n", sizeof(T));
+	printf("  cached    : false\n");
+	printf("}\n");
+#endif
     // std::cout << "What " << std::endl;
 #ifdef OPS_TILING
     // If tiling is enabled, we may need to allocate extra buffer space for row tiles

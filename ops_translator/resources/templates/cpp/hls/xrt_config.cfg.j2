@@ -71,6 +71,7 @@ kernel_frequency={{config["global_clock"]}}
     {% endif %}
     {% if not config["datamover_clock"] == -1 %}
 freqHz={{config["datamover_clock"]}}:{% for ilh, program in app.uniqueOuterLoops() %}datamover_outerloop_{{ilh.id}}_1{{", " if not loop.last}}{% endfor %}
+
 tolerance=0.12:{% for ilh, program in app.uniqueOuterLoops() %}datamover_outerloop_{{ilh.id}}_1{{", " if not loop.last}}{% endfor %}  
     {% endif %}
 {% endif %}
