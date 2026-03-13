@@ -39,14 +39,26 @@ slr=kernel_outerloop_inst_{{ilh.id}}_{{loop.index0+1}}:SLR{{slr_id}}
             {% if program.tiling %}
                 {% if config["tile_banks"] > 1 %}
                     {% for i in range(config["tile_banks"]) %}
+                        {% if not config["tile_bank_placement_policy"] == 4 %}
 sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b{{i}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+                        {#{% else %}
+sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b{{i}}:DDR#}
+                        {% endif %}
                     {% endfor %}
-                {% else %}
+                {% else %} 
+                    {% if not config["tile_bank_placement_policy"] == 4 %}
 sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+                    {#% else %}
+sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:DDR#}
+                    {% endif %}
                 {% endif %}
 {#sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b2:HBM[{{arg.id * 2 + 1}}]#}
             {% else %}
+                {% if not config["tile_bank_placement_policy"] == 4 %}
 sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+                {#% else %}
+sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:DDR#}
+                {% endif %}
             {% endif %}
         {% endfor %}
     {% endfor %}
@@ -58,9 +70,8 @@ sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{FPGABankPlacer.getBank(a
 kernel_frequency={{config["global_clock"]}}
     {% endif %}
     {% if not config["datamover_clock"] == -1 %}
-        {% for ilh, program in app.uniqueOuterLoops() %}
-freqHz={{config["datamover_clock"]}}:datamover_outerloop_{{ilh.id}}_1
-        {% endfor %}
+freqHz={{config["datamover_clock"]}}:{% for ilh, program in app.uniqueOuterLoops() %}datamover_outerloop_{{ilh.id}}_1{{", " if not loop.last}}{% endfor %}
+tolerance=0.12:{% for ilh, program in app.uniqueOuterLoops() %}datamover_outerloop_{{ilh.id}}_1{{", " if not loop.last}}{% endfor %}  
     {% endif %}
 {% endif %}
 
