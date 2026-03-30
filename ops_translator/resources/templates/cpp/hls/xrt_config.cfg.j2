@@ -1,11 +1,11 @@
 [connectivity]
 {%set is_slr_iter_par = config["iter_par_factor"] is iterable and (config["iter_par_factor"] is not string and config["iter_par_factor"] is not mapping) %}
 {% for ilh, program in app.uniqueOuterLoops() %}
-    {% if config["SLR_count"] > 1 %}
+    {#% if config["SLR_count"] > 1 %#}
         {% for slr_id in range(config["SLR_count"]) %}
 nk=kernel_outerloop_{{ilh.id}}{% if is_slr_iter_par %}_{{slr_id}}{% endif %}:1:kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}
         {% endfor %}
-    {% endif %}
+    {#% endif %#}
 {% endfor %}
 
 {% for ilh, program in app.uniqueOuterLoops() %}

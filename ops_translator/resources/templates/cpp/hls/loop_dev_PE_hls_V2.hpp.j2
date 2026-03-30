@@ -25,7 +25,7 @@ arg{{arg.id}}_widenStencilValues[{{link}}]
         {%- if isread -%}
 arg{{arg.id}}_{{link.name}}[{{arg.stencil_ptr}}_{{buffer_read_idx(link)}}]
         {%- else -%}
-arg{{arg.id}}_{{link.name}}[{{arg.stencil_ptr}}_{{buffer_write_idx(link)}}]
+arg{{arg.id}}_{{link.name}}[{{arg.stencil_ptr}}_{{buffer_read_idx(link)}}]
         {%- endif -%}
     {%- else -%}
 arg{{arg.id}}_{{link}}
@@ -337,7 +337,7 @@ public:
             /*
             {{widen_read_stencil_desc}}
             */
-        {% for stencil_name in lh.get_unique_read_stencil_names() %}
+        {#% for stencil_name in lh.get_unique_read_stencil_names() %}
             // Stencil: {{stencil_name}}
             {% for point  in prog.findStencil(stencil_name).points %}
             //      {{"|-" if not loop.last else "`-"}} point: {{point}}
@@ -368,6 +368,33 @@ public:
                 {{stencil_name}}_{{buffer_write_idx(buffer)}} = {{(buffer.write_point - buffer.read_point).y}} * {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} + {{(buffer.write_point - buffer.read_point).x}};
             else
                 {{stencil_name}}_{{buffer_write_idx(buffer)}} = 0;
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+        {% endfor %#}
+
+        {% for stencil_name in lh.get_unique_read_stencil_names() %}
+            // Stencil: {{stencil_name}}
+            {% for point  in prog.findStencil(stencil_name).points %}
+            //      {{"|-" if not loop.last else "`-"}} point: {{point}}
+            {% endfor %}
+            {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
+            // read point: {{buffer.read_point}}, write point: {{buffer.write_point}}
+                {% if buffer.buffer_type == ops.BufferType.LINE_BUFF %}
+                    {% if buffer.is_read_write_aligned %}
+            unsigned short {{stencil_name}}_{{buffer_read_idx(buffer)}} = 0;
+                    {% else %}
+            unsigned short {{stencil_name}}_{{buffer_read_idx(buffer)}} = 0;
+            constexpr short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff = {{buffer.read_point.x - buffer.write_point.x}};
+                    {% endif %}
+                {% else %}
+                    {% if buffer.is_read_write_aligned %}
+            unsigned short {{stencil_name}}_{{buffer_read_idx(buffer)}} = 0;
+                    {% else %}
+            unsigned short {{stencil_name}}_{{buffer_read_idx(buffer)}} = 0;
+            constexpr short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff_x = {{(buffer.read_point - buffer.write_point).x}};
+            constexpr short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff_y = {{(buffer.read_point - buffer.write_point).y}};
+            const short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff = {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff_y * {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} + {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff_x;
                     {% endif %}
                 {% endif %}
             {% endfor %}
@@ -490,12 +517,12 @@ public:
                 {% else %}
                     {% if SIS %}
                         {% if  buffer.buffer_type == ops.BufferType.LINE_BUFF %}
-            #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_s2p {% if "BRAM" in (config["supported_internal_storage"]) %}impl = BRAM{% endif %} latency=2
+            #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_1p {% if "BRAM" in (config["supported_internal_storage"]) %}impl = BRAM{% endif %} latency=2
                         {% else %}
-            #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_s2p {% if "URAM" in (config["supported_internal_storage"]) %}impl = URAM{% endif %} latency=2  
+            #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_1p {% if "URAM" in (config["supported_internal_storage"]) %}impl = URAM{% endif %} latency=2  
                         {% endif %}
                     {% else %}
-            #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_s2p latency=2
+            #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_1p latency=2
                     {% endif %}
                 {% endif %}
                 {% if SIS %}
@@ -558,7 +585,6 @@ public:
         {% for stencil_name in lh.get_unique_read_stencil_names() %}
             {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
                         "{{stencil_name}}_{{buffer_read_idx(buffer)}}: %d, "\
-                        "{{stencil_name}}_{{buffer_write_idx(buffer)}}: %d, "\
             {% endfor %}
         {% endfor %}
                         "reg_itr(%d)\n", m_PEId, i, 
@@ -571,7 +597,6 @@ public:
         {% for stencil_name in lh.get_unique_read_stencil_names() %}
             {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
                         {{stencil_name}}_{{buffer_read_idx(buffer)}}, 
-                        {{stencil_name}}_{{buffer_write_idx(buffer)}}, 
             {% endfor %}
         {% endfor %}
                         reg_itr);
@@ -628,28 +653,29 @@ public:
         {% for stencil_name in lh.get_unique_read_stencil_names() %}
             {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
                 {% if buffer.buffer_type == ops.BufferType.LINE_BUFF %}
-                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_read_idx(buffer)}} = {{stencil_name}}_{{buffer_read_idx(buffer)}} >= ({{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} - 1);
-                    {% if not buffer.is_read_write_aligned %}
+                    
+                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_read_idx(buffer)}} = {{stencil_name}}_{{buffer_read_idx(buffer)}} >= ({{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} - 1 {%if not buffer.is_read_write_aligned%} + ({{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff){% endif %});
+                    {#% if not buffer.is_read_write_aligned %}
                     bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_write_idx(buffer)}} = {{stencil_name}}_{{buffer_write_idx(buffer)}} >= ({{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} - 1);
-                    {% endif %}
+                    {% endif %#}
                 {% else %}
-                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_read_idx(buffer)}} = {{stencil_name}}_{{buffer_read_idx(buffer)}} >= (plane_diff);
-                    {% if not buffer.is_read_write_aligned %}
+                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_read_idx(buffer)}} = {{stencil_name}}_{{buffer_read_idx(buffer)}} >= (plane_diff {%if not buffer.is_read_write_aligned%} + ({{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff){% endif %});
+                    {#% if not buffer.is_read_write_aligned %}
                     bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_write_idx(buffer)}} = {{stencil_name}}_{{buffer_write_idx(buffer)}} >= (plane_diff);
-                    {% endif %}
+                    {% endif %#}
                 {% endif %}
 
                     if (cond_end_of_line_buff_{{stencil_name}}_{{buffer_read_idx(buffer)}})
                         {{stencil_name}}_{{buffer_read_idx(buffer)}} = 0;
                     else
                         {{stencil_name}}_{{buffer_read_idx(buffer)}}++;
-                {% if not buffer.is_read_write_aligned %}
+                {#% if not buffer.is_read_write_aligned %}
 
                     if (cond_end_of_line_buff_{{stencil_name}}_{{buffer_write_idx(buffer)}})
                         {{stencil_name}}_{{buffer_write_idx(buffer)}} = 0;
                     else
                         {{stencil_name}}_{{buffer_write_idx(buffer)}}++;
-                {% endif %}
+                {% endif %#}
             {% endfor %}
         {% endfor %}
 
@@ -664,7 +690,6 @@ public:
                     {% for stencil_name in lh.get_unique_read_stencil_names() %}
                         {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
                                     "{{stencil_name}}_{{buffer_read_idx(buffer)}}(%d), "\
-                                    "{{stencil_name}}_{{buffer_write_idx(buffer)}}(%d), "\
                         {% endfor %}
                     {% endfor %}
                                     "reg_itr(%d)\n", m_PEId, i, 
@@ -676,8 +701,7 @@ public:
                     {% endif %}
                     {% for stencil_name in lh.get_unique_read_stencil_names() %}
                         {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
-                                    {{stencil_name}}_{{buffer_read_idx(buffer)}}, 
-                                    {{stencil_name}}_{{buffer_write_idx(buffer)}}, 
+                                    {{stencil_name}}_{{buffer_read_idx(buffer)}},  
                         {% endfor %}
                     {% endfor %}
                                     reg_itr);

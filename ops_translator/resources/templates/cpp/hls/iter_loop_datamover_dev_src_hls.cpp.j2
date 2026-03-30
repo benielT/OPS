@@ -323,13 +323,13 @@ static void stridedTileStream2memWithAvoid(
 
 static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         const unsigned int num_pkts,
-    {% if not isTiling %}
+    {#% if not isTiling %}
         {% if ilh.isMultiDim() %}
             {% for m_dim in ilh.getMultidimList() %}
         const unsigned int num_pkts_d{{m_dim}},
             {% endfor %}
         {% endif %}
-    {% endif %}
+    {% endif %#}
     {% if isTiling %}
         const unsigned int num_beats,
         {% if ndim == 3 %}
@@ -531,11 +531,11 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
         const unsigned int iter,
     {% if not isTiling%}
         const unsigned int num_pkts,
-        {% if ilh.isMultiDim() %}
+        {#% if ilh.isMultiDim() %}
             {% for m_dim in ilh.getMultidimList() %}
         const unsigned int num_pkts_d{{m_dim}},
             {% endfor %}
-        {% endif %}
+        {% endif %#}
     {% endif %}
     {% if isTiling %}
         const ops::hls::MemConfigTile& memconfig,
@@ -1132,11 +1132,11 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
                 outer_itr,
         {% if not isTiling %}
                 num_pkts,
-            {% if ilh.isMultiDim() %}
+            {#% if ilh.isMultiDim() %}
                 {% for m_dim in ilh.getMultidimList() %}
                 num_pkts_d{{m_dim}},
                 {% endfor %}
-            {% endif %}
+            {% endif %#}
         {% endif %}
                 config,
         {% if ilh.isMultiDim() %}
