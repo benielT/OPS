@@ -31,6 +31,7 @@ class Preprocessor(pcpp.Preprocessor):
         self.line_directive = None
         self.__is_ops_tiled_flag = False
         self.__ops_tile_sizes = [-1,-1,-1]  # x,y,z
+        self.__is_ops_tiled_interleave = False
 
     # preprocessor hook
     def on_comment(self, tok: str) -> bool:
@@ -88,6 +89,11 @@ class Preprocessor(pcpp.Preprocessor):
     def is_ops_tiled(self)-> bool:
         return self.__is_ops_tiled_flag
     
+    def is_ops_tiling_interleaved(self)-> bool:
+        if (self.is_ops_tiled and self.__is_ops_tiled_interleave):
+            return True
+        return False
+    
     def extract_macro_value(self, name: str, macro: Any) -> Any:
         if isinstance(macro.value, list) and len(macro.value) > 0:
             token = macro.value[0]
@@ -108,15 +114,20 @@ class Preprocessor(pcpp.Preprocessor):
                 self.__is_ops_tiled_flag = True
             elif name == "OPS_MAXTILESIZE_X": 
                 self.__ops_tile_sizes[0] = self.extract_macro_value(name, macro)
-                print(f"X tile size: {self.__ops_tile_sizes[0]}")
+                print(f"[PREPROC] X tile size: {self.__ops_tile_sizes[0]}")
                 
             elif name == "OPS_MAXTILESIZE_Y":
                 self.__ops_tile_sizes[1] = self.extract_macro_value(name, macro)
-                print(f"Y tile size: {self.__ops_tile_sizes[1]}")
+                print(f"[PREPROC] Y tile size: {self.__ops_tile_sizes[1]}")
 
             elif name == "OPS_MAXTILESIZE_Z":
                 self.__ops_tile_sizes[2] = self.extract_macro_value(name, macro)
-                print(f"Z tile size: {self.__ops_tile_sizes[2]}")
+                print(f"[PREPROC] Z tile size: {self.__ops_tile_sizes[2]}")
+                
+            elif name == "OPS_HLS_TILE_INTERLEAVE":
+                self.__is_ops_tiled_interleave = True
+                print(f"[PREPROC] OPS TILING INTERLEAVE flag set")
+                
 
     def parse(self, input, source) -> None:
         super().parse(input, source)

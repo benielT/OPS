@@ -209,6 +209,9 @@ def main(argv=None) -> None:
         #Target config update based on defines
         captureDefines(args, target)
         
+        # Check config and apply contrains and overides if any conflicts
+        target.verify_config(app)
+        
         #Calling Optimizer for FPGA
         if target.name == "hls": 
             logging.info("Code-gen : Starting optimization phase for target: " + target.name)
@@ -216,8 +219,6 @@ def main(argv=None) -> None:
                 logging.info("Optimizing program: %s", str(program.path))
                 scheme.optimize(program, app)
 
-        # Check config and apply contrains and overides if any conflicts
-        target.verify_config(app)
         
         logging.info("Code-gen : Generating target specific template, scheme - " + scheme.target.name)
         codegen(args, scheme, app, target.config, args.force_soa)
@@ -275,17 +276,31 @@ def main(argv=None) -> None:
 def captureDefines(args: Namespace, target: Target) -> None:
     defines = [define for [define] in args.D]
     ops_hls_row_tiles_pat = re.compile("OPS_HLS_ROW_TILES=*")
+    ops_tiling_interleave = re.compile("OPS_HLS_TILE_INTERLEAVE")
     
     #Search for OPS_HLS_ROW_TILES
     for d in defines:
         if (ops_hls_row_tiles_pat.search(d)):
             tile_banks = d.split("=")[1]
             if not tile_banks.isnumeric():
+                logging.error(f"OPS_HLS_ROW_TILES flag produce non numeric value:{tile_banks}")
                 break
             if "tile_banks" in target.config:
+                logging.info(f"overiding tile_banks={tile_banks} in config based on OPS_HLS_ROW_TILES flag")
                 target.config["tile_banks"] = int(tile_banks)
-            break
+                break
     
+    #Searching for OPS_HLS_TILE_INTERLEAVE
+    # for d in defines:
+    #     if (ops_tiling_interleave.search(d)):
+    #         if "tile_banks" not in target.config:
+    #             break
+    #         if target.config["vector_factor"] != target.config["mem_vector_factor"] * target.config["tile_banks"]:
+    #             print(f"Overiding vector factor: {target.config['ector_factor']} with mem_vector_factor x tile_banks as OPS_HLS_INTERLEAVE mode is enabled")
+    #             logging.warning(f"Overiding vector factor: {target.config['vector_factor']} with mem_vector_factor x tile_banks as OPS_HLS_INTERLEAVE mode is enabled")
+    #             target.config["vector_factor"] = target.config["mem_vector_factor"] * target.config["tile_banks"]
+            
+
     
 def parse(args: Namespace, lang: Lang) -> Application:
     app = Application()

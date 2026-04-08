@@ -568,6 +568,39 @@ void print3D_host_tiles(ops::hls::Grid<T>& grid, std::string prompt="")
 		std::cout << " [DEBUG] tile grid values: " << prompt << std::endl;
 		std::cout << "----------------------------------------------" << std::endl;
 
+	#if defined(OPS_HLS_TILE_INTERLEAVE)
+		for (int tile_bank = 0; tile_bank < grid.alt_banks; tile_bank++)
+		{
+			std::cout << "		----------------------------------------------" << std::endl;
+			std::cout << " 		[DEBUG] bank: " << tile_bank  << std::endl;
+			std::cout << "		----------------------------------------------" << std::endl;
+
+			for (int k = 0; k < grid.originalProperty.grid_size[2]; k++)
+			{
+				std::cout << "----------- plane: " << k <<"----------" << std::endl;
+
+				for (int j = 0; j < grid.originalProperty.grid_size[1]; j++)
+				{
+					std::cout << "----------- row: " << j <<"----------" << std::endl;
+					for (unsigned int i = 0; i < grid.originalProperty.grid_size[0]; i+=mem_vector_factor) {
+						unsigned long abs_index = i + j * grid.originalProperty.grid_size[0] 
+                                                        + k * grid.originalProperty.grid_size[0] * grid.originalProperty.grid_size[1];
+                        unsigned long vectored_index = abs_index / mem_vector_factor;
+						unsigned int bank = vectored_index % grid.alt_banks;
+						unsigned long bank_index = vectored_index / grid.alt_banks;
+						bank_index *= mem_vector_factor;
+
+						if (vectored_index % grid.alt_banks == tile_bank) {
+							for (unsigned short v = 0; v < mem_vector_factor; v++) 
+								std::cout << std::setw(12) << grid.altHostBuffers[tile_bank][bank_index + v];
+						}
+						
+					}
+					std::cout << std::endl;
+				}
+			}
+		}
+	#else
 		auto alt_buf_row_counts = grid.getAltBufferRowsCounts();
 
 		for (int tile_bank = 0; tile_bank < grid.alt_banks; tile_bank++)
@@ -591,6 +624,7 @@ void print3D_host_tiles(ops::hls::Grid<T>& grid, std::string prompt="")
 				}
 			// }
 		}
+	#endif 
 	}
 	else
 	{

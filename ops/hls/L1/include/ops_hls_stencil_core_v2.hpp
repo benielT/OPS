@@ -32,7 +32,11 @@ class StencilCoreV2
 {
     public:
     	static constexpr unsigned short s_datatype_size = sizeof(T) * 8;
+#if defined(OPS_TILING) && defined(OPS_HLS_TILE_INTERLEAVE)
+    	static constexpr unsigned short s_axis_width = (VEC_FACTOR >> 1) * s_datatype_size;
+#else
     	static constexpr unsigned short s_axis_width = VEC_FACTOR * s_datatype_size;
+#endif
     	static constexpr unsigned short s_datatype_bytes = sizeof(T);
     	static constexpr unsigned short s_mask_width = VEC_FACTOR * s_datatype_bytes;
         static constexpr unsigned short s_singe_index_size = size_singleIndex;
@@ -258,7 +262,7 @@ static StencilConfigCoreSingleTile stencilConfigCoreSingleTileGen2D(const Stenci
     return tileConfig;
 }
 
-static StencilConfigCoreSingleTile stencilConfigCoreSingleTileGen3D(const StencilConfigCoreTiled& srcConfig, const unsigned short tile_x, const unsigned short tile_y)
+static StencilConfigCoreSingleTile stencilConfigCoreSingleTileGen3D(const StencilConfigCoreTiled& srcConfig, const unsigned short tile_x, const unsigned short tile_y, bool is_small_tile = false)
 {
     StencilConfigCoreSingleTile tileConfig;
 

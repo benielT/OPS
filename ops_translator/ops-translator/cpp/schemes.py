@@ -464,12 +464,18 @@ class CppHLS(Scheme):
         app: Application
     ) -> Tuple[str, str]:
         template = env.get_template(str(self.host_config_template))     
+        
+        if (config["HBM_tile_racks"] > 0):
+            placer = FPGABankPlacer(config["tile_bank_placement_policy"], 
+                                                config["HBM_banks"], config["HBM_tile_racks"])
+        else:
+            placer = None
+            
         return (
             template.render(
                 config=config,
                 app=app,
-                FPGABankPlacer = FPGABankPlacer(config["tile_bank_placement_policy"], 
-                                                config["HBM_banks"], config["HBM_tile_racks"]),
+                FPGABankPlacer = placer,
             ), self.host_config_extension
         ) 
     
