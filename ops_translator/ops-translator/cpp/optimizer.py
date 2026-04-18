@@ -80,7 +80,128 @@ def ISLUpdateNodeSwapPairs(graph: DataflowGraph_v2) -> None:
 
     logging.debug(f"Internal dat swap updated graph: \n {graph}")
     
+        
+def getUniqueCopyPair (copy_pairs: List) -> List:
+    unique_copy_pairs = []
+    
+    def findInAnySide(pair: Tuple) -> bool:
+        for unique_pair in unique_copy_pairs:
+            if unique_pair[0] == pair[0] or unique_pair[0] == pair[1] or unique_pair[1] == pair[0] or unique_pair[1] == pair[1]:
+                return True
+        return False
+    
+    for pair in copy_pairs:
+        if pair not in unique_copy_pairs and not findInAnySide(pair):
+            unique_copy_pairs.append(pair)
+            
+    return unique_copy_pairs
+   
 def ISLCopyDetection(original_graph: DataflowGraph_v2, prog: Program, app: Application, scheme: Scheme) -> DataflowGraph_v2:
+    
+    """ This dataflow analysis check ops_par_loop nodes writing output to DF_END node and check weather there are any copy kernels that can be identified and
+    eliminated to avoid synthesis of hardware for data copy 
+
+    Args:
+        original_graph (DataFlowGraph_v2): Original dataflow graph
+        prog (Program): OPS program
+        app (Application): OPS app
+        scheme (Scheme): The OPS translation scheme calling the optimization
+
+    Returns:
+        DataFlowGraph: Adjusted dataflow graph without copy kernel nodes and redundant edges removed
+    """
+    
+    kernel_processor = KernelProcess()
+    
+    copy_graph = original_graph.copy()
+    
+    checked_node_ids = []
+    # unique_copy_pairs = []
+    
+    for node in copy_graph.getAllLoopNodes():
+        kernel_entities = prog.findEntities(node.loop.kernel)
+        
+        if len(kernel_entities) == 0:
+            raise OptError(f"Failed to get AST entity of the kernel {node.loop.kernel} from program: {id(prog)}")
+        
+        logging.debug(f"kernel entity: {kernel_entities[0].ast.spelling}, {kernel_entities[0].ast.extent}, {id(kernel_entities[0].ast)}")
+        lines = ASTtoString(kernel_entities[0].ast)
+            # logging.debug(f"AST dump child of kernel kind: {child.kind}, type: {child.type}, val: {child.spelling}")
+            
+        logging.debug(f"AST dump of the body of kernel declaration of kernel {node.loop.kernel}")
+        for line in lines:
+            logging.debug(line)
+            
+        kernel_func = scheme.translateKernel(node.loop, prog, app, 1)
+        logging.debug(f"translated kernel function: {kernel_func}")
+        kernel_func = kernel_processor.clean_kernel_func_text(kernel_func)
+        logging.debug(f"kernel function after cleaning: {kernel_func}")
+        kernel_body, kernel_args = kernel_processor.get_kernel_body_and_arg_list(kernel_func)
+        logging.debug(f"kernel arguments: {kernel_args}, kernel body: {kernel_body}")
+        logging.debug(f"ops_par_loop arguments: {node.loop.args}")
+        
+        if not len(kernel_args) == len(node.loop.args):
+            raise OptError("Critical error, number of kernel arg should match with ops_par_loop args")
+        
+        kernel_children = [child for child in kernel_entities[0].ast.get_children()]
+        copy_pairs = findCopyPairsInsideKernelCompoundStatement(kernel_children[-1])
+        logging.debug(f"copy pairs found {copy_pairs}")   
+        
+        unique_copy_pairs = getUniqueCopyPair(copy_pairs)
+        
+        if not len(unique_copy_pairs) == len(kernel_args) / 2:
+            logging.warning(f"kernel {node.loop.kernel} cannot be a copy kernel")
+            continue
+        
+        #It's a copy kernel
+        logging.debug(f"Copy Kernel : {node.loop.kernel} found")
+        checked_node_ids.append(node.node_uid)
+        
+        for pair in unique_copy_pairs:
+            lhs_idx = kernel_args.index(pair[0])
+            rhs_idx = kernel_args.index(pair[1])
+            logging.debug(f"lhs_idx: {lhs_idx}, rhs_idx:{rhs_idx}")
+            lhs_dat_name = node.loop.get_dat_name(lhs_idx)
+            rhs_dat_name = node.loop.get_dat_name(rhs_idx)
+            logging.debug(f"lhs_dat_name: {lhs_dat_name}, rhs_dat_name: {rhs_dat_name}")
+            # lhs_global_dat_idx = findIdx(copy_graph.global_dats, lambda dat: dat.ptr == lhs_dat_name)
+            # rhs_global_dat_idx = findIdx(copy_graph.global_dats, lambda dat: dat.ptr == rhs_dat_name)
+            # logging.debug(f"lhs_global_dat_idx: {lhs_global_dat_idx}, rhs_global_dat_idx: {rhs_global_dat_idx}")
+            # copy_graph.global_dat_swap_map[lhs_global_dat_idx] = rhs_global_dat_idx
+            # copy_graph.global_dat_swap_map[rhs_global_dat_idx] = lhs_global_dat_idx 
+            
+            # scenario 1 the rhs_dat_connects to END node
+            outer_edges_from_node = copy_graph.getOutEdgesFromNode(node.node_uid, lhs_dat_name)
+            if not len(outer_edges_from_node) == 1:
+                raise OptError(f"Failed to get unique out edge of buffer: {lhs_dat_name} from node: {node.loop.kernel} in the dataflow graph. outer_edges_from_nodes:{outer_edges_from_node}");
+            
+            out_src_id, out_sink_id, out_attr = outer_edges_from_node[0] 
+            
+            if out_sink_id == copy_graph.getEndNodeIdx(): # Continue to scenario 1
+                copy_graph.addDatSwapUpdate(lhs_dat_name, rhs_dat_name)    
+            else: # Scenario 2 just only doing remap
+                pass
+            
+            # remap 
+            in_edge_from_node = copy_graph.getInEdgesFromNode(node.node_uid, rhs_dat_name)
+            
+            if not len(in_edge_from_node) == 1:
+                raise OptError(f"Failed to get unique in edge of buffer: {rhs_dat_name} from node: {node.loop.kernel} in the dataflow graph");
+            
+            in_src_id, in_sink_id, in_attr = in_edge_from_node[0]
+            
+            copy_graph.addEdge(in_src_id, in_attr["src_arg_id"], in_attr["dat_str"], out_sink_id, 0)
+            
+    #Remove all copy nodes now
+    for node_uid in checked_node_ids:
+        copy_graph.deleteNode(node_uid)
+            
+    logging.debug(f"global swap map is ISL COpy detect: {copy_graph.getGlobalDatsSwapMap()}")
+    ISLUpdateNodeSwapPairs(copy_graph)
+    copy_graph.print("after_copy_detection", make_dats_node=True, attr={'show_arg_id': False})
+    return copy_graph
+
+def ISLCopyDetection_deprecated(original_graph: DataflowGraph_v2, prog: Program, app: Application, scheme: Scheme) -> DataflowGraph_v2:
     
     """ This dataflow analysis check ops_par_loop nodes writing output to DF_END node and check weather there are any copy kernels that can be identified and
     eliminated to avoid synthesis of hardware for data copy 
