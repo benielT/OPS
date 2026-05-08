@@ -383,18 +383,22 @@ public:
                 {% if buffer.buffer_type == ops.BufferType.LINE_BUFF %}
                     {% if buffer.is_read_write_aligned %}
             unsigned short {{stencil_name}}_{{buffer_read_idx(buffer)}} = 0;
+            const short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len = {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} - 1;
                     {% else %}
             unsigned short {{stencil_name}}_{{buffer_read_idx(buffer)}} = 0;
             constexpr short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff = {{buffer.read_point.x - buffer.write_point.x}};
+            const short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len = {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} - 1  + {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff;
                     {% endif %}
                 {% else %}
                     {% if buffer.is_read_write_aligned %}
             unsigned short {{stencil_name}}_{{buffer_read_idx(buffer)}} = 0;
+            const short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len = plane_diff;
                     {% else %}
             unsigned short {{stencil_name}}_{{buffer_read_idx(buffer)}} = 0;
             constexpr short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff_x = {{(buffer.read_point - buffer.write_point).x}};
             constexpr short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff_y = {{(buffer.read_point - buffer.write_point).y}};
             const short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff = {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff_y * {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} + {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff_x;
+            const short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len = plane_diff  + {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff;
                     {% endif %}
                 {% endif %}
             {% endfor %}
@@ -654,12 +658,12 @@ public:
             {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
                 {% if buffer.buffer_type == ops.BufferType.LINE_BUFF %}
                     
-                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_read_idx(buffer)}} = {{stencil_name}}_{{buffer_read_idx(buffer)}} >= ({{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} - 1 {%if not buffer.is_read_write_aligned%} + ({{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff){% endif %});
+                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_read_idx(buffer)}} = {{stencil_name}}_{{buffer_read_idx(buffer)}} >= {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len;
                     {#% if not buffer.is_read_write_aligned %}
                     bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_write_idx(buffer)}} = {{stencil_name}}_{{buffer_write_idx(buffer)}} >= ({{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} - 1);
                     {% endif %#}
                 {% else %}
-                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_read_idx(buffer)}} = {{stencil_name}}_{{buffer_read_idx(buffer)}} >= (plane_diff {%if not buffer.is_read_write_aligned%} + ({{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff){% endif %});
+                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_read_idx(buffer)}} = {{stencil_name}}_{{buffer_read_idx(buffer)}} >= {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len;
                     {#% if not buffer.is_read_write_aligned %}
                     bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_write_idx(buffer)}} = {{stencil_name}}_{{buffer_write_idx(buffer)}} >= (plane_diff);
                     {% endif %#}
