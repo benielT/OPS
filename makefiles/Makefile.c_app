@@ -41,6 +41,13 @@ ifdef OPS_GENERATOR_LOG_DEBUG
 	OPS_GEN_DEBUG=-g
 endif
 
+OPS_GEN_ISL_DF_FORMAT=
+ifdef OPS_ISL_DF_FORMAT
+	OPS_GEN_ISL_DF_FORMAT=$(OPS_ISL_DF_FORMAT)
+else
+	OPS_GEN_ISL_DF_FORMAT="png"
+endif
+
 OPS_TARGET_CONFIG_JSON=
 ifdef OPS_TARGET_CONFIG_FILE
 	OPS_TARGET_CONFIG_JSON=--config ${OPS_TARGET_CONFIG_FILE}
@@ -65,7 +72,7 @@ DEFINES += $(filter -D%, $(CXXFLAGS))
 	@echo "OPS_EXTENTIONS: ${OPS_GENERATED_SUFFIX}_hls"
 	@echo "OPS_GENERATED: ${OPS_GENERATED_HLS}"
 	which python3
-	python3 $(OPS_INSTALL_PATH)/../ops_translator/ops-translator $(VERBOSE) $(DUMP) $(DUMP_AST) $(OPS_GEN_DEBUG) --fpga $(OPS_TARGET_CONFIG_JSON) $(DEFINES) -DOPS_FPGA -I $(OPS_INSTALL_PATH)/c/include/ --file_paths $(OPS_FILES)
+	python3 $(OPS_INSTALL_PATH)/../ops_translator/ops-translator $(VERBOSE) $(DUMP) $(DUMP_AST) $(OPS_GEN_DEBUG) --fpga $(OPS_TARGET_CONFIG_JSON) $(DEFINES) -DOPS_FPGA -I $(OPS_INSTALL_PATH)/c/include/ --file_paths $(OPS_FILES) -dff $(OPS_GEN_ISL_DF_FORMAT)
 	@echo ""
 	rm -f .generated_hls
 	touch .generated_hls
@@ -525,3 +532,5 @@ clean:
 	rm -f *_ast.txt  
 	rm -f *.png
 	rm -f *.dot
+	rm -f *.pdf
+	rm -f *.jpg

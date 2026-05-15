@@ -9,7 +9,7 @@ from functools import cmp_to_key
 import logging
 import rustworkx as rx
 from rustworkx.visualization import graphviz_draw
-    
+import config
 # import pygraphviz
 if TYPE_CHECKING:
     from store import Location
@@ -1469,7 +1469,7 @@ class IterLoop:
         
     def printDataflowGraph(self, filename: str) -> None: 
         logging.debug(self.get_active_df_graph())
-        self.get_active_df_graph().print(self.unique_name, make_dats_node = True)
+        self.get_active_df_graph().print(self.unique_name, format=config.global_args.df_img_format, make_dats_node = True)
         
     def isMultiDim(self) -> bool:
         for dat, ac_type in self.dats:

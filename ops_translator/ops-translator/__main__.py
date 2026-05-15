@@ -1,3 +1,4 @@
+import config
 import dataclasses
 import os
 import json
@@ -25,7 +26,6 @@ from util import getVersion, safeFind, isFilePath, isDirPath, jsonReadFile
 from util import create_cpp_main, replace_fortran_program_with_subroutine
 
 def main(argv=None) -> None:
-
     #Build arg parser
     parser = ArgumentParser(prog="ops-translator")
 
@@ -51,10 +51,11 @@ def main(argv=None) -> None:
     parser.add_argument("-t", "--target", help="Code-gereration target", type=str, action="append", nargs=1, choices=target_names, default=[])
 
     parser.add_argument("-fpga", "--fpga", help="Generate program for FPGA vitis HLS", action="store_true")
+    parser.add_argument("-dff","--df_img_format", help="Dataflow IR Image Dump Format", type=str, default="png")
     
     #invoking arg parser
     args = parser.parse_args(argv)
-
+    config.global_args = parser.parse_args(argv)
     #setting logger
     if (args.debug):
         print("Log level DEBUG set")

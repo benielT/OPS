@@ -8,6 +8,7 @@ from util import KernelProcess, findIdx, function_name, print_rx_graph
 from scheme import Scheme
 from cpp.parser import ASTtoString, CursorKind, getBinaryOp, Cursor, getAccessorAccessIndices, decend
 from copy import deepcopy
+import config
 # import pygraphviz
 import rustworkx as rx
 import jaro
@@ -198,7 +199,7 @@ def ISLCopyDetection(original_graph: DataflowGraph_v2, prog: Program, app: Appli
             
     logging.debug(f"global swap map is ISL COpy detect: {copy_graph.getGlobalDatsSwapMap()}")
     ISLUpdateNodeSwapPairs(copy_graph)
-    copy_graph.print("after_copy_detection", make_dats_node=True, attr={'show_arg_id': False})
+    copy_graph.print("after_copy_detection", format=config.global_args.df_img_format, make_dats_node=True, attr={'show_arg_id': False})
     return copy_graph
 
 def ISLCopyDetection_deprecated(original_graph: DataflowGraph_v2, prog: Program, app: Application, scheme: Scheme) -> DataflowGraph_v2:
@@ -312,7 +313,7 @@ def ISLCopyDetection_deprecated(original_graph: DataflowGraph_v2, prog: Program,
     
     logging.debug(f"global swap map is ISL COpy detect: {copy_graph.getGlobalDatsSwapMap()}")
     ISLUpdateNodeSwapPairs(copy_graph)
-    copy_graph.print("after_copy_detection", make_dats_node=True, attr={'show_arg_id': False})
+    copy_graph.print("after_copy_detection", format=config.global_args.df_img_format, make_dats_node=True, attr={'show_arg_id': False})
     return copy_graph
 
 def ISLReadBufferPropagation(original_graph: DataflowGraph_v2, prog: Program, app: Application, scheme: Scheme) -> DataflowGraph_v2:
@@ -436,7 +437,7 @@ def ISLReadBufferPropagation(original_graph: DataflowGraph_v2, prog: Program, ap
             
     logging.debug(f"{function_name()}: propagation paths: {propagation_paths}")
     logging.debug(f"{copy_graph}")
-    copy_graph.print("after_buffer_propagation", make_dats_node=True, attr={'show_arg_id': False})
+    copy_graph.print("after_buffer_propagation", format=config.global_args.df_img_format, make_dats_node=True, attr={'show_arg_id': False})
     return copy_graph
     
 @dataclass
@@ -747,7 +748,7 @@ def ISLDataDependencyCyclesDetection(original_graph: DataflowGraph_v2, prog: Pro
             
         return {"label" : f"{node.dat_ptr}:{node.df_node.node_uid}_{node_name_suffix}"}
     
-    print_rx_graph(f"{copy_graph.unique_name}", dependency_graph, node_attr=node_attr)
+    print_rx_graph(f"{copy_graph.unique_name}", dependency_graph, node_attr=node_attr, format=config.global_args.df_img_format)
     
     # Phase 2: Explore shortest paths.
     # The cycle heads, the dats writing to end should have a swap pair dat (sometimes it can be same dat) that read from start
@@ -796,7 +797,7 @@ def ISLDataDependencyCyclesDetection(original_graph: DataflowGraph_v2, prog: Pro
         
         #updating internal swap map
     logging.debug(f"df_graph after ISLDataDepCyclesDet \n {copy_graph}")
-    copy_graph.print("after_buffer_DataDepCycleDet", make_dats_node=True, attr={'show_arg_id':False})
+    copy_graph.print("after_buffer_DataDepCycleDet", format=config.global_args.df_img_format, make_dats_node=True, attr={'show_arg_id':False})
     return copy_graph
     # for head in cycle_heads:
     #     logging.debug(f"dependency train: {head}")
