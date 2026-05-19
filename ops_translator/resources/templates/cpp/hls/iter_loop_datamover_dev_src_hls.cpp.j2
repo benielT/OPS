@@ -306,7 +306,10 @@ static void stridedTileStream2memWithAvoid(
 				ops::hls::hlsTerminate<MEM_DATA_WIDTH, IN_ITR>(strm_in, size_x);
     {% endif %}
     {% for i in range(config["tile_banks"]) %}
-        {% if loop.last %}
+        {% if loop.first and ndim != 3 %}
+            if (bank_id == {{i}})
+                ops::hls::stream2memWithAvoid<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(arg_b{{i}} + s2, strm_in, size_x, avoid_x);
+        {% elif loop.last %}
             else
                 ops::hls::stream2memWithAvoid<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(arg_b{{i}} + s2, strm_in, size_x, avoid_x);
         {% else %}
