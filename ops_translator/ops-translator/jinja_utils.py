@@ -134,7 +134,7 @@ def getOverlapTileSize(n_slr: int, p_slr: int, half_span: int, mem_vec_fac: int)
     # print(f"n_slr: {n_slr}, p_slr: {p_slr}, half_span: {half_span}, mem_vec_fac: {mem_vec_fac}")
     if isinstance(p_slr, list):
         return (floor(((sum(p_slr)) * half_span + mem_vec_fac - 1) / mem_vec_fac) * mem_vec_fac * 2)
-    return(((n_slr * p_slr) * half_span + mem_vec_fac - 1) / mem_vec_fac) * mem_vec_fac * 2
+    return (floor(((n_slr * p_slr) * half_span + mem_vec_fac - 1) / mem_vec_fac) * mem_vec_fac * 2)
 
 
 def getTotalPEs(n_slr: int, p_slr: Union[int, List]) -> int:
