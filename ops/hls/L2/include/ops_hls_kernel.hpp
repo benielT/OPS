@@ -40,8 +40,8 @@
 // This file is required for OpenCL C++ wrapper APIs
 #include "../../ext/xcl2/xcl2.hpp"
 
-#ifndef OPS_HLS_ROW_TILES
-    #define OPS_HLS_ROW_TILES 1
+#ifndef OPS_HLS_TILE_BANKS
+    #define OPS_HLS_TILE_BANKS 1
 #endif
 namespace ops
 {
@@ -105,7 +105,7 @@ public:
 	unsigned short vector_factor = 8; //grid vector factor considered for adjustements
 	host_buffer_t<T> hostBuffer;
     #ifdef OPS_TILING
-    std::vector<host_buffer_t<T>> altHostBuffers = std::vector<host_buffer_t<T>>(OPS_HLS_ROW_TILES);
+    std::vector<host_buffer_t<T>> altHostBuffers = std::vector<host_buffer_t<T>>(OPS_HLS_TILE_BANKS);
     std::vector<cl::Buffer> deviceBuffer;
     #else
     cl::Buffer deviceBuffer;
@@ -116,7 +116,7 @@ public:
 	bool isDevBufDirty;
 	bool isSetAsArg;
     #ifdef OPS_TILING
-    static const unsigned short alt_banks = OPS_HLS_ROW_TILES;
+    static const unsigned short alt_banks = OPS_HLS_TILE_BANKS;
     #else
     static const unsigned short alt_banks = 1;
     #endif

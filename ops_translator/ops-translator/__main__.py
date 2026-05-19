@@ -276,18 +276,18 @@ def main(argv=None) -> None:
 
 def captureDefines(args: Namespace, target: Target) -> None:
     defines = [define for [define] in args.D]
-    ops_hls_row_tiles_pat = re.compile("OPS_HLS_ROW_TILES=*")
+    ops_hls_tile_bank_pat = re.compile("OPS_HLS_TILE_BANKS=*")
     ops_tiling_interleave = re.compile("OPS_HLS_TILE_INTERLEAVE")
     
-    #Search for OPS_HLS_ROW_TILES
+    #Search for OPS_HLS_TILE_BANKS
     for d in defines:
-        if (ops_hls_row_tiles_pat.search(d)):
+        if (ops_hls_tile_bank_pat.search(d)):
             tile_banks = d.split("=")[1]
             if not tile_banks.isnumeric():
-                logging.error(f"OPS_HLS_ROW_TILES flag produce non numeric value:{tile_banks}")
+                logging.error(f"OPS_HLS_TILE_BANKS flag produce non numeric value:{tile_banks}")
                 break
             if "tile_banks" in target.config:
-                logging.info(f"overiding tile_banks={tile_banks} in config based on OPS_HLS_ROW_TILES flag")
+                logging.info(f"overiding tile_banks={tile_banks} in config based on OPS_HLS_TILE_BANKS flag")
                 target.config["tile_banks"] = int(tile_banks)
                 break
     
