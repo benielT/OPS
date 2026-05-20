@@ -946,6 +946,164 @@ void stream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out,
 
 /**************************** TILED ops  ****************************/
 
+/**
+ * @brief 	stream2interleave reads from number of HLS stream and create in-terleved stream for tiled processing
+ *
+ * @details This function reads data from NUM_STREAMS number of input streams of size MEM_DATAWIDTH and create
+ * 			NUM_STREAMS of output streams of size, MEM_DATAWIDTH+DATA_WIDTH*OVERLAP_SIZE to support NUM_STREAMS/2 
+ * 			process elements. Each process element consumes two adjacent output streams where the borders will be
+ * 			overlapped over the process element boundary. 
+ *
+ * @tparam MEM_DATA_WIDTH The bit-width of each memory access (e.g., 64, 128, 256)
+ * @tparam DATA_WIDTH Element datawidth
+ * @tparam OVERLAP_SIZE Overlap size of the low level tiles
+ * @tparam NUM_STREAMS Number of input, output streams
+ *
+ * @param[in] in_streams - Input streams array of size MEM_DATA_WIDTH
+ * @param[out] out_sreams - Output streams array of size MEM_DATA_WIDTH + DATA_WIDTH * OVERLAP_SIZE
+ * @param[in] num_pkts - Number of stream packets
+ */
+
+template <unsigned short MEM_DATA_WIDTH, unsigned short DATA_WIDTH, unsigned short NUM_STREAMS, unsigned short OVERLAP_SIZE = 1>
+void stream2interleave(::hls::stream<ap_uint<MEM_DATA_WIDTH>> in_stream[NUM_STREAMS], ::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_SIZE>> out_stream[NUM_STREAMS], const unsigned int num_pkts) 
+{
+#ifndef __SYTHESIS__
+	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
+			"MEM_DATA_WIDTH failed limit check");
+	static_assert(NUM_STREAMS % 2 == 0,
+			" NUM_STREAMS has to be divisible by 2");
+#endif
+
+	constexpr unsigned short REALISED_OVERLAP_SIZE = DATA_WIDTH * OVERLAP_SIZE;
+	constexpr unsigned short REALISED_OVERLAP_SIZE_MIN_1 = REALISED_OVERLAP_SIZE - 1;
+	constexpr unsigned short MSB_IN = MEM_DATA_WIDTH - 1;
+	constexpr unsigned short LSB_LAST_OVERLAP_IN = MEM_DATA_WIDTH - REALISED_OVERLAP_SIZE;
+	constexpr unsigned short MEM_DATA_WIDTH_OUT = MEM_DATA_WIDTH + REALISED_OVERLAP_SIZE;
+	constexpr unsigned short MSB_OUT = MEM_DATA_WIDTH_OUT - 1;
+	constexpr unsigned short LSB_LAST_OVERLAP_OUT = MEM_DATA_WIDTH_OUT - REALISED_OVERLAP_SIZE;
+	constexpr unsigned short NUM_STREAMS_BY_2 = NUM_STREAMS >> 1;
+	constexpr unsigned short NUM_STREAMS_MIN_1 = NUM_STREAMS - 1;
+
+	const unsigned int num_pkts_plus_1 = register_it(num_pkts + 1);
+
+	// 3 step shift registers
+	ap_uint<MEM_DATA_WIDTH> data_front[NUM_STREAMS], data[NUM_STREAMS], data_back[NUM_STREAMS];
+	#pragma HLS ARRAY_PARTITION variable=data_front dim=0 complete
+	#pragma HLS ARRAY_PARTITION variable=data dim=0 complete
+	#pragma HLS ARRAY_PARTITION variable=data_back dim=0 complete
+
+	for (unsigned int itr = 0; itr < num_pkts_plus_1; itr++) 
+	{
+		#pragma HLS PIPELINE II=1
+		bool read_cond = register_it(itr < num_pkts);
+		ap_uint<MEM_DATA_WIDTH> tmp[NUM_STREAMS];
+		#pragma HLS ARRAY_PARTITION variable=tmp dim=0 complete
+
+		if (read_cond) {
+			for (unsigned int n = 0; n < NUM_STREAMS; n++)
+			{
+				#pragma HLS UNROLL
+				tmp[n] = in_stream[n].read();	
+			}
+		}
+
+		for (unsigned int n = 0; n < NUM_STREAMS; n++)
+		{
+			#pragma HLS UNROLL
+			data_back[n] = data[n];
+			data[n] = data_front[n];
+			data_front[n] =  register_it(tmp[n]);	
+		}
+
+		ap_uint<MEM_DATA_WIDTH_OUT> tmp_out[NUM_STREAMS];
+		#pragma HLS ARRAY_PARTITION variable=tmp_out dim=1 complete
+
+		if (itr > 0)
+		{
+			for (unsigned int n = 0; n < NUM_STREAMS_BY_2; n++)
+			{
+				#pragma HLS UNROLL
+				tmp_out[2*n].range(MSB_OUT,REALISED_OVERLAP_SIZE) = data[2*n]; 
+				
+				if (n == 0) {
+					tmp_out[2*n].range(REALISED_OVERLAP_SIZE_MIN_1,0) = data_back[NUM_STREAMS_MIN_1].range(MSB_IN, LSB_LAST_OVERLAP_IN);
+				} else {
+					tmp_out[2*n].range(REALISED_OVERLAP_SIZE_MIN_1,0) = data[2*n-1].range(MSB_IN, LSB_LAST_OVERLAP_IN);
+				}
+				tmp_out[2*n+1].range(MSB_IN, 0) = data[2*n+1];
+				
+				if (n == NUM_STREAMS_BY_2 - 1) {
+					tmp_out[2*n+1].range(MSB_OUT, LSB_LAST_OVERLAP_OUT) = data_front[0].range(REALISED_OVERLAP_SIZE_MIN_1,0);
+				} else {
+					tmp_out[2*n+1].range(MSB_OUT, LSB_LAST_OVERLAP_OUT) = data[2*n+2].range(REALISED_OVERLAP_SIZE_MIN_1,0);
+				}
+			}
+
+			for (unsigned int n = 0; n < NUM_STREAMS; n++)
+			{
+				#pragma HLS UNROLL
+				out_stream[n].write(tmp_out[n]);
+			}
+		}
+	}
+}
+
+
+/**
+ * @brief 	interleav2stream reads from number of interleaved HLS stream and create standard stream from tiled processing
+ *
+ * @details This function reads data from NUM_STREAMS number of input streams of size MEM_DATAWIDTH+DATA_WIDTH*OVERLAP_SIZE 
+ * 			and create NUM_STREAMS of output streams of size, MEM_DATAWIDTH to from NUM_STREAMS/2 process
+ * 			elements.
+ *
+ * @tparam MEM_DATA_WIDTH The bit-width of each memory access (e.g., 64, 128, 256)
+ * @tparam DATA_WIDTH Element datawidth
+ * @tparam OVERLAP_SIZE Overlap size of the low level tiles
+ * @tparam NUM_STREAMS Number of input, output streams
+ *
+ * @param[in] in_streams - Input streams array of size MEM_DATA_WIDTH + DATA_WIDTH * OVERLAP_SIZE
+ * @param[out] out_sreams - Output streams array of size MEM_DATA_WIDTH
+ * @param[in] num_pkts - Number of stream packets
+ */
+template <unsigned short MEM_DATA_WIDTH, unsigned short DATA_WIDTH, unsigned short NUM_STREAMS, unsigned short OVERLAP_SIZE = 1>
+void interleave2stream(::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_SIZE>> in_stream[NUM_STREAMS], ::hls::stream<ap_uint<MEM_DATA_WIDTH>> out_stream[NUM_STREAMS], const unsigned int num_pkts) 
+{
+	constexpr unsigned short REALISED_OVERLAP_SIZE = DATA_WIDTH * OVERLAP_SIZE;
+	constexpr unsigned short MEM_DATA_WIDTH_IN = MEM_DATA_WIDTH + REALISED_OVERLAP_SIZE;
+	constexpr unsigned short MSB_IN = MEM_DATA_WIDTH_IN - 1;
+	constexpr unsigned short MSB_OUT = MEM_DATA_WIDTH - 1;
+	constexpr unsigned short NUM_STREAMS_BY_2 = NUM_STREAMS >> 1;
+
+	ap_uint<MEM_DATA_WIDTH_IN> tmp_in[NUM_STREAMS];
+	#pragma HLS ARRAY_PARTITION variable = tmp_in dim=0 complete
+	ap_uint<MEM_DATA_WIDTH> tmp_out[NUM_STREAMS];
+	#pragma HLS ARRAY_PARTITION variable = tmp_out dim=0 complete
+
+	for (unsigned int itr = 0; itr < num_pkts; itr++) 
+	{
+		#pragma HLS PIPELINE II=1
+		
+		for (unsigned short n = 0; n < NUM_STREAMS; n++)
+		{
+			#pragma HLS UNROLL
+			tmp_in[n] = register_it(in_stream[n].read());
+		}
+
+		for (unsigned short n = 0; n < NUM_STREAMS_BY_2; n++)
+		{
+			#pragma HLS UNROLL
+			tmp_out[2*n] = tmp_in[2*n].range(MSB_IN, REALISED_OVERLAP_SIZE);
+			tmp_out[2*n+1] = tmp_in[2*n+1].range(MSB_OUT,0);
+		}
+
+		for (unsigned short n = 0; n < NUM_STREAMS; n++)
+		{
+			#pragma HLS UNROLL
+			out_stream[n].write(tmp_out[n]);
+		}
+	}
+}
+
 static ap_uint<144> commandGen2D(const ap_uint<64>& offset, const ap_uint<16>& stride_x, const ap_uint<16>& size_x,
                 const ap_uint<16>& stride_y, const ap_uint<16>& size_y, const ap_uint<16>& avoid_x)
 {
