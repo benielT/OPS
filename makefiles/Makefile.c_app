@@ -58,21 +58,21 @@ DEFINES+= -DOPS_ACC_IGNORE
 #filtering -D flags from CXXFLAGS and append to DEFINES
 DEFINES += $(filter -D%, $(CXXFLAGS))
 
-.generated: $(HEADERS) $(OPS_FILES) $(OPS_INSTALL_PATH)/../ops_translator/ops-translator/*.py
+.generated: $(HEADERS) $(OPS_FILES) $(OPS_INSTALL_PATH)/../ops_translator/ops_translator/*.py
 	@echo "generating translations for ${OPS_FILES}"
 	@echo "OPS_EXTENTIONS: ${OPS_GENERATED_SUFFIX}"
 	@echo "OPS_GENERATED: ${OPS_GENERATED}"
 	which python3
-	python3 $(OPS_INSTALL_PATH)/../ops_translator/ops-translator $(VERBOSE) $(DUMP) $(DUMP_AST) $(OPS_GEN_DEBUG) $(OPS_TARGET_CONFIG_JSON) $(DEFINES) -I $(OPS_INSTALL_PATH)/c/include/ --file_paths $(OPS_FILES)
+	python3 $(OPS_INSTALL_PATH)/../ops_translator/ops_translator $(VERBOSE) $(DUMP) $(DUMP_AST) $(OPS_GEN_DEBUG) $(OPS_TARGET_CONFIG_JSON) $(DEFINES) -I $(OPS_INSTALL_PATH)/c/include/ --file_paths $(OPS_FILES)
 	rm -f .generated
 	touch .generated
 
-.generated_hls: $(HEADERS) $(OPS_FILES) $(OPS_INSTALL_PATH)/../ops_translator/ops-translator/*.py
+.generated_hls: $(HEADERS) $(OPS_FILES) $(OPS_INSTALL_PATH)/../ops_translator/ops_translator/*.py
 	@echo "generating translations for ${OPS_FILES}"
 	@echo "OPS_EXTENTIONS: ${OPS_GENERATED_SUFFIX}_hls"
 	@echo "OPS_GENERATED: ${OPS_GENERATED_HLS}"
 	which python3
-	python3 $(OPS_INSTALL_PATH)/../ops_translator/ops-translator $(VERBOSE) $(DUMP) $(DUMP_AST) $(OPS_GEN_DEBUG) --fpga $(OPS_TARGET_CONFIG_JSON) $(DEFINES) -DOPS_FPGA -I $(OPS_INSTALL_PATH)/c/include/ --file_paths $(OPS_FILES) -dff $(OPS_GEN_ISL_DF_FORMAT)
+	python3 $(OPS_INSTALL_PATH)/../ops_translator/ops_translator $(VERBOSE) $(DUMP) $(DUMP_AST) $(OPS_GEN_DEBUG) --fpga $(OPS_TARGET_CONFIG_JSON) $(DEFINES) -DOPS_FPGA -I $(OPS_INSTALL_PATH)/c/include/ --file_paths $(OPS_FILES) -dff $(OPS_GEN_ISL_DF_FORMAT)
 	@echo ""
 	rm -f .generated_hls
 	touch .generated_hls
