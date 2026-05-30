@@ -1,0 +1,48 @@
+{% extends "top.hpp.j2" %}
+#include "top.hpp"
+
+{% block dut_prototype %}
+{{super()}}
+{% endblock %}
+{% block dut_body %}
+{
+    #pragma HLS TOP
+    
+    {% for i in range(tile_banks) %}
+    #pragma HLS INTERFACE mode=m_axi bundle=gmem{{loop.index0}} depth=MAX_AXI_DEPTH_DIV_BY_BANKS max_read_burst_length=BURST_SIZE max_write_burst_length=BURST_SIZE \
+            port=arg0_b{{loop.index0}} offset=slave 
+    #pragma HLS INTERFACE s_axilite port = arg0_b{{loop.index0}} bundle = control
+    {% endfor %}
+    {% for i in range(tile_banks) -%}
+    #pragma HLS INTERFACE mode=axis port=arg0_strm_out register
+    {% endfor %}
+    #pragma HLS INTERFACE s_axilite port=num_beats
+    #pragma HLS INTERFACE s_axilite port=num_beats_div_banks_by_2
+    #pragma HLS INTERFACE s_axilite port=size_y
+    #pragma HLS INTERFACE s_axilite port=size_z
+    #pragma HLS INTERFACE s_axilite port=command
+    #pragma HLS INTERFACE s_axilite port=short_command
+    #pragma HLS INTERFACE s_axilite port=return bundle=control
+
+    #pragma HLS DATAFLOW
+
+    ::hls::stream<ap_uint<48>> arg0_read_command_strm[{{tile_banks}}];
+	#pragma HLS STREAM variable = arg0_read_command_strm depth = 2
+
+    ::hls::stream<ap_uint<AXIS_DATA_WIDTH>> arg0_read_strm[{{tile_banks}}];
+	#pragma HLS STREAM variable = arg0_read_strm depth = 10
+
+    ::hls::stream<ap_uint<AXIS_DATA_WIDTH>> arg0_read_redirected_strm[{{tile_banks}}];
+	#pragma HLS STREAM variable = arg0_read_strm depth = 10
+
+    ops::hls::readConfigStreamGenerator<{{tile_banks}}, {{ii}}>(short_command, arg0_read_command_strm);
+    {% for i in range(tile_banks) %}
+    ops::hls::stridedTileMem2streamV2<MEM_DATA_WIDTH, AXIS_DATA_WIDTH, BURST_SIZE, II>(arg0_b{{loop.index0}}, arg0_read_command_strm[{{loop.index0}}], arg0_read_strm[{{loop.index0}}], size_y, size_z);
+    {%- endfor %}
+
+    ops::hls::redirect<MEM_DATA_WIDTH, AXIS_DATA_WIDTH, {{tile_banks}}, II>(arg0_read_strm, arg0_read_redirected_strm, short_command);
+    {% for i in range(tile_banks) %}
+    ops::hls::stream2axis<AXIS_DATA_WIDTH>(arg0_read_redirected_strm[{{loop.index0}}], arg0_strm_out[{{loop.index0}}], num_beats_div_banks_by_2{%if debug == true %},true{% endif %});
+    {%- endfor %}
+}
+{% endblock %}
