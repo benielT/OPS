@@ -19,7 +19,7 @@
 #include <tuple>
 // #define DEBUG_LOG
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 		#ifndef DEBUG_LOG_SIZE_OF
 			#define DEBUG_LOG_SIZE_OF 4
@@ -84,7 +84,7 @@ static void convMemBeat2axisPkt(ap_uint<MEM_DATA_WIDTH>* mem_in,
 					const unsigned int& size,
 					const unsigned int& index)
 {	
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(MEM_DATA_WIDTH >= AXIS_DATA_WIDTH,
 			"MEM_DATA_WIDTH has to be grater that AXIS_DATA_WIDTH");
 #endif
@@ -92,7 +92,7 @@ static void convMemBeat2axisPkt(ap_uint<MEM_DATA_WIDTH>* mem_in,
 	constexpr unsigned int bytes_per_axis_pkt = AXIS_DATA_WIDTH / 8;
 	constexpr unsigned int num_strm_pkts_per_beat = MEM_DATA_WIDTH / AXIS_DATA_WIDTH;
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 	printf("\n|HLS DEBUG_LOG| %s | bytes_per_beat: %d, bytes_per_axis_pkt: %d, num_strm_pkts_per_beat: %d\n"
 			, __func__, bytes_per_beat, bytes_per_axis_pkt, num_strm_pkts_per_beat);
@@ -103,7 +103,7 @@ static void convMemBeat2axisPkt(ap_uint<MEM_DATA_WIDTH>* mem_in,
 	ap_uint<MEM_DATA_WIDTH> tmp;
 	tmp = mem_in[index];
 	
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 	printf("   |HLS DEBUG_LOG|%s| reading beat index: %d\n", __func__, index);
 #endif
@@ -121,7 +121,7 @@ static void convMemBeat2axisPkt(ap_uint<MEM_DATA_WIDTH>* mem_in,
 			tmp_pkt.data = tmp.range((pkt + 1) * AXIS_DATA_WIDTH - 1, pkt * AXIS_DATA_WIDTH);
 			strm_out.write(tmp_pkt);
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 			printf("   |HLS DEBUG_LOG|%s| sending axis pkt: %d, val=(",__func__, pkt);
 
@@ -149,7 +149,7 @@ static void convAxisPkt2memBeat(ap_uint<MEM_DATA_WIDTH>* mem_out,
 					unsigned int& size,
 					unsigned int& index)
 {	
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(MEM_DATA_WIDTH >= AXIS_DATA_WIDTH,
 			"MEM_DATA_WIDTH has to be grater that AXIS_DATA_WIDTH");
 #endif
@@ -157,7 +157,7 @@ static void convAxisPkt2memBeat(ap_uint<MEM_DATA_WIDTH>* mem_out,
 	constexpr unsigned int bytes_per_axis_pkt = AXIS_DATA_WIDTH / 8;
 	constexpr unsigned int num_strm_pkts_per_beat = MEM_DATA_WIDTH / AXIS_DATA_WIDTH;
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 	printf("\n|HLS DEBUG_LOG| %s | bytes_per_beat: %d, bytes_per_axis_pkt: %d, num_strm_pkts_per_beat: %d, beat index: %d\n"
 			, __func__, bytes_per_beat, bytes_per_axis_pkt, num_strm_pkts_per_beat, index);
@@ -178,7 +178,7 @@ static void convAxisPkt2memBeat(ap_uint<MEM_DATA_WIDTH>* mem_out,
 			tmp_pkt = strm_in.read();
 			tmp.range((pkt + 1) * AXIS_DATA_WIDTH - 1, pkt * AXIS_DATA_WIDTH) = tmp_pkt.data;
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 			printf("   |HLS DEBUG_LOG||%s| receiving axis pkt: %d, val=(", __func__, pkt);
 
@@ -211,7 +211,7 @@ static void convAxisPkt2memBeatMasked(ap_uint<DATA_WIDTH>* mem_out,
 					unsigned int& size,
 					unsigned int& index)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(DATA_WIDTH <= AXIS_DATA_WIDTH,
 			"MEM_DATA_WIDTH has to be less than equal AXIS_DATA_WIDTH");
 #endif
@@ -222,7 +222,7 @@ static void convAxisPkt2memBeatMasked(ap_uint<DATA_WIDTH>* mem_out,
 //	constexpr unsigned int shift_val = 1 << bytes_per_data;
 	ap_uint<1> cond_write = 0;
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 	printf("\n|HLS DEBUG_LOG|%s| bytes_per_axis_pkt: %d, bytes_per_data: %d, num_data_per_axis_pkt: %d, beat index: %d\n"
 			, __func__, bytes_per_axis_pkt, bytes_per_data, num_data_per_axis_pkt, index);
@@ -233,7 +233,7 @@ static void convAxisPkt2memBeatMasked(ap_uint<DATA_WIDTH>* mem_out,
 	
 	tmp_pkt = strm_in.read();
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 		printf("   |HLS DEBUG_LOG||%s| receiving axis , val=(", __func__);
 
@@ -284,7 +284,7 @@ static void convStreamPkt2memBeat(ap_uint<MEM_DATA_WIDTH>* mem_out,
 					unsigned int& size,
 					unsigned int& index)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(MEM_DATA_WIDTH >= STREAM_DATA_WIDTH,
 			"MEM_DATA_WIDTH has to be grater that AXIS_DATA_WIDTH");
 #endif
@@ -292,7 +292,7 @@ static void convStreamPkt2memBeat(ap_uint<MEM_DATA_WIDTH>* mem_out,
 	constexpr unsigned int bytes_per_stream_pkt = STREAM_DATA_WIDTH / 8;
 	constexpr unsigned int num_strm_pkts_per_beat = MEM_DATA_WIDTH / STREAM_DATA_WIDTH;
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 	printf("\n|HLS DEBUG_LOG| %s | bytes_per_beat: %d, bytes_per_stream_pkt: %d, num_strm_pkts_per_beat: %d, beat index: %d\n"
 			, __func__, bytes_per_beat, bytes_per_stream_pkt, num_strm_pkts_per_beat, index);
@@ -313,7 +313,7 @@ static void convStreamPkt2memBeat(ap_uint<MEM_DATA_WIDTH>* mem_out,
 			tmp_pkt = strm_in.read();
 			tmp.range((pkt + 1) * STREAM_DATA_WIDTH - 1, pkt * STREAM_DATA_WIDTH) = tmp_pkt;
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 			printf("   |HLS DEBUG_LOG||%s| receiving axis pkt: %d, val=(", __func__, pkt);
 
@@ -348,7 +348,7 @@ static void convStreamPkt2memBeatMasked(ap_uint<DATA_WIDTH>* mem_out,
 					unsigned int& size,
 					unsigned int& index)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(DATA_WIDTH <= STREAM_DATA_WIDTH,
 			"MEM_DATA_WIDTH has to be less that equal AXIS_DATA_WIDTH");
 #endif
@@ -359,7 +359,7 @@ static void convStreamPkt2memBeatMasked(ap_uint<DATA_WIDTH>* mem_out,
 //	constexpr unsigned int shift_val = 1 << bytes_per_data;
 	ap_uint<1> cond_write = 0;
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 	printf("\n|HLS DEBUG_LOG|%s| bytes_per_strm_pkt: %d, bytes_per_data: %d, num_data_per_strm_pkt: %d, beat index: %d\n"
 			, __func__, bytes_per_strm_pkt, bytes_per_data, num_data_per_strm_pkt, index);
@@ -372,7 +372,7 @@ static void convStreamPkt2memBeatMasked(ap_uint<DATA_WIDTH>* mem_out,
 	data_pkt = data_in.read();
 	mask_pkt = mask_in.read();
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 		printf("   |HLS DEBUG_LOG||%s| receiving axis , val=(", __func__);
 
@@ -426,25 +426,28 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
 				::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out,
 				const unsigned int num_beats)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
 			"MEM_DATA_WIDTH failed limit check");
 	static_assert(BURST_SIZE >= min_burst_len && BURST_SIZE <= max_burst_len,
 			" BURST_SIZE has failed limit check");
+	static_assert((BURST_SIZE > 0) && ((BURST_SIZE & (BURST_SIZE - 1)) == 0), 
+            "BURST_SIZE must be a power of 2 for bitwise boundary optimization");
 #endif
 
-	constexpr unsigned int bytes_per_beat = MEM_DATA_WIDTH / 8;
+	constexpr unsigned int bytes_per_beat = MEM_DATA_WIDTH >> 3;
     constexpr unsigned int ii = IN_ITR;
-	constexpr unsigned int burst_size = BURST_SIZE;
-	const unsigned int non_burst_beats = num_beats % BURST_SIZE;
-    const unsigned int burst_beats = num_beats - non_burst_beats;
+	constexpr unsigned int BURST_MASK = BURST_SIZE - 1;
 
+	const unsigned int non_burst_beats = num_beats & BURST_MASK; // num_beats % BURST_SIZE
+    const unsigned int burst_beats = num_beats & ~BURST_MASK; // num_beats / BURST_SIZE
 
 #ifdef DEBUG_LOG
     const unsigned int num_bursts = num_beats / BURST_SIZE; 
 	print("====================================================================================\n");
 	print("|HLS DEBUG_LOG| mem2stream | num_beats: %d\n", num_beats);
 	print("|HLS DEBUG_LOG| mem2stream | num_burst: %d\n", num_bursts);
+	print("|HLS DEBUG_LOG| mem2stream | burst_beats: %d\n", burst_beats);
 	print("|HLS DEBUG_LOG| mem2stream | non_burst_beats: %d\n\n", non_burst_beats);
 	print("====================================================================================\n");
 #endif
@@ -498,6 +501,117 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
 	}
 }
 
+/**
+ * @brief 	mem2stream variant 2: reads from a memory location with to an hls stream with different size.
+ *  		This is optimized to read from AXI4 with burst and to utilize width maximum througput
+ *
+ * @tparam MEM_DATA_WIDTH : Data width of the AXI4 port and the hls stream port
+ * @tparam BURST_SIZE : Burst length of the AXI4 (max beats < 256)
+ * @tparam IN_ITR: II of the mem read from memory
+ *
+ * @param mem_in : input memory port
+ * @param stream_out : output hls-stream
+ * @param size : Number of bytes of the data
+ */
+template <unsigned int MEM_DATA_WIDTH, unsigned int STREAM_DATA_WIDTH, unsigned int BURST_SIZE=32, unsigned int IN_ITR=2>
+void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
+                ::hls::stream<ap_uint<STREAM_DATA_WIDTH>>& strm_out,
+                const unsigned int num_beats)
+{
+#ifndef __SYNTHESIS__
+    // Existing width assertions
+	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
+			"MEM_DATA_WIDTH failed limit check");
+	static_assert(BURST_SIZE >= min_burst_len && BURST_SIZE <= max_burst_len,
+			"BURST_SIZE has failed limit check");
+	static_assert(STREAM_DATA_WIDTH >= min_axis_data_width && STREAM_DATA_WIDTH <= max_axis_data_width,
+			"STREAM_DATA_WIDTH failed limit check");
+    static_assert(STREAM_DATA_WIDTH <= MEM_DATA_WIDTH, 
+            "STREAM_DATA_WIDTH must be less than or equal to MEM_DATA_WIDTH");
+    static_assert(MEM_DATA_WIDTH % STREAM_DATA_WIDTH == 0, 
+            "MEM_DATA_WIDTH must be an exact multiple of STREAM_DATA_WIDTH");
+    static_assert((BURST_SIZE > 0) && ((BURST_SIZE & (BURST_SIZE - 1)) == 0), 
+            "BURST_SIZE must be a power of 2 for bitwise boundary optimization");
+#endif
+
+    constexpr unsigned int pkts_per_beat = MEM_DATA_WIDTH / STREAM_DATA_WIDTH;
+    constexpr unsigned int ii_adj = (IN_ITR > pkts_per_beat) ? IN_ITR : pkts_per_beat;
+    constexpr unsigned int BURST_MASK = BURST_SIZE - 1;
+    
+    const unsigned int non_burst_beats = num_beats & BURST_MASK; //num_beats % BURST_SIZE
+    const unsigned int burst_beats = num_beats & ~BURST_MASK; //num_beats / BURST_SIZE
+
+#ifdef DEBUG_LOG
+    const unsigned int num_bursts = num_beats / BURST_SIZE; 
+    print("====================================================================================\n");
+    print("|HLS DEBUG_LOG| mem2stream_v2 | num_beats: %d\n", num_beats);
+    print("|HLS DEBUG_LOG| mem2stream_v2 | num_burst: %d\n", num_bursts);
+    print("|HLS DEBUG_LOG| mem2stream_v2 | non_burst_beats: %d\n", non_burst_beats);
+    print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | pkts_per_beat: %d \n", pkts_per_beat);
+	print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | adjusted_ii: %d \n", ii_adj);
+    print("====================================================================================\n");
+#endif
+
+    unsigned int index = 0;
+
+    for (unsigned int beat = 0; beat < burst_beats; beat++)
+    {
+    #pragma HLS PIPELINE II=ii_adj
+
+        ap_uint<MEM_DATA_WIDTH> tmp = mem_in[index];
+        
+        for (unsigned int i = 0; i < pkts_per_beat; i++) 
+        {
+        #pragma HLS UNROLL
+            strm_out << tmp.range((i + 1) * STREAM_DATA_WIDTH - 1, i * STREAM_DATA_WIDTH);
+        }
+
+#ifdef DEBUG_LOG
+        print("====================================================================================\n");
+        print("|HLS DEBUG_LOG| mem2stream_v2 | reading burst index: %d, val=(\n", index);
+
+        for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
+        {
+            DataConv conv;
+            conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+            print("     %f,\n", conv.f);
+        }
+        print(")\n\n");
+        print("====================================================================================\n");
+#endif
+
+        index++;
+    }
+
+    for (unsigned int beat = 0; beat < non_burst_beats; beat++)
+    {
+    #pragma HLS PIPELINE II=ii_adj
+    
+        ap_uint<MEM_DATA_WIDTH> tmp = mem_in[index];
+        
+        for (unsigned int i = 0; i < pkts_per_beat; i++) 
+        {
+        #pragma HLS UNROLL
+            strm_out << tmp.range((i + 1) * STREAM_DATA_WIDTH - 1, i * STREAM_DATA_WIDTH);
+        }
+
+#ifdef DEBUG_LOG
+        print("====================================================================================\n");
+        print("|HLS DEBUG_LOG| mem2stream_v2 | reading non-burst index: %d, val=(\n", index);
+
+        for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
+        {
+            DataConv conv;
+            conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+            print("     %f\n", conv.f);
+        }
+        print(")\n\n");
+        print("====================================================================================\n");
+#endif
+        index++;
+    }
+}
+
 // /**
 //  * @brief 	mem2stream reads from a memory location with to an hls stream.
 //  *  		This is optimized to read from AXI4 with burst and to utilize width maximum througput
@@ -518,7 +632,7 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
 // 				::hls::stream<ap_uint<MEM_DATA_WIDTH/2>>& strm_l_out,
 // 				const unsigned int num_beats)
 // {
-// #ifndef __SYTHESIS__
+// #ifndef __SYNTHESIS__
 // 	static_assert(MEM_DATA_WIDTH % 2 == 0,
 // 			"MEM_DATA_WIDTH sould be divisible by 2");
 // 	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
@@ -672,7 +786,7 @@ void stream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out,
 				::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
 				const unsigned int num_beats)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
 			"MEM_DATA_WIDTH failed limit check");
 	static_assert(BURST_SIZE >= min_burst_len && BURST_SIZE <= max_burst_len,
@@ -685,7 +799,7 @@ void stream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out,
 	const unsigned int non_burst_beats = num_beats % BURST_SIZE;
     const unsigned int burst_beats = num_beats - non_burst_beats;
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
     const unsigned int num_bursts = num_beats / BURST_SIZE;
 	printf("|HLS DEBUG_LOG| %s | num_beats: %d, num_burst: %d, non_burst_beats: %d\n"
@@ -791,13 +905,13 @@ void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
 				::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
 				const unsigned int num_beats, const unsigned int avoid_beats)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
 			"MEM_DATA_WIDTH failed limit check");
 	static_assert(BURST_SIZE >= min_burst_len && BURST_SIZE <= max_burst_len,
 			" BURST_SIZE has failed limit check");
-	// static_assert(BURST_SIZE != POW2(LOG2(BURST_SIZE)),
-	// 		" BURST_SIZE has to be power of 2");
+	static_assert((BURST_SIZE > 0) && ((BURST_SIZE & (BURST_SIZE - 1)) == 0), 
+                  "BURST_SIZE must be a power of 2 for bitwise optimization");
 #endif
 
 	constexpr unsigned int bytes_per_beat = MEM_DATA_WIDTH / 8;
@@ -809,7 +923,7 @@ void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
     const unsigned int burst_beats = writing_beats - non_burst_beats;
 	const unsigned int num_bursts = burst_beats >> burst_shift;
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 	print("====================================================================================\n");
 	print("|HLS DEBUG_LOG| stream2memWithAvoid | num_beats: %d\n", num_beats);
@@ -886,9 +1000,170 @@ void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
 #endif
         index++;
 	}
+}
+
+/**
+ * @brief   stream2memWithAvoid variant 2: reads from a smaller hls stream and writes to wider memory while skipping initial beats.
+ * This is optimized to write to AXI4 with burst and to utilize maximum throughput.
+ *
+ * @tparam MEM_DATA_WIDTH    : Data width of the AXI4 port
+ * @tparam STREAM_DATA_WIDTH : Data width of the hls stream port
+ * @tparam BURST_SIZE        : Burst length of the AXI4 (MUST be power of 2, max beats < 256)
+ * @tparam IN_ITR            : II configuration of mem write
+ *
+ * @param mem_out     : output memory port
+ * @param strm_in     : input hls-stream
+ * @param num_beats   : Total number of MEMORY beats to process from the stream
+ * @param avoid_beats : Number of initial MEMORY beats to skip/discard before writing
+ */
+template <unsigned int MEM_DATA_WIDTH, unsigned int STREAM_DATA_WIDTH, unsigned int BURST_SIZE=32, unsigned int IN_ITR=2>
+void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
+                         ::hls::stream<ap_uint<STREAM_DATA_WIDTH>>& strm_in,
+                         const unsigned int num_beats, const unsigned int avoid_beats)
+{
+#ifndef __SYNTHESIS__ 
+
+    static_assert(STREAM_DATA_WIDTH <= MEM_DATA_WIDTH, 
+        	"STREAM_DATA_WIDTH must be less than or equal to MEM_DATA_WIDTH");
+    static_assert(MEM_DATA_WIDTH % STREAM_DATA_WIDTH == 0, 
+            "MEM_DATA_WIDTH must be an exact multiple of STREAM_DATA_WIDTH");
+    static_assert(STREAM_DATA_WIDTH >= min_axis_data_width && STREAM_DATA_WIDTH <= max_axis_data_width,
+			"STREAM_DATA_WIDTH failed limit check");
+	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
+			"MEM_DATA_WIDTH failed limit check");
+	static_assert(BURST_SIZE >= min_burst_len && BURST_SIZE <= max_burst_len,
+			" BURST_SIZE has failed limit check");
+    static_assert((BURST_SIZE > 0) && ((BURST_SIZE & (BURST_SIZE - 1)) == 0), 
+            "BURST_SIZE must be a power of 2 for bitwise optimization");
+#endif
+
+    constexpr unsigned int pkts_per_beats = MEM_DATA_WIDTH / STREAM_DATA_WIDTH;
+    
+    // Adjust II internally: It takes at least pkts_per_beats cycles to read the data from a single stream port
+    constexpr unsigned int ii_adj = (IN_ITR > pkts_per_beats) ? IN_ITR : pkts_per_beats;
+
+    // Bitwise boundary math
+    constexpr unsigned int BURST_MASK = BURST_SIZE - 1;
+    constexpr unsigned int burst_shift = LOG2(BURST_SIZE);
+    
+    const unsigned int writing_beats = num_beats - avoid_beats;
+    const unsigned int non_burst_beats = writing_beats & BURST_MASK;
+    const unsigned int burst_beats = writing_beats & ~BURST_MASK;
+    const unsigned int num_bursts = burst_beats >> burst_shift;
+
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
-	printf("|HLS DEBUG_LOG|%s| exiting.\n"
-			, __func__);
+    print("====================================================================================\n");
+    print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | num_beats: %d\n", num_beats);
+    print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | burst_beats: %d\n", burst_beats);
+    print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | non_burst_beats: %d\n", non_burst_beats);
+    print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | num_burst: %d\n", num_bursts);
+    print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | avoid_beats: %d\n", avoid_beats);
+    print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | pkts_per_beats: %d \n", pkts_per_beats);
+	print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | adjusted_ii: %d \n", ii_adj);
+    print("====================================================================================\n");
+#endif
+#endif
+
+    unsigned int index = 0;
+
+    // 1. DISCARD LOOP
+    for (unsigned int beat = 0; beat < avoid_beats; beat++)
+    {
+    #pragma HLS PIPELINE II=ii_adj
+        ap_uint<MEM_DATA_WIDTH> tmp; 
+        
+        // Read pkts_per_beats times to clear the equivalent of one MEM_DATA_WIDTH beat
+        for (unsigned int i = 0; i < pkts_per_beats; i++) 
+        {
+        #pragma HLS UNROLL
+            tmp.range((i + 1) * STREAM_DATA_WIDTH - 1, i * STREAM_DATA_WIDTH) = strm_in.read();
+        }
+
+#ifdef DEBUG_LOG
+        print("====================================================================================\n");
+        print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | discarding index: %d, val=(\n", index);
+        for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
+        {
+            DataConv conv;
+            conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+            print("     %f,\n", conv.f);
+        }
+        print(")%d \n\n",0);
+        print("====================================================================================\n");
+#endif
+        index++;
+    }
+
+    // 2. BURST WRITE LOOP
+    for (unsigned int burst = 0; burst < num_bursts; burst++)
+    {
+        for(unsigned int beat = 0; beat < BURST_SIZE; beat++)
+        {
+        #pragma HLS PIPELINE II=ii_adj
+
+            ap_uint<MEM_DATA_WIDTH> tmp;
+            
+            // Pack stream data into the memory beat
+            for (unsigned int i = 0; i < pkts_per_beats; i++) 
+            {
+            #pragma HLS UNROLL
+                tmp.range((i + 1) * STREAM_DATA_WIDTH - 1, i * STREAM_DATA_WIDTH) = strm_in.read();
+            }
+            
+            mem_out[index] = tmp;       
+
+#ifdef DEBUG_LOG
+            print("====================================================================================\n");
+            print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | writing burst index: %d, val=(\n", index);
+            for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
+            {
+                DataConv conv;
+                conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+                print("     %f,\n", conv.f);
+            }
+            print(")%d \n\n",0);
+            print("====================================================================================\n");
+#endif
+            index++;
+        }
+    }
+
+    // 3. REMAINDER WRITE LOOP
+    for (unsigned int beat = 0; beat < non_burst_beats; beat++)
+    {
+    #pragma HLS PIPELINE II=ii_adj
+    
+        ap_uint<MEM_DATA_WIDTH> tmp;
+        
+        // Pack remainder data
+        for (unsigned int i = 0; i < pkts_per_beats; i++) 
+        {
+        #pragma HLS UNROLL
+            tmp.range((i + 1) * STREAM_DATA_WIDTH - 1, i * STREAM_DATA_WIDTH) = strm_in.read();
+        }
+        
+        mem_out[index] = tmp;
+        
+#ifdef DEBUG_LOG
+        print("====================================================================================\n");
+        print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | writing non-burst index: %d, val=(\n", index);
+
+        for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
+        {
+            DataConv conv;
+            conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+            print("     %f,\n", conv.f);
+        }
+        print(")%d\n\n",0);
+        print("====================================================================================\n");
+#endif
+        index++;
+    }
+    
+#ifdef DEBUG_LOG
+    printf("|HLS DEBUG_LOG|%s| exiting.\n"
+            , __func__);
 #endif
 }
 
@@ -967,7 +1242,7 @@ void stream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out,
 template <unsigned short MEM_DATA_WIDTH, unsigned short DATA_WIDTH, unsigned short NUM_STREAMS, unsigned short OVERLAP_SIZE = 1>
 void stream2interleave(::hls::stream<ap_uint<MEM_DATA_WIDTH>> in_stream[NUM_STREAMS], ::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_SIZE>> out_stream[NUM_STREAMS], const unsigned int num_pkts) 
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
 			"MEM_DATA_WIDTH failed limit check");
 	static_assert(NUM_STREAMS % 2 == 0,
@@ -1441,9 +1716,9 @@ static void tileStream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out, ::hls::stream<ap_ui
     }
 }
 /**
- * @brief Writes strided tile data from a stream to memory with tiling and batching support.
+ * @brief Writes strided tile data from memory to stream with tiling and batching support.
  *
- * @details This function reads data from an input stream and writes it to memory according to a
+ * @details This function reads data from memory writes it to an output stream to according to a
  * tiled memory configuration. It handles multi-dimensional tiling in X, Y, and Z dimensions
  * with support for non-uniform tile sizes at boundaries.
  *
@@ -1451,8 +1726,8 @@ static void tileStream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out, ::hls::stream<ap_ui
  * @tparam BURST_SIZE Burst size for memory transfers (default: 32)
  * @tparam IN_ITR Initiation interval for the pipeline (default: 2)
  *
- * @param[in] strm_in Reference to the input HLS stream containing the tile data to be written
- * @param[out] mem_out Pointer to the output memory where tile data will be written
+ * @param[in] mem_in Pointer to the input memory where tile data is read from
+ * @param[out] strm_out Reference to the output HLS stream that the tile data will be converted to
  * @param[in] config Reference to MemConfigTile configuration containing:
  *        - start_offset: Base offset in memory
  *        - end_z, start_z: Z-dimension range
@@ -1525,6 +1800,1270 @@ static void stridedTileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream
                     #endif
                     mem2stream<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>((ap_uint<MEM_DATA_WIDTH>* )(mem_in + offset), strm_out, tile_size_x);
 
+                }
+            }
+        }
+    }
+}
+
+/**
+ * @brief readConfigStreamGenerator: Generates and distributes bank-specific configuration commands 
+ * across multiple output streams.
+ *
+ * @details This function decodes a single 160-bit configuration command containing 3D memory 
+ * access parameters (strides, sizes, and offsets). It iterates through the Z and Y dimensions 
+ * to compute absolute memory offsets. Utilizing power-of-two bitwise optimizations, it 
+ * calculates the base bank offset and starting bank, handles modulo wrap-around logic, and 
+ * pushes appropriate 48-bit sub-commands to an array of hardware streams. The 
+ * distribution logic is fully unrolled for optimal HLS synthesis.
+ *
+ * @tparam NUM_BANKS The number of target memory banks. Must be a power of two to enable 
+ * bitwise masking optimizations.
+ * @tparam IN_ITR Initiation interval for the inner HLS pipeline (default: 2).
+ *
+ * @param[in] command A 160-bit packed configuration word containing:
+ * - [63:0]   offset_x: Base offset in the X dimension
+ * - [95:80]  size_x:   Size in the X dimension
+ * - [111:96] stride_y: Stride in the Y dimension
+ * - [127:112] size_y:   Size in the Y dimension
+ * - [143:128] stride_z: Stride in the Z dimension
+ * - [159:144] size_z:   Size in the Z dimension
+ * @param[out] strms Array of output HLS streams (hls::stream<ap_uint<48>>). 
+ * Each 48-bit command contains:
+ * - [31:0]   bank_offset: The starting offset for that specific bank
+ * - [47:32]  b_size_x:    The calculated X dimension size for that specific bank
+ *
+ * @note Enforces a compile-time static assertion that `NUM_BANKS` is a power of two, 
+ * replacing expensive hardware modulo operations with bitwise AND masking.
+ */
+template <unsigned short NUM_BANKS, unsigned short IN_ITR=2>
+static void readConfigStreamGenerator(const ap_uint<160>& command, ::hls::stream<ap_uint<48>> strms[NUM_BANKS])
+{
+#ifndef __SYNTHESIS__
+	static_assert((NUM_BANKS != 0) && ((NUM_BANKS & (NUM_BANKS - 1)) == 0), "NUM_BANKS must be a power of two");
+#endif 
+
+	constexpr unsigned short NUM_BANKS_SHIFT = LOG2(NUM_BANKS);
+	constexpr unsigned short BANK_MASK = NUM_BANKS - 1;
+
+	size_t offset_x = command.range(63,0);
+	ap_uint<16> size_x = command.range(95,80);
+    ap_uint<16> stride_y = command.range(111,96);
+    ap_uint<16> size_y = command.range(127,112);
+    ap_uint<16> stride_z = command.range(143,128);
+    ap_uint<16> size_z = command.range(159,144);
+
+	const unsigned short size_x_div_by_banks_floor = size_x >> NUM_BANKS_SHIFT;
+	const unsigned int size_x_mod_num_banks = size_x & BANK_MASK;
+
+	for (unsigned short z = 0; z < size_z; z++)
+    {
+        for (unsigned short y = 0; y < size_y; y++)
+        {
+//          #pragma HLS PIPELINE II = IN_ITR
+
+            size_t z_offset = offset_x + z * stride_z;
+            size_t abs_offset = z_offset + y * stride_y;
+            
+            const unsigned int bank_offset = abs_offset >> NUM_BANKS_SHIFT;
+            const unsigned int starting_bank = abs_offset & BANK_MASK; //Equivalent to abs_offset % NUM_BANKS
+            
+            // Optimized wrap-around calculation
+            const unsigned int banks_upper_limit = (starting_bank + size_x_mod_num_banks) & BANK_MASK;  //Equivalent to (...) % NUM_BANKS
+            const bool is_t1_or_t2 = banks_upper_limit < starting_bank;
+
+            for (unsigned int i = 0; i < NUM_BANKS; i++)
+            {
+                #pragma HLS UNROLL
+
+                const unsigned int current_bank_offset = (i < starting_bank) ? bank_offset + 1 : bank_offset;
+
+                const bool is_gt_sb = (i >= starting_bank);
+                const bool is_lt_uplim = (i < banks_upper_limit);
+
+                bool cond;
+                if (is_t1_or_t2) {
+                    cond = is_gt_sb || is_lt_uplim;
+                } else {
+                    cond = is_gt_sb && is_lt_uplim;
+                }
+
+                const unsigned char add_arg = cond ? 1 : 0;
+                unsigned short b_size_x = size_x_div_by_banks_floor + add_arg;
+
+                ap_uint<48> b_command;
+                b_command.range(31,0) = current_bank_offset;
+                b_command.range(47,32) = b_size_x;
+
+                strms[i] << b_command;
+            }
+        }
+    }
+}
+
+/**
+ * @brief writeConfigStreamGenerator: Generates and distributes bank-specific configuration commands 
+ * across multiple output streams, accounting for avoidance zones.
+ *
+ * @details This function decodes a single 192-bit configuration command containing 3D memory 
+ * access parameters alongside boundary avoidance data (strides, sizes, offsets, avoid_x, and avoid_y). 
+ * It iterates through the Z and Y dimensions to compute absolute memory offsets. Utilizing power-of-two 
+ * bitwise optimizations, it calculates the base bank offset and starting bank, handles modulo 
+ * wrap-around logic, and pushes appropriate 64-bit sub-commands to an array of hardware streams. 
+ * The distribution logic is fully unrolled for optimal HLS synthesis.
+ *
+ * @tparam NUM_BANKS The number of target memory banks. Must be a power of two to enable 
+ * bitwise masking optimizations.
+ * @tparam IN_ITR Initiation interval for the inner HLS pipeline (default: 2).
+ *
+ * @param[in] command A 192-bit packed configuration word containing:
+ * - [63:0]   offset_x: Base offset in the X dimension
+ * - [95:80]  size_x:   Size in the X dimension
+ * - [111:96] stride_y: Stride in the Y dimension
+ * - [127:112] size_y:   Size in the Y dimension
+ * - [143:128] stride_z: Stride in the Z dimension
+ * - [159:144] size_z:   Size in the Z dimension
+ * - [175:160] avoid_x:  Avoid size in X dimension
+ * - [191:176] avoid_y:  Avoid size in Y dimension
+ * @param[out] strms Array of output HLS streams (hls::stream<ap_uint<64>>). 
+ * Each 64-bit command contains:
+ * - [31:0]   bank_offset: The starting offset for that specific bank
+ * - [47:32]  b_size_x:    The calculated X dimension size for that specific bank
+ * - [63:48]  b_avoid_x:   The calculated avoid_x size for that specific bank
+ *
+ * @note Enforces a compile-time static assertion that `NUM_BANKS` is a power of two, 
+ * replacing expensive hardware modulo operations with bitwise AND masking.
+ */
+template <unsigned short NUM_BANKS, unsigned short IN_ITR=2>
+static void writeConfigStreamGenerator(const ap_uint<192>& command, ::hls::stream<ap_uint<64>> strms[NUM_BANKS])
+{
+#ifndef __SYNTHESIS__
+    static_assert((NUM_BANKS != 0) && ((NUM_BANKS & (NUM_BANKS - 1)) == 0), "NUM_BANKS must be a power of two");
+#endif 
+
+    constexpr unsigned short NUM_BANKS_SHIFT = LOG2(NUM_BANKS);
+    constexpr unsigned short BANK_MASK = NUM_BANKS - 1;
+
+    ap_uint<64> offset_x = command.range(63,0);
+    ap_uint<16> size_x = command.range(95,80);
+    ap_uint<16> stride_y = command.range(111,96);
+    ap_uint<16> size_y = command.range(127,112);
+    ap_uint<16> stride_z = command.range(143,128);
+    ap_uint<16> size_z = command.range(159,144);
+    ap_uint<16> avoid_x = command.range(175,160);
+    ap_uint<16> avoid_y = command.range(191,176);
+
+    const unsigned short avoid_x_per_bank = avoid_x >> NUM_BANKS_SHIFT;
+    const ap_uint<3> avoid_x_mod_banks = avoid_x & BANK_MASK;
+
+    const unsigned short size_x_div_by_banks_floor = size_x >> NUM_BANKS_SHIFT;
+    const unsigned int size_x_mod_num_banks = size_x & BANK_MASK;
+
+    for (unsigned short z = 0; z < size_z; z++)
+    {
+        for (unsigned short y = 0; y < size_y; y++)
+        {
+//          #pragma HLS PIPELINE II = IN_ITR
+
+            size_t z_offset = offset_x + z * stride_z;
+            size_t abs_offset = z_offset + y * stride_y;
+            
+            const unsigned int bank_offset = abs_offset >> NUM_BANKS_SHIFT;
+            const unsigned int starting_bank = abs_offset & BANK_MASK; //Equivalent to abs_offset % NUM_BANKS
+            
+            // Optimized wrap-around calculation
+            const unsigned int banks_upper_limit = (starting_bank + size_x_mod_num_banks) & BANK_MASK;  //Equivalent to (...) % NUM_BANKS
+            const bool is_t1_or_t2 = banks_upper_limit < starting_bank;
+
+            const ap_uint<3> avoid_x_bank_upper_limit = starting_bank + avoid_x_mod_banks;
+            const bool is_t1_or_t2_avoid_x = avoid_x_bank_upper_limit < starting_bank;
+
+            for (unsigned int i = 0; i < NUM_BANKS; i++)
+            {
+                #pragma HLS UNROLL
+
+                const unsigned int current_bank_offset = (i < starting_bank) ? bank_offset + 1 : bank_offset;
+
+                const bool is_gt_sb = (i >= starting_bank);
+                const bool is_lt_uplim = (i < banks_upper_limit);
+                const bool is_avoid_lt_uplim = (i < avoid_x_bank_upper_limit);
+
+                bool cond;
+                if (is_t1_or_t2) {
+                    cond = is_gt_sb || is_lt_uplim;
+                } else {
+                    cond = is_gt_sb && is_lt_uplim;
+                }
+                
+                bool avoid_cond;
+                if (is_t1_or_t2_avoid_x) {
+                    avoid_cond = is_gt_sb || is_avoid_lt_uplim;
+                } else {
+                    avoid_cond = is_gt_sb && is_avoid_lt_uplim;
+                }
+
+                const unsigned char add_arg = cond ? 1 : 0;
+                const unsigned char add_avoid_arg = avoid_cond ? 1 : 0;
+                unsigned short b_size_x = size_x_div_by_banks_floor + add_arg;
+                unsigned short adj_avoid_x = avoid_x_per_bank + add_avoid_arg;
+                unsigned short b_avoid_x = y < avoid_y ? b_size_x : adj_avoid_x;
+                b_avoid_x = b_avoid_x > b_size_x ? b_size_x : b_avoid_x;
+
+                ap_uint<64> b_command;
+                b_command.range(31,0) = current_bank_offset;
+                b_command.range(47,32) = b_size_x;
+                
+                // Fixed out-of-bounds range mapping (64 is invalid for ap_uint<64>)
+                b_command.range(63,48) = b_avoid_x; 
+
+                strms[i] << b_command;
+            }
+        }
+    }
+}
+
+/**
+ * @brief stridedTileMem2streamV2 Writes strided tile data from memory to stream with tiling from the externel config
+ * 		generator
+ *
+ * @details This function reads data from memory writes it to an output stream to according to a
+ * command feeding from a dataflow command generator. For each rows new command will be feed from the generator
+ *
+ * @tparam MEM_DATA_WIDTH The bit-width of each memory access (e.g., 64, 128, 256)
+ * @tparam BURST_SIZE Burst size for memory transfers (default: 32)
+ * @tparam IN_ITR Initiation interval for the pipeline (default: 2)
+ *
+ * @param[in] mem_in Pointer to the input memory where tile data is read from
+ * @param[in] strm_command Simple command stream with offset and size information to be
+ * 			read from the memory.
+ * @param[out] strm_out Reference to the output HLS stream that the tile data will be converted to
+ *
+ * @note Supports partial tiles at boundaries through last_tile_size parameters
+ * @note Debug logging available when DEBUG_LOG is defined
+ * 
+ * @see ops::hls::ReadConfigStreamGenerator
+ * @see ops::hls::stream2mem
+ */
+template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
+static void stridedTileMem2streamV2(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uint<48>>& strm_command,
+		::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, unsigned short size_y, unsigned short size_z=1)
+{
+	for (unsigned short z = 0; z < size_z; z++)
+	{
+		for (unsigned short y = 0; y < size_y; y++)
+		{
+//			#pragma HLS PIPELINE II = IN_ITR
+			auto command = strm_command.read();
+			unsigned int bank_offset = command.range(31,0);
+			unsigned short size_x = command.range(47,32);
+			#ifdef DEBUG_LOG
+			    printf("|HLS DEBUG_LOG|%s| reading tile from mem to stream, bank_offset:%d, size_x:%d \n", __func__, bank_offset, size_x);
+			#endif
+			ops::hls::mem2stream<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(mem_in + bank_offset, strm_out, size_x);
+
+		}
+	}
+}
+
+template <unsigned short MEM_DATA_WIDTH, unsigned short AXIS_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
+static void stridedTileMem2streamV2(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uint<48>>& strm_command,
+		::hls::stream<ap_uint<AXIS_DATA_WIDTH>>& strm_out, unsigned short size_y, unsigned short size_z=1)
+{
+	for (unsigned short z = 0; z < size_z; z++)
+	{
+		for (unsigned short y = 0; y < size_y; y++)
+		{
+//			#pragma HLS PIPELINE II = IN_ITR
+			auto command = strm_command.read();
+			unsigned int bank_offset = command.range(31,0);
+			unsigned short size_x = command.range(47,32);
+			#ifdef DEBUG_LOG
+			    printf("|HLS DEBUG_LOG|%s| reading tile from mem to stream, bank_offset:%d, size_x:%d \n", __func__, bank_offset, size_x);
+			#endif
+			ops::hls::mem2stream<MEM_DATA_WIDTH, AXIS_DATA_WIDTH, BURST_SIZE, IN_ITR>(mem_in + bank_offset, strm_out, size_x);
+
+		}
+	}
+}
+
+
+/**
+ * @brief Writes a 3D strided tile from a hardware stream to memory, incorporating boundary avoidance.
+ *
+ * @details This function acts as a datamover sink within a task-parallel dataflow architecture. 
+ * It iterates over the Z and Y dimensions of a structured mesh domain. For each row (Y iteration), 
+ * it consumes a 64-bit configuration command to dynamically determine the absolute memory offset, 
+ * the write length (`size_x`), and the boundary avoidance zone (`avoid_x`) for the target memory bank. 
+ * The actual burst-aligned memory write operations are delegated to `ops::hls::stream2memWithAvoid`.
+ *
+ * @tparam MEM_DATA_WIDTH The bit-width of the AXI memory interface and the input data stream.
+ * @tparam BURST_SIZE The maximum AXI burst length for the memory transactions (default: 32).
+ * @tparam IN_ITR The targeted Initiation Interval (II) for the underlying pipeline (default: 2).
+ *
+ * @param[in] strm_in The input HLS stream containing the computed tile data to be written.
+ * @param[out] out Pointer to the mapped target memory bank (typically an AXI4 master interface).
+ * @param[in] strm_command The HLS stream providing bank-specific 64-bit configuration commands.
+ * Expected bit-packing per command:
+ * 			- [31:0]  bank_offset: The absolute base offset in memory for the current row.
+ * 			- [47:32] size_x:      The total number of elements to process in the X dimension.
+ * 			- [63:48] avoid_x:     The number of boundary elements to avoid writing.
+ * @param[in] size_y The total number of iterations in the Y dimension.
+ * @param[in] size_z The total number of iterations in the Z dimension.
+ *
+ * @note The expected format of `strm_command` directly corresponds to the stream outputs 
+ * @see generated by the `writeConfigStreamGenerator` utility.
+ */
+template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
+static void stridedTileStream2memWithAvoidV2(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, ap_uint<MEM_DATA_WIDTH>* out, ::hls::stream<ap_uint<64>>& strm_command, unsigned short size_y, unsigned short size_z)
+{
+    for (unsigned short z = 0; z < size_z; z++)
+    {
+        for (unsigned short y = 0; y < size_y; y++)
+        {
+//          #pragma HLS PIPELINE II = IN_ITR
+            auto command = strm_command.read();
+            unsigned int bank_offset = command.range(31,0);
+            unsigned short size_x = command.range(47,32);
+            unsigned short avoid_x = command.range(63, 48);
+            #ifdef DEBUG_LOG
+                printf("|HLS DEBUG_LOG|%s| reading tile from mem to stream, bank_offset:%d, size_x:%d \n", __func__, bank_offset, size_x);
+            #endif
+            ops::hls::stream2memWithAvoid<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(out + bank_offset, strm_in, size_x, avoid_x);
+        }
+    }
+}
+
+/**
+ * @brief redirect: Reorders and aligns strided tile data from multiple input streams to output streams.
+ *
+ * @details This function acts as a dynamic router and barrel shifter. It decodes a 160-bit 
+ * configuration command to determine the 3D memory access pattern and the resulting bank 
+ * wrap-around logic. It selectively reads from a partitioned array of input streams based 
+ * on boundary conditions, and then combinatorially rotates (barrel shifts) the data 
+ * to align it correctly across the output streams, compensating for the starting bank offset.
+ *
+ * @tparam MEM_DATA_WIDTH The bit-width of the data elements in the streams.
+ * @tparam NUM_BANKS The number of memory banks and corresponding streams. Must be a power 
+ * of two to enable bitwise modulo masking and efficient barrel shifting.
+ * @tparam BURST_SIZE Burst size for memory transfers (default: 32).
+ * @tparam IN_ITR Initiation interval for the inner HLS pipeline (default: 2).
+ *
+ * @param[in] strm_in Array of input HLS streams (size NUM_BANKS) providing the raw, 
+ * unaligned data read from memory.
+ * @param[out] strm_out Array of output HLS streams (size NUM_BANKS) where the correctly 
+ * aligned and shifted data will be written.
+ * @param[in] command A 160-bit packed configuration word containing:
+ * 		- [63:0]   offset_x: Base offset in the X dimension
+ * 		- [95:80]  size_x:   Size in the X dimension
+ * 		- [111:96] stride_y: Stride in the Y dimension
+ * 		- [127:112] size_y:   Size in the Y dimension
+ * 		- [143:128] stride_z: Stride in the Z dimension
+ * 		- [159:144] size_z:   Size in the Z dimension
+ *
+ */
+
+template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short IN_ITR=2>
+static void redirect(
+        ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in[NUM_BANKS],
+        ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out[NUM_BANKS],
+        const ap_uint<160>& command)
+{
+    // Enforce the power-of-two constraint for bitwise optimizations
+#ifndef __SYNTHESIS__
+    static_assert((NUM_BANKS != 0) && ((NUM_BANKS & (NUM_BANKS - 1)) == 0), "NUM_BANKS must be a power of two");
+#endif 
+
+    const unsigned short NUM_BANKS_SHIFT = LOG2(NUM_BANKS);
+    const unsigned int BANK_MASK = NUM_BANKS - 1;
+
+    size_t offset_x = command.range(63,0);
+    ap_uint<16> size_x = command.range(95,80);
+    ap_uint<16> stride_y = command.range(111,96);
+    ap_uint<16> size_y = command.range(127,112);
+    ap_uint<16> stride_z = command.range(143,128);
+    ap_uint<16> size_z = command.range(159,144);
+    
+    unsigned short size_x_div_by_banks_ceil = (size_x + NUM_BANKS - 1) >> NUM_BANKS_SHIFT;
+    unsigned short size_x_div_by_banks_floor = size_x >> NUM_BANKS_SHIFT;
+    
+    // Optimized modulo using bitwise AND
+    unsigned int size_x_mod_banks = size_x & BANK_MASK;
+
+#ifdef DEBUG_LOG
+    printf("==== DATAMOVER REDIRECT INITIAL PARAMETERS ====\n");
+    printf("offset_x: %lu\n", offset_x);
+    printf("size_x: %u\n", (unsigned int)size_x);
+    printf("stride_y: %u\n", (unsigned int)stride_y);
+    printf("size_y: %u\n", (unsigned int)size_y);
+    printf("stride_z: %u\n", (unsigned int)stride_z);
+    printf("size_z: %u\n", (unsigned int)size_z);
+    printf("size_x_div_by_banks_ceil: %u\n", size_x_div_by_banks_ceil);
+    printf("size_x_div_by_banks_floor: %u\n", size_x_div_by_banks_floor);
+    printf("size_x_mod_banks: %u\n", size_x_mod_banks);
+    printf("NUM_BANKS: %u\n", NUM_BANKS);
+    printf("========================================\n");
+#endif
+
+    for (unsigned short z = 0; z < size_z; z++)
+    {
+        for (unsigned short y = 0; y < size_y; y++)
+        {
+            #pragma HLS LOOP_FLATTEN
+
+            const size_t z_offset = offset_x + z * stride_z;
+            const size_t abs_offset = z_offset + y * stride_y;
+            
+            // Replaced modulo with bitwise AND
+            const unsigned int starting_bank = abs_offset & BANK_MASK;
+            const unsigned int banks_upper_limit = (starting_bank + size_x_mod_banks) & BANK_MASK;
+            const bool is_t1_or_t2 = banks_upper_limit < starting_bank;
+
+            // Pre-calculate bank conditions outside the inner pipeline loop
+            bool bank_cond[NUM_BANKS];
+            #pragma HLS ARRAY_PARTITION variable=bank_cond complete dim=1
+
+            for (unsigned int i = 0; i < NUM_BANKS; i++)
+            {
+                #pragma HLS UNROLL
+                const bool is_gt_sb = i >= starting_bank;
+                const bool is_lt_uplim = i < banks_upper_limit;
+
+                if (is_t1_or_t2) {
+                    bank_cond[i] = is_gt_sb || is_lt_uplim;
+                } else {
+                    bank_cond[i] = is_gt_sb && is_lt_uplim;
+                }
+            }
+
+            for (unsigned short x = 0; x < size_x_div_by_banks_ceil; x++)
+            {
+                #pragma HLS PIPELINE II=IN_ITR
+
+                // Fully partition these to map to discrete registers
+                ap_uint<MEM_DATA_WIDTH> tmp[NUM_BANKS];
+                ap_uint<MEM_DATA_WIDTH> swap[NUM_BANKS];
+                #pragma HLS ARRAY_PARTITION variable=tmp complete dim=1
+                #pragma HLS ARRAY_PARTITION variable=swap complete dim=1
+
+                const bool is_x_lt_bank_x_size = x < size_x_div_by_banks_floor;
+
+                // 1. Read from input streams based on conditions
+                for (unsigned int i = 0; i < NUM_BANKS; i++)
+                {
+                    #pragma HLS UNROLL
+                    const bool read_cond = is_x_lt_bank_x_size || bank_cond[i];
+                    tmp[i] = read_cond ? register_it(strm_in[i].read()) : ap_uint<MEM_DATA_WIDTH>(0);
+
+#ifdef DEBUG_LOG
+					auto read_val = tmp[i]; 
+					if (read_cond) {
+						printf("==== REDIRECT READ ====\n");
+						printf("Bank[%u], X[%u], Y[%u], Z[%u]\n", i, x, (unsigned int)y, (unsigned int)z);
+						printf("Values (float): (");
+						for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
+							DataConv conv;
+							conv.i = read_val.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+							if (j > 0) printf(", ");
+							printf("%f", conv.f);
+						}
+						printf(")\n");
+						printf("=====================\n");
+					}
+#endif
+                }
+
+                // 2. The Barrel Shifter (Replaces the large switch statement)
+                for (unsigned int i = 0; i < NUM_BANKS; i++)
+                {
+                    #pragma HLS UNROLL
+                    unsigned int src_idx = (starting_bank + i) & BANK_MASK;
+                    swap[i] = tmp[src_idx];
+                }
+
+                // 3. Write to output streams
+                for (unsigned int i = 0; i < NUM_BANKS; i++)
+                {
+                    #pragma HLS UNROLL
+                    strm_out[i] << swap[i];
+#ifdef DEBUG_LOG
+					auto write_val = swap[i];
+					printf("==== REDIRECT WRITE ====\n");
+					printf("Bank[%u],  X[%u], Y[%u], Z[%u]\n", i, x, (unsigned int)y, (unsigned int)z);
+					printf("Values (float): (");
+					for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
+						DataConv conv;
+						conv.i = write_val.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+						if (j > 0) printf(", ");
+						printf("%f", conv.f);
+					}
+					printf(")\n");
+					printf("======================\n");
+#endif
+                }
+            }
+        }
+    }
+}
+
+/**
+ * @brief aggregatedStream2streamStepdown: Reads multiple input streams with higher data width and distributes 
+ * 		them as smaller chunks across multiple output streams.
+ *
+ * @details This function implements a stream width reduction and distribution mechanism. It reads packets
+ * 		from multiple input streams with higher bit-width (STREAM1_DATA_WIDTH) at an initiation interval of IN_ITR,
+ * 		and splits each packet into FACTOR smaller chunks. These chunks are then collected and distributed
+ * 		round-robin across the output streams with lower bit-width (STREAM2_DATA_WIDTH), effectively converting
+ * 		NUM_STRMS × STREAM1_DATA_WIDTH per cycle into FACTOR output waves of NUM_STRMS × STREAM2_DATA_WIDTH.
+ *
+ * @tparam STREAM1_DATA_WIDTH The bit-width of the input stream data (must be larger than STREAM2_DATA_WIDTH).
+ * @tparam STREAM2_DATA_WIDTH The bit-width of the output stream data (must evenly divide STREAM1_DATA_WIDTH).
+ * @tparam NUM_STRMS The number of input and output streams. Must be a power of two.
+ * @tparam IN_ITR Initiation interval for the outer HLS pipeline reading input streams (default: 2).
+ *
+ * @param[in] strm_in Array of input HLS streams (size NUM_STRMS) with bit-width STREAM1_DATA_WIDTH,
+ * 		providing wide data packets to be split and redistributed.
+ * @param[out] strm_out Array of output HLS streams (size NUM_STRMS) with bit-width STREAM2_DATA_WIDTH,
+ * 		receiving the split and redistributed data chunks in round-robin fashion.
+ * @param[in] num_big_pkts The number of large packets (width STREAM1_DATA_WIDTH) to process from input streams.
+ *
+ */
+template <unsigned short STREAM1_DATA_WIDTH, unsigned short STREAM2_DATA_WIDTH, unsigned short NUM_STRMS, unsigned short IN_ITR=2>
+static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>> strm_in[NUM_STRMS],
+				::hls::stream<ap_uint<STREAM2_DATA_WIDTH>> strm_out[NUM_STRMS],
+				const unsigned int num_big_pkts)
+{
+	constexpr unsigned short FACTOR = STREAM1_DATA_WIDTH / STREAM2_DATA_WIDTH;
+    constexpr unsigned int ii_adj = (IN_ITR >= FACTOR) ? IN_ITR : FACTOR;
+	constexpr unsigned short ii_out = ii_adj / FACTOR;
+#ifndef __SYNTHESIS__
+    static_assert((NUM_STRMS != 0) && ((NUM_STRMS & (NUM_STRMS - 1)) == 0), "NUM_STRMS must be a power of two");
+	static_assert(STREAM1_DATA_WIDTH > STREAM2_DATA_WIDTH,
+			"STREAM1_DATA_WIDTH has to be bigger than STREAM2_DATA_WIDTH");
+    static_assert(STREAM1_DATA_WIDTH % STREAM2_DATA_WIDTH == 0, 
+            "STREAM1_DATA_WIDTH has to be fully divisible by STREAM2_DATA_WIDTH");
+    static_assert(STREAM1_DATA_WIDTH % 8 == 0, "STREAM1_DATA_WIDTH should be divisible by 8");
+    static_assert(STREAM2_DATA_WIDTH % 8 == 0, "STREAM2_DATA_WIDTH should be divisible by 8");
+	static_assert(ii_adj % FACTOR == 0, "Output ii is not divisible by input II");
+#endif 
+
+
+#ifndef __SYNTHESIS__
+    #ifdef DEBUG_LOG
+		printf("====================================================================================\n");
+        printf("|HLS DEBUG_LOG| %s | adj_ii: %d, num_big_pkts: %d\n"
+                , __func__, ii_adj , num_big_pkts);
+        printf("====================================================================================\n");
+    #endif
+#endif
+
+	ap_uint<STREAM1_DATA_WIDTH> read_val[NUM_STRMS];
+	#pragma HLS ARRAY_PARTITION variable=read_val
+
+	for (unsigned int pkt = 0; pkt < num_big_pkts; pkt++)
+	{
+	#pragma HLS PIPELINE II=ii_adj
+
+#ifdef DEBUG_LOG
+		printf("====================================================================================\n");
+        printf("|HLS DEBUG_LOG| aggreatedStream2streamStepdown | reading pkt: %d, read values \n", pkt);
+#endif 
+		read: for (unsigned short num_strm = 0; num_strm < NUM_STRMS; num_strm++)
+		{
+		#pragma HLS UNROLL
+			read_val[num_strm] = strm_in[num_strm].read();
+#ifdef DEBUG_LOG
+		printf("[sream: %d] = (", num_strm);
+			for (unsigned k = 0; k < STREAM1_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
+			{
+				DataConv conv;
+				conv.i = read_val[num_strm].range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+				printf("%f%s ", conv.f, k != STREAM1_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8) ? "," : "");
+			}
+        printf(")\n");
+#endif
+		}
+#ifdef DEBUG_LOG
+		printf("====================================================================================\n");
+#endif 
+ 
+		write: for (unsigned short output_cycle = 0; output_cycle < FACTOR; output_cycle++)
+		{
+		#pragma HLS PIPELINE II=ii_out
+#ifdef DEBUG_LOG
+		printf("====================================================================================\n");
+        printf("|HLS DEBUG_LOG| aggreatedStream2streamStepdown | output pkt: %d \n", pkt*FACTOR + output_cycle);
+#endif			
+			for (unsigned short out_strm = 0; out_strm < NUM_STRMS; out_strm++)
+			{
+			#pragma HLS UNROLL
+				// Distribute all chunks round-robin across output streams
+				unsigned short chunk_idx = output_cycle * NUM_STRMS + out_strm;
+				unsigned short in_strm = chunk_idx / FACTOR;
+				unsigned short chunk_k = chunk_idx % FACTOR;
+				
+				ap_uint<STREAM2_DATA_WIDTH> out_val = 
+					read_val[in_strm].range((chunk_k+1) * STREAM2_DATA_WIDTH - 1, chunk_k * STREAM2_DATA_WIDTH);
+				strm_out[out_strm].write(out_val);
+#ifdef DEBUG_LOG
+				printf("[stream_out: %d, from_in_stream: %d, chunk: %d] = (", out_strm, in_strm, chunk_k);
+				for (unsigned j = 0; j < STREAM2_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); j++)
+				{
+					DataConv conv;
+					conv.i = out_val.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+					printf("%f%s ", conv.f, j != STREAM2_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8) ? "," : "");
+				}
+				printf(")\n");
+#endif
+			}
+		}
+	}
+}
+
+/**
+ * @brief aggregatedStream2streamStepup: Reads smaller chunks from multiple input streams and combines 
+ * 		them into larger packets distributed across multiple output streams.
+ *
+ * @details This function implements the inverse operation of aggregatedStream2streamStepdown. It reads
+ * 		data from multiple input streams with lower bit-width (STREAM1_DATA_WIDTH) organized in FACTOR 
+ * 		cycles of round-robin distribution. It collects these chunks and reorganizes them back into 
+ * 		larger packets with higher bit-width (STREAM2_DATA_WIDTH) for output across NUM_STRMS output streams.
+ * 		Effectively converts FACTOR output waves of NUM_STRMS × STREAM1_DATA_WIDTH back into
+ * 		NUM_STRMS × STREAM2_DATA_WIDTH per cycle.
+ *
+ * @tparam STREAM1_DATA_WIDTH The bit-width of the input stream data (must be smaller than STREAM2_DATA_WIDTH).
+ * @tparam STREAM2_DATA_WIDTH The bit-width of the output stream data (must be a multiple of STREAM1_DATA_WIDTH).
+ * @tparam NUM_STRMS The number of input and output streams. Must be a power of two.
+ * @tparam IN_ITR Initiation interval for the outer HLS pipeline combining input chunks (default: 2).
+ *
+ * @param[in] strm_in Array of input HLS streams (size NUM_STRMS) with bit-width STREAM1_DATA_WIDTH,
+ * 		providing chunks distributed across FACTOR cycles per output packet.
+ * @param[out] strm_out Array of output HLS streams (size NUM_STRMS) with bit-width STREAM2_DATA_WIDTH,
+ * 		receiving the recombined wider packets.
+ * @param[in] num_big_pkts The number of large output packets (width STREAM2_DATA_WIDTH) to generate.
+ *
+ */
+template <unsigned short STREAM1_DATA_WIDTH, unsigned short STREAM2_DATA_WIDTH, unsigned short NUM_STRMS, unsigned short IN_ITR=2>
+static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>> strm_in[NUM_STRMS],
+			::hls::stream<ap_uint<STREAM2_DATA_WIDTH>> strm_out[NUM_STRMS],
+			const unsigned int num_big_pkts)
+{
+	constexpr unsigned short FACTOR = STREAM2_DATA_WIDTH / STREAM1_DATA_WIDTH;
+    constexpr unsigned int ii_adj = (IN_ITR >= FACTOR) ? IN_ITR : FACTOR;
+	constexpr unsigned short ii_out = ii_adj / FACTOR;
+#ifndef __SYNTHESIS__
+    static_assert((NUM_STRMS != 0) && ((NUM_STRMS & (NUM_STRMS - 1)) == 0), "NUM_STRMS must be a power of two");
+	static_assert(STREAM2_DATA_WIDTH > STREAM1_DATA_WIDTH,
+			"STREAM2_DATA_WIDTH has to be bigger than STREAM1_DATA_WIDTH");
+    static_assert(STREAM2_DATA_WIDTH % STREAM1_DATA_WIDTH == 0, 
+            "STREAM2_DATA_WIDTH has to be fully divisible by STREAM1_DATA_WIDTH");
+    static_assert(STREAM1_DATA_WIDTH % 8 == 0, "STREAM1_DATA_WIDTH should be divisible by 8");
+    static_assert(STREAM2_DATA_WIDTH % 8 == 0, "STREAM2_DATA_WIDTH should be divisible by 8");
+	static_assert(ii_adj % FACTOR == 0, "Output ii is not divisible by input II");
+#endif 
+
+
+#ifndef __SYNTHESIS__
+    #ifdef DEBUG_LOG
+		printf("====================================================================================\n");
+        printf("|HLS DEBUG_LOG| %s | adj_ii: %d, num_big_pkts: %d\n"
+                , __func__, ii_adj , num_big_pkts);
+        printf("====================================================================================\n");
+    #endif
+#endif
+
+	// Array to collect chunks for reconstruction (indexed by [input_stream][chunk_position])
+	ap_uint<STREAM1_DATA_WIDTH> chunks[NUM_STRMS][FACTOR];
+	#pragma HLS ARRAY_PARTITION variable=chunks dim=0 complete
+
+	for (unsigned int pkt = 0; pkt < num_big_pkts; pkt++)
+	{
+	#pragma HLS PIPELINE II=ii_adj
+
+#ifdef DEBUG_LOG
+		printf("====================================================================================\n");
+        printf("|HLS DEBUG_LOG| aggregatedStream2streamStepup | combining pkt: %d \n", pkt);
+#endif 
+ 
+		// Read chunks from input streams using inverse mapping of stepdown distribution
+		read: for (unsigned short output_cycle = 0; output_cycle < FACTOR; output_cycle++)
+		{
+		#pragma HLS PIPELINE II=ii_out
+#ifdef DEBUG_LOG
+		printf("====================================================================================\n");
+        printf("|HLS DEBUG_LOG| aggregatedStream2streamStepup | read cycle: %d \n", pkt*FACTOR + output_cycle);
+#endif			
+			for (unsigned short out_strm = 0; out_strm < NUM_STRMS; out_strm++)
+			{
+			#pragma HLS UNROLL
+				// Reverse mapping: undo the round-robin distribution from stepdown
+				unsigned short chunk_idx = output_cycle * NUM_STRMS + out_strm;
+				unsigned short in_strm = chunk_idx / FACTOR;
+				unsigned short chunk_k = chunk_idx % FACTOR;
+				
+				chunks[in_strm][chunk_k] = strm_in[out_strm].read();
+#ifdef DEBUG_LOG
+				printf("[stream_in: %d → chunks[%d][%d]] = (", out_strm, in_strm, chunk_k);
+				for (unsigned j = 0; j < STREAM1_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); j++)
+				{
+					DataConv conv;
+					conv.i = chunks[in_strm][chunk_k].range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+					printf("%f%s ", conv.f, j != STREAM1_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8) ? "," : "");
+				}
+				printf(")\n");
+#endif
+			}
+		}
+
+		// Reconstruct and write wide packets from collected chunks
+		write: for (unsigned short num_strm = 0; num_strm < NUM_STRMS; num_strm++)
+		{
+		#pragma HLS UNROLL
+			ap_uint<STREAM2_DATA_WIDTH> out_val = 0;
+			for (unsigned short k = 0; k < FACTOR; k++)
+			{
+			#pragma HLS UNROLL
+				out_val.range((k+1) * STREAM1_DATA_WIDTH - 1, k * STREAM1_DATA_WIDTH) = chunks[num_strm][k];
+			}
+			strm_out[num_strm].write(out_val);
+#ifdef DEBUG_LOG
+			printf("[stream_out: %d] = (", num_strm);
+			for (unsigned j = 0; j < STREAM2_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); j++)
+			{
+				DataConv conv;
+				conv.i = out_val.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+				printf("%f%s ", conv.f, j != STREAM2_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8) ? "," : "");
+			}
+			printf(")\n");
+#endif
+		}
+	}
+}
+
+/**
+ * @brief redirect varient 2: Reorders and aligns strided tile data from multiple input streams to output streams with
+ * 		with diferent stream size from the original interleve memory width. 	
+ *
+ * @details This function acts as a dynamic router and barrel shifter. It decodes a 160-bit 
+ * 		configuration command to determine the 3D memory access pattern and the resulting bank 
+ * 		wrap-around logic. It selectively reads from a partitioned array of input streams based 
+ * 		on boundary conditions, and then combinatorially rotates (barrel shifts) the data 
+ * 		to align it correctly across the output streams, compensating for the starting bank offset.
+ *
+ * @tparam MEM_DATA_WIDTH The bit-width of the original memory source.
+ * @tparam STREAM_DATA_WIDTH The bit-width of the stream data elements.
+ * @tparam NUM_BANKS The number of memory banks and corresponding streams. Must be a power 
+ * of two to enable bitwise modulo masking and efficient barrel shifting.
+ * @tparam IN_ITR Initiation interval for the inner HLS pipeline (default: 2).
+ *
+ * @param[in] strm_in Array of input HLS streams (size NUM_BANKS) providing the raw, 
+ * unaligned data read from memory.
+ * @param[out] strm_out Array of output HLS streams (size NUM_BANKS) where the correctly 
+ * aligned and shifted data will be written.
+ * @param[in] command A 160-bit packed configuration word containing:
+ * 		- [63:0]   offset_x: Base offset in the X dimension
+ * 		- [95:80]  size_x:   Size in the X dimension
+ * 		- [111:96] stride_y: Stride in the Y dimension
+ * 		- [127:112] size_y:   Size in the Y dimension
+ * 		- [143:128] stride_z: Stride in the Z dimension
+ * 		- [159:144] size_z:   Size in the Z dimension
+ *
+ */
+
+template <unsigned short MEM_DATA_WIDTH, unsigned short STREAM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short IN_ITR=2>
+static void redirect(
+        ::hls::stream<ap_uint<STREAM_DATA_WIDTH>> strm_in[NUM_BANKS],
+        ::hls::stream<ap_uint<STREAM_DATA_WIDTH>> strm_out[NUM_BANKS],
+        const ap_uint<160>& command)
+{
+    // Enforce the power-of-two constraint for bitwise optimizations
+#ifndef __SYNTHESIS__
+	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
+			"MEM_DATA_WIDTH failed limit check");
+	static_assert(STREAM_DATA_WIDTH >= min_axis_data_width && STREAM_DATA_WIDTH <= max_axis_data_width,
+			"STREAM_DATA_WIDTH failed limit check");
+	static_assert(MEM_DATA_WIDTH % STREAM_DATA_WIDTH == 0, 
+            "MEM_DATA_WIDTH must be an exact multiple of STREAM_DATA_WIDTH");
+    static_assert((NUM_BANKS != 0) && ((NUM_BANKS & (NUM_BANKS - 1)) == 0), "NUM_BANKS must be a power of two");
+#endif 
+
+	constexpr unsigned int pkts_per_beat = MEM_DATA_WIDTH / STREAM_DATA_WIDTH;
+    constexpr unsigned int ii_adj = (IN_ITR > pkts_per_beat) ? IN_ITR : pkts_per_beat;
+    constexpr unsigned short NUM_BANKS_SHIFT = LOG2(NUM_BANKS);
+    constexpr unsigned int BANK_MASK = NUM_BANKS - 1;
+
+    size_t offset_x = command.range(63,0);
+    ap_uint<16> size_x = command.range(95,80);
+    ap_uint<16> stride_y = command.range(111,96);
+    ap_uint<16> size_y = command.range(127,112);
+    ap_uint<16> stride_z = command.range(143,128);
+    ap_uint<16> size_z = command.range(159,144);
+    
+    unsigned short size_x_div_by_banks_ceil = (size_x + NUM_BANKS - 1) >> NUM_BANKS_SHIFT;
+    unsigned short size_x_div_by_banks_floor = size_x >> NUM_BANKS_SHIFT;
+    
+    // Optimized modulo using bitwise AND
+    unsigned int size_x_mod_banks = size_x & BANK_MASK;
+
+#ifdef DEBUG_LOG
+    printf("==== DATAMOVER REDIRECT V2 INITIAL PARAMETERS ====\n");
+    printf("offset_x: %lu\n", offset_x);
+    printf("size_x: %u\n", (unsigned int)size_x);
+    printf("stride_y: %u\n", (unsigned int)stride_y);
+    printf("size_y: %u\n", (unsigned int)size_y);
+    printf("stride_z: %u\n", (unsigned int)stride_z);
+    printf("size_z: %u\n", (unsigned int)size_z);
+    printf("size_x_div_by_banks_ceil: %u\n", size_x_div_by_banks_ceil);
+    printf("size_x_div_by_banks_floor: %u\n", size_x_div_by_banks_floor);
+    printf("size_x_mod_banks: %u\n", size_x_mod_banks);
+    printf("NUM_BANKS: %u\n", NUM_BANKS);
+    printf("========================================\n");
+#endif
+
+    for (unsigned short z = 0; z < size_z; z++)
+    {
+        for (unsigned short y = 0; y < size_y; y++)
+        {
+            #pragma HLS LOOP_FLATTEN
+
+            const size_t z_offset = offset_x + z * stride_z;
+            const size_t abs_offset = z_offset + y * stride_y;
+            
+            // Replaced modulo with bitwise AND
+            const unsigned int starting_bank = abs_offset & BANK_MASK;
+            const unsigned int banks_upper_limit = (starting_bank + size_x_mod_banks) & BANK_MASK;
+            const bool is_t1_or_t2 = banks_upper_limit < starting_bank;
+
+            // Pre-calculate bank conditions outside the inner pipeline loop
+            bool bank_cond[NUM_BANKS];
+            #pragma HLS ARRAY_PARTITION variable=bank_cond complete dim=1
+
+            for (unsigned int i = 0; i < NUM_BANKS; i++)
+            {
+                #pragma HLS UNROLL
+                const bool is_gt_sb = i >= starting_bank;
+                const bool is_lt_uplim = i < banks_upper_limit;
+
+                if (is_t1_or_t2) {
+                    bank_cond[i] = is_gt_sb || is_lt_uplim;
+                } else {
+                    bank_cond[i] = is_gt_sb && is_lt_uplim;
+                }
+            }
+
+            for (unsigned short x = 0; x < size_x_div_by_banks_ceil; x++)
+            {
+                #pragma HLS PIPELINE II=IN_ITR
+
+                // Fully partition these to map to discrete registers
+                ap_uint<MEM_DATA_WIDTH> tmp[NUM_BANKS];
+                ap_uint<MEM_DATA_WIDTH> swap[NUM_BANKS];
+                #pragma HLS ARRAY_PARTITION variable=tmp complete dim=1
+                #pragma HLS ARRAY_PARTITION variable=swap complete dim=1
+
+                const bool is_x_lt_bank_x_size = x < size_x_div_by_banks_floor;
+
+                // 1. Read from input streams based on conditions
+                for (unsigned int i = 0; i < NUM_BANKS; i++)
+                {
+                    #pragma HLS UNROLL
+                    const bool read_cond = is_x_lt_bank_x_size || bank_cond[i];
+		
+					for (unsigned int k = 0; k < pkts_per_beat; k++) 
+					{
+						#pragma HLS UNROLL
+						ap_uint<STREAM_DATA_WIDTH> read_val = read_cond ? register_it(strm_in[i].read()) : ap_uint<STREAM_DATA_WIDTH>(0);
+						tmp[i].range((k + 1) * STREAM_DATA_WIDTH - 1, k * STREAM_DATA_WIDTH) = read_val;
+
+#ifdef DEBUG_LOG
+						if (read_cond) {
+							printf("==== REDIRECT READ ====\n");
+							printf("Bank[%u], Packet[%u], X[%u], Y[%u], Z[%u]\n", i, k, x, (unsigned int)y, (unsigned int)z);
+							printf("Values (float): (");
+							for (unsigned int j = 0; j < STREAM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
+								DataConv conv;
+								conv.i = read_val.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+								if (j > 0) printf(", ");
+								printf("%f", conv.f);
+							}
+							printf(")\n");
+							printf("=====================\n");
+						}
+#endif
+					}    
+                }
+
+                // 2. The Barrel Shifter 
+                for (unsigned int i = 0; i < NUM_BANKS; i++)
+                {
+                    #pragma HLS UNROLL
+                    unsigned int src_idx = (starting_bank + i) & BANK_MASK;
+                    swap[i] = tmp[src_idx];
+                }
+
+                // 3. Write to output streams
+                for (unsigned int i = 0; i < NUM_BANKS; i++)
+                {
+                    #pragma HLS UNROLL
+					for (unsigned int k = 0; k < pkts_per_beat; k++) 
+					{
+					#pragma HLS UNROLL
+						ap_uint<STREAM_DATA_WIDTH> write_val = swap[i].range((k + 1) * STREAM_DATA_WIDTH - 1, k * STREAM_DATA_WIDTH);
+						strm_out[i] << write_val;
+
+#ifdef DEBUG_LOG
+						printf("==== REDIRECT WRITE ====\n");
+						printf("Bank[%u], Packet[%u], X[%u], Y[%u], Z[%u]\n", i, k, x, (unsigned int)y, (unsigned int)z);
+						printf("Values (float): (");
+						for (unsigned int j = 0; j < STREAM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
+							DataConv conv;
+							conv.i = write_val.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+							if (j > 0) printf(", ");
+							printf("%f", conv.f);
+						}
+						printf(")\n");
+						printf("======================\n");
+#endif
+					}
+                }
+            }
+        }
+    }
+}
+
+
+/**
+ * @brief reverseRedirect: Reverses the alignment of strided tile data from input streams back to memory layout order.
+ *
+ * @details This function acts as the inverse of the `redirect` function. It decodes a 160-bit 
+ * configuration command to map memory wrap-around boundaries. It unconditionally reads 
+ * buffered data from a partitioned array of input streams, combinatorially rotates 
+ * (reverse barrel shifts) the data to undo the starting bank offset alignment, and 
+ * selectively writes the ordered data to the output streams based on boundary conditions.
+ *
+ * @tparam MEM_DATA_WIDTH The bit-width of the data elements in the streams.
+ * @tparam NUM_BANKS The number of memory banks and corresponding streams. Must be a power 
+ * of two to enable bitwise modulo masking and efficient barrel shifting.
+ * @tparam IN_ITR Initiation interval for the inner HLS pipeline (default: 2).
+ *
+ * @param[in] strm_in Array of input HLS streams (size NUM_BANKS) containing shifted data.
+ * @param[out] strm_out Array of output HLS streams (size NUM_BANKS) where correctly 
+ * reordered data will be written back out.
+ * @param[in] command A 160-bit packed configuration word containing 3D access dimensions.
+ *
+ * @see ops::hls::redirect
+ */
+template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short IN_ITR=2>
+static void reverseRedirect(
+        ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in[NUM_BANKS],
+        ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out[NUM_BANKS],
+        const ap_uint<160>& command)
+{
+#ifndef __SYNTHESIS__
+	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
+			"MEM_DATA_WIDTH failed limit check");
+    static_assert((NUM_BANKS != 0) && ((NUM_BANKS & (NUM_BANKS - 1)) == 0), "NUM_BANKS must be a power of two");
+#endif 
+
+    const unsigned short NUM_BANKS_SHIFT = LOG2(NUM_BANKS);
+    const unsigned int BANK_MASK = NUM_BANKS - 1;
+
+    size_t offset_x = command.range(63,0);
+    ap_uint<16> size_x = command.range(95,80);
+    ap_uint<16> stride_y = command.range(111,96);
+    ap_uint<16> size_y = command.range(127,112);
+    ap_uint<16> stride_z = command.range(143,128);
+    ap_uint<16> size_z = command.range(159,144);
+    
+    unsigned short size_x_div_by_banks_ceil = (size_x + NUM_BANKS - 1) >> NUM_BANKS_SHIFT;
+    unsigned short size_x_div_by_banks_floor = size_x >> NUM_BANKS_SHIFT;
+    
+    unsigned int size_x_mod_banks = size_x & BANK_MASK; // size_x % NUM_BANKS
+
+#ifdef DEBUG_LOG
+    printf("==== DATAMOVER REVERSE REDIRECT INITIAL PARAMETERS ====\n");
+    printf("offset_x: %lu\n", offset_x);
+    printf("size_x: %u\n", (unsigned int)size_x);
+    printf("stride_y: %u\n", (unsigned int)stride_y);
+    printf("size_y: %u\n", (unsigned int)size_y);
+    printf("stride_z: %u\n", (unsigned int)stride_z);
+    printf("size_z: %u\n", (unsigned int)size_z);
+    printf("size_x_div_by_banks_ceil: %u\n", size_x_div_by_banks_ceil);
+    printf("size_x_div_by_banks_floor: %u\n", size_x_div_by_banks_floor);
+    printf("size_x_mod_banks: %u\n", size_x_mod_banks);
+    printf("NUM_BANKS: %u\n", NUM_BANKS);
+    printf("========================================\n");
+#endif
+
+    for (unsigned short z = 0; z < size_z; z++)
+    {
+        for (unsigned short y = 0; y < size_y; y++)
+        {
+            #pragma HLS LOOP_FLATTEN
+
+            const size_t z_offset = offset_x + z * stride_z;
+            const size_t abs_offset = z_offset + y * stride_y;
+            
+            const unsigned int starting_bank = abs_offset & BANK_MASK;
+            const unsigned int banks_upper_limit = (starting_bank + size_x_mod_banks) & BANK_MASK;
+            const bool is_t1_or_t2 = banks_upper_limit < starting_bank;
+
+            // Pre-calculate boundary write conditions
+            bool bank_cond[NUM_BANKS];
+            #pragma HLS ARRAY_PARTITION variable=bank_cond complete dim=1
+
+            for (unsigned int i = 0; i < NUM_BANKS; i++)
+            {
+                #pragma HLS UNROLL
+                const bool is_gt_sb = i >= starting_bank;
+                const bool is_lt_uplim = i < banks_upper_limit;
+
+                if (is_t1_or_t2) {
+                    bank_cond[i] = is_gt_sb || is_lt_uplim;
+                } else {
+                    bank_cond[i] = is_gt_sb && is_lt_uplim;
+                }
+            }
+
+            for (unsigned short x = 0; x < size_x_div_by_banks_ceil; x++)
+            {
+                #pragma HLS PIPELINE II=IN_ITR
+
+                ap_uint<MEM_DATA_WIDTH> tmp[NUM_BANKS];
+                ap_uint<MEM_DATA_WIDTH> swap[NUM_BANKS];
+                #pragma HLS ARRAY_PARTITION variable=tmp complete dim=1
+                #pragma HLS ARRAY_PARTITION variable=swap complete dim=1
+
+                const bool is_x_lt_bank_x_size = x < size_x_div_by_banks_floor;
+
+                // 1. Unconditional Read
+                for (unsigned int i = 0; i < NUM_BANKS; i++)
+                {
+                    #pragma HLS UNROLL
+                    tmp[i] = register_it(strm_in[i].read());
+#ifdef DEBUG_LOG
+                    printf("==== REVERSE REDIRECT READ ====\n");
+                    printf("Bank[%u], X[%u], Y[%u], Z[%u]\n", i, x, (unsigned int)y, (unsigned int)z);
+                    printf("Values (float): (");
+                    for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
+                        DataConv conv;
+                        conv.i = tmp[i].range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+                        if (j > 0) printf(", ");
+                        printf("%f", conv.f);
+                    }
+                    printf(")\n");
+                    printf("============================\n");
+#endif
+                }
+
+                // 2. Reverse Barrel Shifter
+                for (unsigned int i = 0; i < NUM_BANKS; i++)
+                {
+                    #pragma HLS UNROLL
+                    unsigned int src_idx = (i - starting_bank + NUM_BANKS) & BANK_MASK;
+                    swap[i] = tmp[src_idx];
+                }
+
+                // 3. Conditional Write to Outputs
+                for (unsigned int i = 0; i < NUM_BANKS; i++)
+                {
+                    #pragma HLS UNROLL
+                    const bool write_cond = is_x_lt_bank_x_size || bank_cond[i];
+                    
+                    if (write_cond) {
+                        strm_out[i] << swap[i];
+#ifdef DEBUG_LOG
+                        printf("==== REVERSE REDIRECT WRITE ====\n");
+                        printf("Bank[%u], X[%u], Y[%u], Z[%u]\n", i, x, (unsigned int)y, (unsigned int)z);
+                        printf("Values (float): (");
+                        for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
+                            DataConv conv;
+                            conv.i = swap[i].range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+                            if (j > 0) printf(", ");
+                            printf("%f", conv.f);
+                        }
+                        printf(")\n");
+                        printf("===============================\n");
+#endif
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * @brief reverseRedirect variant-2: Reverses the alignment of strided tile data from input streams back to memory layout order.
+ *
+ * @details This function acts as the inverse of the `redirect` function. It decodes a 160-bit 
+ * configuration command to map memory wrap-around boundaries. It unconditionally reads 
+ * buffered data from a partitioned array of input streams, combinatorially rotates 
+ * (reverse barrel shifts) the data to undo the starting bank offset alignment, and 
+ * selectively writes the ordered data to the output streams based on boundary conditions.
+ *
+ * @tparam MEM_DATA_WIDTH The bit-width of the original memory source.
+ * @tparam STREAM_DATA_WIDTH The bit-width of the stream data elements.
+ * @tparam NUM_BANKS The number of memory banks and corresponding streams. Must be a power 
+ * of two to enable bitwise modulo masking and efficient barrel shifting.
+ * @tparam IN_ITR Initiation interval for the inner HLS pipeline (default: 2).
+ *
+ * @param[in] strm_in Array of input HLS streams (size NUM_BANKS) containing shifted data.
+ * @param[out] strm_out Array of output HLS streams (size NUM_BANKS) where correctly 
+ * reordered data will be written back out.
+ * @param[in] command A 160-bit packed configuration word containing 3D access dimensions.
+ *
+ * @see ops::hls::redirect
+ */
+template <unsigned short MEM_DATA_WIDTH, unsigned short STREAM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short IN_ITR=2>
+static void reverseRedirect(
+        ::hls::stream<ap_uint<STREAM_DATA_WIDTH>> strm_in[NUM_BANKS],
+        ::hls::stream<ap_uint<STREAM_DATA_WIDTH>> strm_out[NUM_BANKS],
+        const ap_uint<160>& command)
+{
+    // Enforce power-of-two constraint
+#ifndef __SYNTHESIS__
+	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
+			"MEM_DATA_WIDTH failed limit check");
+	static_assert(STREAM_DATA_WIDTH >= min_axis_data_width && STREAM_DATA_WIDTH <= max_axis_data_width,
+			"STREAM_DATA_WIDTH failed limit check");
+	static_assert(MEM_DATA_WIDTH % STREAM_DATA_WIDTH == 0, 
+            "MEM_DATA_WIDTH must be an exact multiple of STREAM_DATA_WIDTH");
+    static_assert((NUM_BANKS != 0) && ((NUM_BANKS & (NUM_BANKS - 1)) == 0), "NUM_BANKS must be a power of two");
+#endif 
+
+    constexpr unsigned int pkts_per_beat = MEM_DATA_WIDTH / STREAM_DATA_WIDTH;
+    constexpr unsigned int ii_adj = (IN_ITR > pkts_per_beat) ? IN_ITR : pkts_per_beat;
+    constexpr unsigned short NUM_BANKS_SHIFT = LOG2(NUM_BANKS);
+    constexpr unsigned int BANK_MASK = NUM_BANKS - 1;
+
+    size_t offset_x = command.range(63,0);
+    ap_uint<16> size_x = command.range(95,80);
+    ap_uint<16> stride_y = command.range(111,96);
+    ap_uint<16> size_y = command.range(127,112);
+    ap_uint<16> stride_z = command.range(143,128);
+    ap_uint<16> size_z = command.range(159,144);
+    
+    unsigned short size_x_div_by_banks_ceil = (size_x + NUM_BANKS - 1) >> NUM_BANKS_SHIFT;
+    unsigned short size_x_div_by_banks_floor = size_x >> NUM_BANKS_SHIFT;
+    
+    unsigned int size_x_mod_banks = size_x & BANK_MASK; // size_x % NUM_BANKS
+
+#ifdef DEBUG_LOG
+    printf("==== DATAMOVER REVERSE REDIRECT V2 INITIAL PARAMETERS ====\n");
+    printf("offset_x: %lu\n", offset_x);
+    printf("size_x: %u\n", (unsigned int)size_x);
+    printf("stride_y: %u\n", (unsigned int)stride_y);
+    printf("size_y: %u\n", (unsigned int)size_y);
+    printf("stride_z: %u\n", (unsigned int)stride_z);
+    printf("size_z: %u\n", (unsigned int)size_z);
+    printf("size_x_div_by_banks_ceil: %u\n", size_x_div_by_banks_ceil);
+    printf("size_x_div_by_banks_floor: %u\n", size_x_div_by_banks_floor);
+    printf("size_x_mod_banks: %u\n", size_x_mod_banks);
+    printf("NUM_BANKS: %u\n", NUM_BANKS);
+    printf("pkts_per_beat: %u\n", (unsigned int)pkts_per_beat);
+    printf("========================================\n");
+#endif
+
+    for (unsigned short z = 0; z < size_z; z++)
+    {
+        for (unsigned short y = 0; y < size_y; y++)
+        {
+            #pragma HLS LOOP_FLATTEN
+
+            const size_t z_offset = offset_x + z * stride_z;
+            const size_t abs_offset = z_offset + y * stride_y;
+            
+            const unsigned int starting_bank = abs_offset & BANK_MASK;
+            const unsigned int banks_upper_limit = (starting_bank + size_x_mod_banks) & BANK_MASK;
+            const bool is_t1_or_t2 = banks_upper_limit < starting_bank;
+
+            // Pre-calculate boundary write conditions
+            bool bank_cond[NUM_BANKS];
+            #pragma HLS ARRAY_PARTITION variable=bank_cond complete dim=1
+
+            for (unsigned int i = 0; i < NUM_BANKS; i++)
+            {
+                #pragma HLS UNROLL
+                const bool is_gt_sb = i >= starting_bank;
+                const bool is_lt_uplim = i < banks_upper_limit;
+
+                if (is_t1_or_t2) {
+                    bank_cond[i] = is_gt_sb || is_lt_uplim;
+                } else {
+                    bank_cond[i] = is_gt_sb && is_lt_uplim;
+                }
+            }
+
+            for (unsigned short x = 0; x < size_x_div_by_banks_ceil; x++)
+            {
+                #pragma HLS PIPELINE II=IN_ITR
+
+                ap_uint<MEM_DATA_WIDTH> tmp[NUM_BANKS];
+                ap_uint<MEM_DATA_WIDTH> swap[NUM_BANKS];
+                #pragma HLS ARRAY_PARTITION variable=tmp complete dim=1
+                #pragma HLS ARRAY_PARTITION variable=swap complete dim=1
+
+                const bool is_x_lt_bank_x_size = x < size_x_div_by_banks_floor;
+
+                // 1. Unconditional Read
+                for (unsigned int i = 0; i < NUM_BANKS; i++)
+                {
+                    #pragma HLS UNROLL
+					for (unsigned int k = 0; k < pkts_per_beat; k++) 
+					{
+						#pragma HLS UNROLL
+						ap_uint<STREAM_DATA_WIDTH> read_val = register_it(strm_in[i].read());
+						tmp[i].range((k + 1) * STREAM_DATA_WIDTH - 1, k * STREAM_DATA_WIDTH) = read_val;
+#ifdef DEBUG_LOG
+                            printf("==== REVERSE REDIRECT READ ====\n");
+                            printf("Bank[%u], Packet[%u], X[%u], Y[%u], Z[%u]\n", i, k, x, (unsigned int)y, (unsigned int)z);
+                            printf("Values (float): (");
+                            for (unsigned int j = 0; j < STREAM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
+                                DataConv conv;
+                                conv.i = read_val.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+                                if (j > 0) printf(", ");
+                                printf("%f", conv.f);
+                            }
+                            printf(")\n");
+                            printf("============================\n");
+#endif
+					}
+                }
+
+                // 2. Reverse Barrel Shifter
+                for (unsigned int i = 0; i < NUM_BANKS; i++)
+                {
+                    #pragma HLS UNROLL
+                    unsigned int src_idx = (i - starting_bank + NUM_BANKS) & BANK_MASK;
+                    swap[i] = tmp[src_idx];
+                }
+
+                // 3. Conditional Write to Outputs
+                for (unsigned int i = 0; i < NUM_BANKS; i++)
+                {
+                    #pragma HLS UNROLL
+                    const bool write_cond = is_x_lt_bank_x_size || bank_cond[i];
+                    
+					for (unsigned int k = 0; k < pkts_per_beat; k++) 
+					{
+						#pragma HLS UNROLL
+                    	if (write_cond) {
+                        ap_uint<STREAM_DATA_WIDTH> write_val = swap[i].range((k + 1) * STREAM_DATA_WIDTH - 1, k * STREAM_DATA_WIDTH);
+                        strm_out[i] << write_val;
+#ifdef DEBUG_LOG
+                        printf("==== REVERSE REDIRECT WRITE ====\n");
+                        printf("Bank[%u], Packet[%u], X[%u], Y[%u], Z[%u]\n", i, k, x, (unsigned int)y, (unsigned int)z);
+                        printf("Values (float): (");
+                        for (unsigned int j = 0; j < STREAM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
+                            DataConv conv;
+                            conv.i = write_val.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+                            if (j > 0) printf(", ");
+                            printf("%f", conv.f);
+                        }
+                        printf(")\n");
+                        printf("===============================\n");
+#endif
+                    	}
+                    }
                 }
             }
         }
@@ -2125,7 +3664,7 @@ DEPRECATED void stream2stream(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_i
 				::hls::stream<ap_uint<STREAM2_DATA_WIDTH>>& strm_out,
 				const unsigned int num_big_pkts)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(STREAM1_DATA_WIDTH > STREAM2_DATA_WIDTH ? STREAM1_DATA_WIDTH % STREAM2_DATA_WIDTH == 0 : STREAM2_DATA_WIDTH % STREAM1_DATA_WIDTH == 0,
 			"Bigger stream has to be fully divisible by smaller stream");
 #endif
@@ -2135,7 +3674,7 @@ DEPRECATED void stream2stream(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_i
 	constexpr unsigned short BIG_STREAM_DATA_WIDTH_BYTES = BIG_STREAM_DATA_WIDTH / 8;
 	constexpr unsigned short TYPE = STREAM1_DATA_WIDTH > STREAM2_DATA_WIDTH ? 1 : 0;
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 	printf("|HLS DEBUG_LOG| %s | type: %d, num_big_pkts: %d\n"
 			, __func__,TYPE, num_big_pkts);
@@ -2155,7 +3694,7 @@ DEPRECATED void stream2stream(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_i
 				if (n == 0)
 				{
 					tmp1 = strm_in.read();
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	#ifdef DEBUG_LOG
 					printf("   |HLS DEBUG_LOG||%s| receiving pkt: %d, val=(", __func__, pkt);
 
@@ -2172,7 +3711,7 @@ DEPRECATED void stream2stream(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_i
 
 				ap_uint<STREAM2_DATA_WIDTH> tmp2 = tmp1.range((n+1)* STREAM2_DATA_WIDTH -1, n * STREAM2_DATA_WIDTH);
 				strm_out.write(tmp2);
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	#ifdef DEBUG_LOG
 				printf("   |HLS DEBUG_LOG||%s| writing pkt: %d, val=(", __func__, pkt*FACTOR + n);
 
@@ -2199,7 +3738,7 @@ DEPRECATED void stream2stream(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_i
 			#pragma HLS LOOP_FLATTEN
 
 				ap_uint<STREAM1_DATA_WIDTH> tmp1 = strm_in.read();
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	#ifdef DEBUG_LOG
 				printf("   |HLS DEBUG_LOG||%s| reading pkt: %d, val=(", __func__, pkt*FACTOR + n);
 
@@ -2216,7 +3755,7 @@ DEPRECATED void stream2stream(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_i
 
 				if (n == FACTOR - 1)
 				{
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	#ifdef DEBUG_LOG
 				printf("   |HLS DEBUG_LOG||%s| writing pkt: %d, val=(", __func__, pkt*FACTOR + n);
 
@@ -2254,7 +3793,7 @@ void stream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_in,
 				::hls::stream<ap_uint<STREAM2_DATA_WIDTH>>& strm_out,
 				const unsigned int num_big_pkts)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(STREAM1_DATA_WIDTH < STREAM2_DATA_WIDTH,
 			"STREAM1_DATA_WIDTH has to be smaller than STREAM2_DATA_WIDTH");
     static_assert(STREAM2_DATA_WIDTH % STREAM1_DATA_WIDTH == 0, 
@@ -2265,7 +3804,7 @@ void stream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_in,
 
 constexpr unsigned short FACTOR = STREAM2_DATA_WIDTH / STREAM1_DATA_WIDTH;
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
     #ifdef DEBUG_LOG
         printf("|HLS DEBUG_LOG| %s | num_big_pkts: %d\n"
                 , __func__, num_big_pkts);
@@ -2282,7 +3821,7 @@ constexpr unsigned short FACTOR = STREAM2_DATA_WIDTH / STREAM1_DATA_WIDTH;
         #pragma HLS LOOP_FLATTEN
 
             ap_uint<STREAM1_DATA_WIDTH> tmp1 = strm_in.read();
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
             printf("   |HLS DEBUG_LOG||%s| reading pkt: %d, val=(", __func__, pkt*FACTOR + n);
 
@@ -2299,7 +3838,7 @@ constexpr unsigned short FACTOR = STREAM2_DATA_WIDTH / STREAM1_DATA_WIDTH;
 
             if (n == FACTOR - 1)
             {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
             printf("   |HLS DEBUG_LOG||%s| writing pkt: %d, val=(", __func__, pkt*FACTOR + n);
 
@@ -2337,7 +3876,7 @@ void stream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_in,
 				::hls::stream<ap_uint<STREAM2_DATA_WIDTH>>& strm_out,
 				const unsigned int num_big_pkts)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(STREAM1_DATA_WIDTH > STREAM2_DATA_WIDTH,
 			"STREAM1_DATA_WIDTH has to be bigger than STREAM2_DATA_WIDTH");
     static_assert(STREAM1_DATA_WIDTH % STREAM2_DATA_WIDTH == 0, 
@@ -2348,7 +3887,7 @@ void stream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_in,
 
 constexpr unsigned short FACTOR = STREAM1_DATA_WIDTH / STREAM2_DATA_WIDTH;
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
     #ifdef DEBUG_LOG
         printf("|HLS DEBUG_LOG| %s | num_big_pkts: %d\n"
                 , __func__, num_big_pkts);
@@ -2368,7 +3907,7 @@ constexpr unsigned short FACTOR = STREAM1_DATA_WIDTH / STREAM2_DATA_WIDTH;
             if (n == 0)
             {
                 tmp1 = strm_in.read();
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
     #ifdef DEBUG_LOG
                     printf("   |HLS DEBUG_LOG||%s| receiving pkt: %d, val=(", __func__, pkt);
 
@@ -2385,7 +3924,7 @@ constexpr unsigned short FACTOR = STREAM1_DATA_WIDTH / STREAM2_DATA_WIDTH;
 
             ap_uint<STREAM2_DATA_WIDTH> tmp2 = tmp1.range((n+1)* STREAM2_DATA_WIDTH -1, n * STREAM2_DATA_WIDTH);
             strm_out.write(tmp2);
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
     #ifdef DEBUG_LOG
                 printf("   |HLS DEBUG_LOG||%s| writing pkt: %d, val=(", __func__, pkt*FACTOR + n);
 
@@ -2419,7 +3958,7 @@ void stream2axis(::hls::stream<ap_uint<STREAM_DATA_WIDTH>>& strm_in,
 #endif
 			)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 
 	if (print_enbl) {
@@ -2433,7 +3972,7 @@ void stream2axis(::hls::stream<ap_uint<STREAM_DATA_WIDTH>>& strm_in,
 
 		ap_axiu<STREAM_DATA_WIDTH,0,0,0> tmp;
 		tmp.data = strm_in.read();
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 			if (print_enbl) {
 				// print("------------------------------------------------------------------------------------\n");
@@ -2474,7 +4013,7 @@ void axis2stream(::hls::stream<ap_axiu<STREAM_DATA_WIDTH,0,0,0>>& strm_in,
 #endif	
 	)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 	if (print_enbl) {
 		print("\n=======================================================\n");
@@ -2486,7 +4025,7 @@ void axis2stream(::hls::stream<ap_axiu<STREAM_DATA_WIDTH,0,0,0>>& strm_in,
 		#pragma HLS PIPELINE II=1
 
 		ap_axiu<STREAM_DATA_WIDTH,0,0,0> tmp = strm_in.read();
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 			if (print_enbl) {
 				// print("------------------------------------------------------------------------------------\n");
@@ -2529,7 +4068,7 @@ void mem2axis(ap_uint<MEM_DATA_WIDTH>* mem_in,
 				::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& strm_out,
 				unsigned int size)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(MEM_DATA_WIDTH % AXIS_DATA_WIDTH == 0, 
 			"MEM_DATA_WIDTH has to be fully divided by AXIS_DATA_WIDTH");
 	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
@@ -2548,7 +4087,7 @@ void mem2axis(ap_uint<MEM_DATA_WIDTH>* mem_in,
 	const unsigned int num_bursts = num_beats / BURST_SIZE;
 	const unsigned int non_burst_beats = num_beats % BURST_SIZE;
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 	printf("|HLS DEBUG_LOG| %s | size: %d, num_beats: %d, num_burst: %d, non_burst_beats: %d\n"
 			, __func__, size, num_beats, num_bursts, non_burst_beats);
@@ -2599,7 +4138,7 @@ void mem2axisV2(ap_uint<MEM_DATA_WIDTH>* mem_in,
 				::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& strm_out,
 				unsigned int size)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(MEM_DATA_WIDTH % AXIS_DATA_WIDTH == 0,
 			"MEM_DATA_WIDTH has to be fully divided by AXIS_DATA_WIDTH");
 	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
@@ -2616,7 +4155,7 @@ void mem2axisV2(ap_uint<MEM_DATA_WIDTH>* mem_in,
 
 	const unsigned int num_beats = (size + bytes_per_beat - 1) / bytes_per_beat;
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 	printf("|HLS DEBUG_LOG| %s | size: %d, num_beats: %d\n"
 			, __func__, size, num_beats);
@@ -2655,7 +4194,7 @@ void mem2axis(ap_uint<MEM_DATA_WIDTH>* mem_in0,
 				unsigned int size,
 				unsigned int selector)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(MEM_DATA_WIDTH % AXIS_DATA_WIDTH == 0, 
 			"MEM_DATA_WIDTH has to be fully divided by AXIS_DATA_WIDTH");
 	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
@@ -2757,7 +4296,7 @@ void axis2mem(ap_uint<MEM_DATA_WIDTH>* mem_out,
 				::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& strm_in,
 				unsigned int size)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(MEM_DATA_WIDTH % AXIS_DATA_WIDTH == 0,
 			"MEM_DATA_WIDTH has to be fully divided by AXIS_DATA_WIDTH");
 	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
@@ -2819,7 +4358,7 @@ void axis2memV2(ap_uint<MEM_DATA_WIDTH>* mem_out,
 				::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& strm_in,
 				unsigned int size)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(MEM_DATA_WIDTH % AXIS_DATA_WIDTH == 0,
 			"MEM_DATA_WIDTH has to be fully divided by AXIS_DATA_WIDTH");
 	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
@@ -2836,7 +4375,7 @@ void axis2memV2(ap_uint<MEM_DATA_WIDTH>* mem_out,
 
 	const unsigned int num_beats = (size + bytes_per_beat - 1) / bytes_per_beat;
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 	printf("|HLS DEBUG_LOG| %s | size: %d, num_beats: %d\n"
 			, __func__, size, num_beats);
@@ -2877,7 +4416,7 @@ void axis2mem(ap_uint<MEM_DATA_WIDTH>* mem_out0,
 				unsigned int size,
 				unsigned int selector)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(MEM_DATA_WIDTH % AXIS_DATA_WIDTH == 0,
 			"MEM_DATA_WIDTH has to be fully divided by AXIS_DATA_WIDTH");
 	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
@@ -2967,7 +4506,7 @@ void axis2memMasked(ap_uint<DATA_WIDTH>* mem_out,
 				::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& strm_in,
 				unsigned int size)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(AXIS_DATA_WIDTH % DATA_WIDTH == 0,
 			"AXIS_DATA_WIDTH has to be fully divided by DATA_WIDTH");
 	static_assert(AXIS_DATA_WIDTH >= min_axis_data_width && AXIS_DATA_WIDTH <= max_axis_data_width,
@@ -3007,7 +4546,7 @@ void axis2stream(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_in,
 				::hls::stream<ap_uint<STREAM_DATA_WIDTH>>& strm_out,
 				unsigned int size)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(AXIS_DATA_WIDTH % STREAM_DATA_WIDTH == 0,
 			"AXIS_DATA_WIDTH has to be fully divided by STREAM_DATA_WIDTH");
 	static_assert(AXIS_DATA_WIDTH >= min_axis_data_width && AXIS_DATA_WIDTH <= max_axis_data_width,
@@ -3040,7 +4579,7 @@ void axis2stream(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_in,
 				axisPkt = axis_in.read();
 			}
 			strm_out <<  axisPkt.data.range((j+1) * STREAM_DATA_WIDTH - 1, j * STREAM_DATA_WIDTH);
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 #ifdef DEBUG_LOG
 			printf("   |HLS DEBUG_LOG|%s| sending axis pkt: %d, val=(",__func__, itr);
 
@@ -3084,7 +4623,7 @@ void axis2streamMasked(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_in,
 				unsigned int size,
 				unsigned short shiftBytes = 0)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(AXIS_DATA_WIDTH % STREAM_DATA_WIDTH == 0,
 			"AXIS_DATA_WIDTH has to be fully divided by STREAM_DATA_WIDTH");
 	static_assert(AXIS_DATA_WIDTH >= min_axis_data_width && AXIS_DATA_WIDTH <= max_axis_data_width,
@@ -3109,7 +4648,7 @@ void axis2streamMasked(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_in,
 //	{
 	cycleBuf[cycleBufIndex] = axis_in.read();
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	#ifdef DEBUG_LOG
 	printf("   |HLS DEBUG_LOG||%s| Iter 0. Cycle Buff, ", __func__);
 
@@ -3141,7 +4680,7 @@ void axis2streamMasked(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_in,
 	for (unsigned int itr = 1; itr < num_axis_pkts; itr++)
 	{
 		cycleBuf[cycleBufIndex] = axis_in.read();
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	#ifdef DEBUG_LOG
 		printf("   |HLS DEBUG_LOG||%s| Iter %d. Cycle Buff, ", __func__, itr);
 
@@ -3176,7 +4715,7 @@ void axis2streamMasked(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_in,
 					= cycleBuf[cycleBufIndexPlusOne].strb.range(bytes_per_axis_pkt - 1, bytes_per_axis_pkt - shiftBytes);
 		}
 
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	#ifdef DEBUG_LOG
 		printf("   |HLS DEBUG_LOG||%s| shifted axis , val=(", __func__);
 
@@ -3397,7 +4936,7 @@ void stream2axis(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_out,
 				::hls::stream<ap_uint<STREAM_DATA_WIDTH>>& strm_in,
 				unsigned int size)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(AXIS_DATA_WIDTH % STREAM_DATA_WIDTH == 0,
 			"AXIS_DATA_WIDTH has to be fully divided by STREAM_DATA_WIDTH");
 	static_assert(AXIS_DATA_WIDTH >= min_axis_data_width && AXIS_DATA_WIDTH <= max_axis_data_width,
@@ -3466,7 +5005,7 @@ void stream2axisMasked(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_out,
 				::hls::stream<ap_uint<STREAM_DATA_WIDTH/8>>& mask_in,
 				unsigned int size)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(AXIS_DATA_WIDTH % STREAM_DATA_WIDTH == 0,
 			"AXIS_DATA_WIDTH has to be fully divided by STREAM_DATA_WIDTH");
 	static_assert(AXIS_DATA_WIDTH >= min_axis_data_width && AXIS_DATA_WIDTH <= max_axis_data_width,
@@ -3535,7 +5074,7 @@ void stream2axisMasked(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_out,
 //		::hls::stream<ap_uint<STREAM_DATA_WIDTH>>& strm_in,
 //				unsigned int size)
 //{
-//#ifndef __SYTHESIS__
+//#ifndef __SYNTHESIS__
 //	static_assert(MEM_DATA_WIDTH % STREAM_DATA_WIDTH == 0,
 //			"MEM_DATA_WIDTH has to be fully divided by STREAM_DATA_WIDTH");
 //	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
@@ -3597,7 +5136,7 @@ void stream2memMasked(ap_uint<DATA_WIDTH>* mem_out,
 		::hls::stream<ap_uint<STREAM_DATA_WIDTH/8>>& mask_in,
 				unsigned int size)
 {
-#ifndef __SYTHESIS__
+#ifndef __SYNTHESIS__
 	static_assert(STREAM_DATA_WIDTH % DATA_WIDTH == 0,
 			"STREAM_DATA_WIDTH has to be fully divided by DATA_WIDTH");
 	static_assert(STREAM_DATA_WIDTH >= min_hls_stream_data_width && STREAM_DATA_WIDTH <= max_hls_stream_data_width,
