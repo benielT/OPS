@@ -18,6 +18,7 @@ constexpr unsigned short MIN_GRID_SIZE_Y = {{min_grid_size_y}};
 constexpr unsigned short MIN_GRID_SIZE_Z = {{min_grid_size_z}};
 constexpr unsigned short MEM_VECTOR_FACTOR = {{mem_vector_factor}};
 constexpr unsigned short STENCIL_D_MAX = {{stencil_d_max}};
+constexpr unsigned short TILE_READ_OFFSET_MAX = {{tile_read_offset_max}};
 
 struct TestParameters{
     unsigned int logic_size_x;
@@ -30,18 +31,22 @@ struct TestParameters{
     unsigned int tile_y;
     unsigned int stencil_d;
     unsigned int test_seed;
+    unsigned int read_offset;
 };
 
 {% block dut_prototype %}
 void dut(
     const unsigned int num_beats,
-    const unsigned int num_beats_div_banks_by_2,
+    const unsigned int num_pkts,
+    const unsigned int num_pkts_small,
     const unsigned short size_y,
     const unsigned short size_z,
-    const ap_uint<192>& command,
     const ap_uint<160>& short_command,
+    const ap_uint<192>& command,
     {%- for i in range(tile_banks) %}
     ap_uint<MEM_DATA_WIDTH>* arg0_b{{loop.index0}},
     {%- endfor %}
-    ::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>> arg0_strm_out[{{tile_banks}}]
+    {%- for i in range(tile_banks) %}
+    ap_uint<MEM_DATA_WIDTH>* arg1_b{{loop.index0}}{{"," if not loop.last}}
+    {%- endfor %}
 ){% endblock %}{% block dut_body %};{% endblock %}

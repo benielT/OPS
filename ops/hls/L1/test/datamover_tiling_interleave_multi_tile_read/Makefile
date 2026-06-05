@@ -243,7 +243,7 @@ runhls: data setup | check_vivado check_vpp
 	$(HLS) -f run_hls.tcl;
 
 clean:
-	rm -rf settings.tcl *_hls.log dut.prj $(INSTANCE_FILES) .generated main.cpp top.cpp top.hpp
+	rm -rf settings.tcl *_hls.log dut.prj $(INSTANCE_FILES) .generated main.cpp top.cpp top.hpp .generated
 
 # Used by Jenkins test
 #cleanall: clean
