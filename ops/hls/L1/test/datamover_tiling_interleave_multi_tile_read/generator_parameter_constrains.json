@@ -3,6 +3,7 @@
     "AXIS_DATA_WIDTH" : [64,128,256],
     "TILE_BANKS" : [2,4,8],
     "VALID_TILE_SIZES" : [128,256,512],
+    "TILE_READ_OFFSET_MAX" : 2, 
     "BURST_SIZE_MIN" : 8,
     "BURST_SIZE_MAX" : 32,
     "MAX_AXI_DEPTH" : 8192,

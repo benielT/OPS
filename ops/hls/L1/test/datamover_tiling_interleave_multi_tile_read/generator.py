@@ -80,6 +80,7 @@ def generate_design_parameter(constrains, random_seed = None):
         type_name = constrains["TYPE"]
         stencil_d_max = constrains["STENCIL_D_MAX"]
         valid_tile_sizes = constrains["VALID_TILE_SIZES"]
+        tile_read_offset_max = constrains["TILE_READ_OFFSET_MAX"]
         
     except KeyError as exc:
         raise KeyError(f"Missing required constraint: {exc}")
@@ -88,8 +89,8 @@ def generate_design_parameter(constrains, random_seed = None):
         raise ValueError("MEM_DATA_WIDTH, AXIS_DATA_WIDTH, TILE_BANKS and VALID_TILE_SIZES must be lists")
     if not mem_data_width or not axis_data_width or not tile_options:
         raise ValueError("MEM_DATA_WIDTH, AXIS_DATA_WIDTH, and TILE_BANKS must not be empty")
-    if not isinstance(burst_min, int) or not isinstance(burst_max, int) or not isinstance(max_grid_size_x, int) or not isinstance(max_grid_size_y, int) or not isinstance(max_grid_size_x, int) or not isinstance(min_grid_size_x, int) or not isinstance(min_grid_size_y, int) or not isinstance(min_grid_size_y, int) or not isinstance(stencil_d_max, int) or not isinstance(max_axi_depth, int):
-        raise ValueError("BURST_SIZE_MIN, BURST_SIZE_MAX, MAX_GRID_SIZE_X, MAX_GRID_SIZE_Y, MAX_GRID_SIZE_Z, MAX_AXI_DEPTH, MIN_GRID_SIZE_X, MIN_GRID_SIZE_Y, MIN_GRID_SIZE_Z, and STENCIL_D_MAX must be integers")
+    if not isinstance(burst_min, int) or not isinstance(burst_max, int) or not isinstance(max_grid_size_x, int) or not isinstance(max_grid_size_y, int) or not isinstance(max_grid_size_x, int) or not isinstance(min_grid_size_x, int) or not isinstance(min_grid_size_y, int) or not isinstance(min_grid_size_y, int) or not isinstance(stencil_d_max, int) or not isinstance(max_axi_depth, int) or not isinstance(tile_read_offset_max, int):
+        raise ValueError("BURST_SIZE_MIN, BURST_SIZE_MAX, MAX_GRID_SIZE_X, MAX_GRID_SIZE_Y, MAX_GRID_SIZE_Z, MAX_AXI_DEPTH, MIN_GRID_SIZE_X, MIN_GRID_SIZE_Y, MIN_GRID_SIZE_Z, STENCIL_D_MAX, and TILE_READ_OFFSET_MAX must be integers")
     if burst_min > burst_max:
         raise ValueError("BURST_SIZE_MIN must be less than or equal to BURST_SIZE_MAX")
         
@@ -169,7 +170,8 @@ def generate_design_parameter(constrains, random_seed = None):
         "min_grid_size_y" : min_grid_size_y,
         "min_grid_size_z" : min_grid_size_z,
         "stencil_d_max" : stencil_d_max,
-        "valid_tile_sizes" : valid_tile_sizes
+        "valid_tile_sizes" : valid_tile_sizes,
+        "tile_read_offset_max" : tile_read_offset_max
     }
 
 class SilentUndefined(Undefined):
