@@ -38,7 +38,7 @@ struct TestParameters{
 void dut(
     const unsigned int num_beats,
     const unsigned int num_pkts,
-    const unsigned int num_pkts_small,
+    const bool is_small_tile,
     const unsigned short size_y,
     const unsigned short size_z,
     const ap_uint<160>& short_command,

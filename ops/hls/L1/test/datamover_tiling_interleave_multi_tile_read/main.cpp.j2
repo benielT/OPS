@@ -262,7 +262,7 @@ void generate_grid(TestGrid<T>& grid, const TestParameters& test_params, bool in
 }
 
 template <typename T>
-ap_uint<192> commandGen3Dwrapper(const TestGrid<T>& grid, const TestParameters& params, unsigned int& total_beats, unsigned int& total_pkts)
+ap_uint<192> commandGen3Dwrapper(const TestGrid<T>& grid, const TestParameters& params, unsigned int& total_beats, unsigned int& total_pkts, bool& is_small_tile)
 {
     unsigned int test_tile_size_x = (params.tile_x + params.read_offset * MEM_VECTOR_FACTOR) <= grid.grid_size_x ? params.tile_x : grid.grid_size_x - params.read_offset * MEM_VECTOR_FACTOR;
     unsigned int test_tile_size_y = params.tile_y <= grid.grid_size_y ? params.tile_y : grid.grid_size_y;
@@ -278,10 +278,18 @@ ap_uint<192> commandGen3Dwrapper(const TestGrid<T>& grid, const TestParameters& 
     
     auto command = ops::hls::commandGen3D(widen_offset, 1, (ap_uint<16>)widen_test_tile_size_x, strid_y, (ap_uint<16>)test_tile_size_y, strid_z, (ap_uint<16>)grid.grid_size_z, 0,  0); //Avoids are not needed as read and writing 1 tile
 
-    total_beats = test_tile_size_x * tile_size_y_mul_z_diff;
-    const unsigned int total_beats_div_4 = widen_test_tile_size_x * tile_size_y_mul_z_diff;
-    bool small_tile = test_tile_size_x  <= LOG2(TILE_BANKS/2);
-    total_pkts = small_tile ? total_beats_div_4 << 1 : total_beats_div_4;
+    unsigned int x_pkts = (widen_test_tile_size_x + TILE_BANKS - 1) >> LOG2(TILE_BANKS);
+    total_pkts = x_pkts * tile_size_y_mul_z_diff;
+    total_beats = widen_test_tile_size_x * tile_size_y_mul_z_diff;
+    is_small_tile = widen_test_tile_size_x  <= LOG2(TILE_BANKS/2);
+
+
+    std::cout <<"[DEBUG][TEST] command gen values" << std::endl;
+    std::cout <<"================================" << std::endl;
+    std::cout <<" total_pkts_per_lane: " << total_pkts << std::endl;
+    std::cout <<" total_beats: " << total_beats << std::endl;
+    std::cout <<" is_small_tile: " << is_small_tile << std::endl;
+    std::cout <<"================================" << std::endl;
 
     return command;
 }
@@ -291,9 +299,10 @@ bool evaluate(TestGrid<T>& grid_a, TestGrid<T>& grid_b, TestParameters& params)
 {
     unsigned int total_beats = 0;
     unsigned int total_pkts = 0;
+    bool is_small_tile = false;
     
     // Use grid_a to generate the expected command
-    auto command = commandGen3Dwrapper(grid_a, params, total_beats, total_pkts);
+    auto command = commandGen3Dwrapper(grid_a, params, total_beats, total_pkts, is_small_tile);
 
     // Parse parameters from the command
     size_t offset_x_vect = command.range(63,0);
@@ -377,7 +386,9 @@ void test_read_write(TestGrid<T>& grid, TestGrid<T>& grid_receive, TestParameter
     
     unsigned int total_beats = 0;
     unsigned int total_pkts = 0;
-    auto command = commandGen3Dwrapper(grid, params, total_beats, total_pkts);
+    bool is_small_tile = false;
+    
+    auto command = commandGen3Dwrapper(grid, params, total_beats, total_pkts, is_small_tile);
 
     ap_uint<160> short_command = command.range(159,0);
 
@@ -402,7 +413,7 @@ void test_read_write(TestGrid<T>& grid, TestGrid<T>& grid_receive, TestParameter
     }
     {% endfor %}
 
-    dut(total_beats, total_pkts, total_pkts << 1, command.range(127,112) /* size_y*/, grid.grid_size_z, short_command, command,
+    dut(total_beats, total_pkts, is_small_tile, command.range(127,112) /* size_y*/, grid.grid_size_z, short_command, command,
     {%- for i in range(tile_banks) -%}
             (ap_uint<MEM_DATA_WIDTH>*)alt_buffer_{{i}}.data(),
     {% endfor %}
@@ -491,6 +502,7 @@ int main()
     std::cout << "*****************************************************************************" << std::endl << std::endl;
 
     constexpr unsigned int num_tests = NUM_TESTS;
+    host_buffer_t<bool> scoreboard;
     
     for (unsigned int test = 0; test < num_tests; test++)
     {
@@ -536,8 +548,18 @@ int main()
         print_grid(grid_receive, "grid_receive");
         print_altbuffers(grid_receive);
 #endif 
-        evaluate(grid, grid_receive, params);
+        auto score = evaluate(grid, grid_receive, params);
+        scoreboard.push_back(score);
     }
+
+    // Final scoreboard
+    std::cout << "==========================" << std::endl;
+    std::cout << "       TEST SUMMARY" << std::endl;
+    std::cout << "==========================" << std::endl;
+    for (unsigned int test = 0; test < num_tests; test++) {
+        std::cout << "Test " << test + 1 <<": " << (scoreboard[test] ? "PASSED" : "FAILED") << std::endl;
+    }
+    std::cout << "==========================" << std::endl;
 
     return 0;
 }

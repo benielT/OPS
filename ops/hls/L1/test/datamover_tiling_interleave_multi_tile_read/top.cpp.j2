@@ -19,13 +19,13 @@
     #pragma HLS INTERFACE s_axilite port = arg1_b{{loop.index0}} bundle = control
     {% endfor %}
 
-    #pragma HLS INTERFACE s_axilite port=num_beats
-    #pragma HLS INTERFACE s_axilite port=num_pkts
-    #pragma HLS INTERFACE s_axilite port=num_pkts_small
-    #pragma HLS INTERFACE s_axilite port=size_y
-    #pragma HLS INTERFACE s_axilite port=size_z
-    #pragma HLS INTERFACE s_axilite port=short_command
-    #pragma HLS INTERFACE s_axilite port=command
+    #pragma HLS INTERFACE s_axilite port=num_beats bundle=control
+    #pragma HLS INTERFACE s_axilite port=num_pkts bundle=control
+    #pragma HLS INTERFACE s_axilite port=is_small_tile bundle=control
+    #pragma HLS INTERFACE s_axilite port=size_y bundle=control
+    #pragma HLS INTERFACE s_axilite port=size_z bundle=control
+    #pragma HLS INTERFACE s_axilite port=short_command bundle=control
+    #pragma HLS INTERFACE s_axilite port=command bundle=control
     #pragma HLS INTERFACE s_axilite port=return bundle=control
 
     #pragma HLS DATAFLOW
@@ -58,9 +58,9 @@
 
     ops::hls::redirect<MEM_DATA_WIDTH, {{tile_banks}}, II>(arg0_read_strm, arg0_read_redirected_strm, short_command);
 
-    ops::hls::aggregatedStream2streamStepdown<MEM_DATA_WIDTH, AXIS_DATA_WIDTH,  {{tile_banks}}, II>(arg0_read_redirected_strm, arg0_read_redirected_stepdown_strm, num_pkts);
+    ops::hls::aggregatedStream2streamStepdown<MEM_DATA_WIDTH, AXIS_DATA_WIDTH,  {{tile_banks}}, II>(arg0_read_redirected_strm, arg0_read_redirected_stepdown_strm, num_pkts, is_small_tile);
 
-    ops::hls::aggregatedStream2streamStepup<AXIS_DATA_WIDTH, MEM_DATA_WIDTH, {{tile_banks}}, II>(arg0_read_redirected_stepdown_strm, arg1_write_redirected_strm, num_pkts);
+    ops::hls::aggregatedStream2streamStepup<AXIS_DATA_WIDTH, MEM_DATA_WIDTH, {{tile_banks}}, II>(arg0_read_redirected_stepdown_strm, arg1_write_redirected_strm, num_pkts, is_small_tile);
 
     ops::hls::reverseRedirect<MEM_DATA_WIDTH, {{tile_banks}}, II>(arg1_write_redirected_strm, arg1_write_strm, short_command);
     
