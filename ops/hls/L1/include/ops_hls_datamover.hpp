@@ -2420,6 +2420,157 @@ static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_W
 }
 
 /**
+ * @brief aggregatedStream2streamStepdown: Reads multiple input streams with higher data width and distributes 
+ * 		them as smaller chunks across multiple output streams.
+ *
+ * @details This function implements a stream width reduction and distribution mechanism. It reads packets
+ * 		from multiple input streams with higher bit-width (STREAM1_DATA_WIDTH) at an initiation interval of IN_ITR,
+ * 		and splits each packet into FACTOR smaller chunks. These chunks are then collected and distributed
+ * 		round-robin across the output streams with lower bit-width (STREAM2_DATA_WIDTH), effectively converting
+ * 		NUM_STRMS × STREAM1_DATA_WIDTH per cycle into FACTOR output waves of NUM_STRMS × STREAM2_DATA_WIDTH.
+ *
+ * @tparam STREAM1_DATA_WIDTH The bit-width of the input stream data (must be larger than STREAM2_DATA_WIDTH).
+ * @tparam STREAM2_DATA_WIDTH The bit-width of the output stream data (must evenly divide STREAM1_DATA_WIDTH).
+ * @tparam NUM_STRMS The number of input and output streams. Must be a power of two.
+ * @tparam IN_ITR Initiation interval for the outer HLS pipeline reading input streams (default: 2).
+ *
+ * @param[in] strm_in Array of input HLS streams (size NUM_STRMS) with bit-width STREAM1_DATA_WIDTH,
+ * 		providing wide data packets to be split and redistributed.
+ * @param[out] strm_out Array of output HLS streams (size NUM_STRMS) with bit-width STREAM2_DATA_WIDTH,
+ * 		receiving the split and redistributed data chunks in round-robin fashion.
+ * @param[in] num_big_pkts The number of large packets (width STREAM1_DATA_WIDTH) to process from input streams.
+ * @param[in] is_small_tile Flag to point small tile_x which is less than NUM_STRMS/2.
+ *
+ */
+template <unsigned short STREAM1_DATA_WIDTH, unsigned short STREAM2_DATA_WIDTH, unsigned short NUM_STRMS, unsigned short IN_ITR=2>
+static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>> strm_in[NUM_STRMS],
+				::hls::stream<ap_uint<STREAM2_DATA_WIDTH>> strm_out[NUM_STRMS],
+				const unsigned int num_big_pkts,
+				const bool is_small_tile)
+{
+	constexpr unsigned short FACTOR = STREAM1_DATA_WIDTH / STREAM2_DATA_WIDTH;
+    constexpr unsigned int ii_adj = (IN_ITR >= FACTOR) ? IN_ITR : FACTOR;
+	constexpr unsigned short ii_out = ii_adj / FACTOR;
+	constexpr unsigned short HALF_FACTOR = FACTOR > 1 ? FACTOR >> 1 : FACTOR;
+
+#ifndef __SYNTHESIS__
+    static_assert((NUM_STRMS != 0) && ((NUM_STRMS & (NUM_STRMS - 1)) == 0), "NUM_STRMS must be a power of two");
+	static_assert(STREAM1_DATA_WIDTH > STREAM2_DATA_WIDTH,
+			"STREAM1_DATA_WIDTH has to be bigger than STREAM2_DATA_WIDTH");
+    static_assert(STREAM1_DATA_WIDTH % STREAM2_DATA_WIDTH == 0, 
+            "STREAM1_DATA_WIDTH has to be fully divisible by STREAM2_DATA_WIDTH");
+    static_assert(STREAM1_DATA_WIDTH % 8 == 0, "STREAM1_DATA_WIDTH should be divisible by 8");
+    static_assert(STREAM2_DATA_WIDTH % 8 == 0, "STREAM2_DATA_WIDTH should be divisible by 8");
+	static_assert(ii_adj % FACTOR == 0, "Output ii is not divisible by input II");
+#endif 
+
+
+#ifndef __SYNTHESIS__
+    #ifdef DEBUG_LOG
+		printf("====================================================================================\n");
+        printf("|HLS DEBUG_LOG| %s | adj_ii: %d, num_big_pkts: %d\n"
+                , __func__, ii_adj , num_big_pkts);
+        printf("====================================================================================\n");
+    #endif
+#endif
+
+	ap_uint<STREAM1_DATA_WIDTH> read_val[NUM_STRMS];
+	#pragma HLS ARRAY_PARTITION variable=read_val
+
+	for (unsigned int pkt = 0; pkt < num_big_pkts; pkt++)
+	{
+	#pragma HLS PIPELINE II=ii_adj
+
+#ifdef DEBUG_LOG
+		printf("====================================================================================\n");
+        printf("|HLS DEBUG_LOG| aggreatedStream2streamStepdown | reading pkt: %d, read values \n", pkt);
+#endif 
+		read: for (unsigned short num_strm = 0; num_strm < NUM_STRMS; num_strm++)
+		{
+		#pragma HLS UNROLL
+			read_val[num_strm] = strm_in[num_strm].read();
+#ifdef DEBUG_LOG
+		printf("[sream: %d] = (", num_strm);
+			for (unsigned k = 0; k < STREAM1_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
+			{
+				DataConv conv;
+				conv.i = read_val[num_strm].range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+				printf("%f%s ", conv.f, k != STREAM1_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8) ? "," : "");
+			}
+        printf(")\n");
+#endif
+		}
+#ifdef DEBUG_LOG
+		printf("====================================================================================\n");
+#endif 
+ 
+		write: if (is_small_tile) {
+			for (unsigned short output_cycle = 0; output_cycle < HALF_FACTOR; output_cycle++)
+			{
+			#pragma HLS PIPELINE II=ii_out
+#ifdef DEBUG_LOG
+			printf("====================================================================================\n");
+			printf("|HLS DEBUG_LOG| aggreatedStream2streamStepdown (small tile) | output pkt: %d \n", pkt*FACTOR + output_cycle);
+#endif			
+				for (unsigned short out_strm = 0; out_strm < NUM_STRMS; out_strm++)
+				{
+				#pragma HLS UNROLL
+					// Distribute all chunks round-robin across output streams
+					unsigned short chunk_idx = output_cycle * NUM_STRMS + out_strm;
+					unsigned short in_strm = chunk_idx / FACTOR;
+					unsigned short chunk_k = chunk_idx % FACTOR;
+					
+					ap_uint<STREAM2_DATA_WIDTH> out_val = 
+						read_val[in_strm].range((chunk_k+1) * STREAM2_DATA_WIDTH - 1, chunk_k * STREAM2_DATA_WIDTH);
+					strm_out[out_strm].write(out_val);
+#ifdef DEBUG_LOG
+					printf("[stream_out: %d, from_in_stream: %d, chunk: %d] = (", out_strm, in_strm, chunk_k);
+					for (unsigned j = 0; j < STREAM2_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); j++)
+					{
+						DataConv conv;
+						conv.i = out_val.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+						printf("%f%s ", conv.f, j != STREAM2_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8) ? "," : "");
+					}
+					printf(")\n");
+#endif
+				}
+			}
+		} else {
+			for (unsigned short output_cycle = 0; output_cycle < FACTOR; output_cycle++)
+			{
+			#pragma HLS PIPELINE II=ii_out
+#ifdef DEBUG_LOG
+			printf("====================================================================================\n");
+			printf("|HLS DEBUG_LOG| aggreatedStream2streamStepdown | output pkt: %d \n", pkt*FACTOR + output_cycle);
+#endif			
+				for (unsigned short out_strm = 0; out_strm < NUM_STRMS; out_strm++)
+				{
+				#pragma HLS UNROLL
+					// Distribute all chunks round-robin across output streams
+					unsigned short chunk_idx = output_cycle * NUM_STRMS + out_strm;
+					unsigned short in_strm = chunk_idx / FACTOR;
+					unsigned short chunk_k = chunk_idx % FACTOR;
+					
+					ap_uint<STREAM2_DATA_WIDTH> out_val = 
+						read_val[in_strm].range((chunk_k+1) * STREAM2_DATA_WIDTH - 1, chunk_k * STREAM2_DATA_WIDTH);
+					strm_out[out_strm].write(out_val);
+#ifdef DEBUG_LOG
+					printf("[stream_out: %d, from_in_stream: %d, chunk: %d] = (", out_strm, in_strm, chunk_k);
+					for (unsigned j = 0; j < STREAM2_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); j++)
+					{
+						DataConv conv;
+						conv.i = out_val.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+						printf("%f%s ", conv.f, j != STREAM2_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8) ? "," : "");
+					}
+					printf(")\n");
+#endif
+				}
+			}
+		}
+	}
+}
+
+/**
  * @brief aggregatedStream2streamStepup: Reads smaller chunks from multiple input streams and combines 
  * 		them into larger packets distributed across multiple output streams.
  *
@@ -2514,6 +2665,160 @@ static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WID
 			}
 		}
 
+		// Reconstruct and write wide packets from collected chunks
+		write: for (unsigned short num_strm = 0; num_strm < NUM_STRMS; num_strm++)
+		{
+		#pragma HLS UNROLL
+			ap_uint<STREAM2_DATA_WIDTH> out_val = 0;
+			for (unsigned short k = 0; k < FACTOR; k++)
+			{
+			#pragma HLS UNROLL
+				out_val.range((k+1) * STREAM1_DATA_WIDTH - 1, k * STREAM1_DATA_WIDTH) = chunks[num_strm][k];
+			}
+			strm_out[num_strm].write(out_val);
+#ifdef DEBUG_LOG
+			printf("[stream_out: %d] = (", num_strm);
+			for (unsigned j = 0; j < STREAM2_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); j++)
+			{
+				DataConv conv;
+				conv.i = out_val.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+				printf("%f%s ", conv.f, j != STREAM2_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8) ? "," : "");
+			}
+			printf(")\n");
+#endif
+		}
+	}
+}
+
+/**
+ * @brief aggregatedStream2streamStepup: Reads smaller chunks from multiple input streams and combines 
+ * 		them into larger packets distributed across multiple output streams.
+ *
+ * @details This function implements the inverse operation of aggregatedStream2streamStepdown. It reads
+ * 		data from multiple input streams with lower bit-width (STREAM1_DATA_WIDTH) organized in FACTOR 
+ * 		cycles of round-robin distribution. It collects these chunks and reorganizes them back into 
+ * 		larger packets with higher bit-width (STREAM2_DATA_WIDTH) for output across NUM_STRMS output streams.
+ * 		Effectively converts FACTOR output waves of NUM_STRMS × STREAM1_DATA_WIDTH back into
+ * 		NUM_STRMS × STREAM2_DATA_WIDTH per cycle.
+ *
+ * @tparam STREAM1_DATA_WIDTH The bit-width of the input stream data (must be smaller than STREAM2_DATA_WIDTH).
+ * @tparam STREAM2_DATA_WIDTH The bit-width of the output stream data (must be a multiple of STREAM1_DATA_WIDTH).
+ * @tparam NUM_STRMS The number of input and output streams. Must be a power of two.
+ * @tparam IN_ITR Initiation interval for the outer HLS pipeline combining input chunks (default: 2).
+ *
+ * @param[in] strm_in Array of input HLS streams (size NUM_STRMS) with bit-width STREAM1_DATA_WIDTH,
+ * 		providing chunks distributed across FACTOR cycles per output packet.
+ * @param[out] strm_out Array of output HLS streams (size NUM_STRMS) with bit-width STREAM2_DATA_WIDTH,
+ * 		receiving the recombined wider packets.
+ * @param[in] num_big_pkts The number of large output packets (width STREAM2_DATA_WIDTH) to generate.
+ * @param[in] is_small_tile Flag to point small tile_x which is less than NUM_STRMS/2.
+ *
+ */
+template <unsigned short STREAM1_DATA_WIDTH, unsigned short STREAM2_DATA_WIDTH, unsigned short NUM_STRMS, unsigned short IN_ITR=2>
+static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>> strm_in[NUM_STRMS],
+			::hls::stream<ap_uint<STREAM2_DATA_WIDTH>> strm_out[NUM_STRMS],
+			const unsigned int num_big_pkts,
+			const bool is_small_tile)
+{
+	constexpr unsigned short FACTOR = STREAM2_DATA_WIDTH / STREAM1_DATA_WIDTH;
+    constexpr unsigned int ii_adj = (IN_ITR >= FACTOR) ? IN_ITR : FACTOR;
+	constexpr unsigned short ii_out = ii_adj / FACTOR;
+	constexpr unsigned short HALF_FACTOR = FACTOR > 1 ? FACTOR >> 1 : FACTOR;
+
+#ifndef __SYNTHESIS__
+    static_assert((NUM_STRMS != 0) && ((NUM_STRMS & (NUM_STRMS - 1)) == 0), "NUM_STRMS must be a power of two");
+	static_assert(STREAM2_DATA_WIDTH > STREAM1_DATA_WIDTH,
+			"STREAM2_DATA_WIDTH has to be bigger than STREAM1_DATA_WIDTH");
+    static_assert(STREAM2_DATA_WIDTH % STREAM1_DATA_WIDTH == 0, 
+            "STREAM2_DATA_WIDTH has to be fully divisible by STREAM1_DATA_WIDTH");
+    static_assert(STREAM1_DATA_WIDTH % 8 == 0, "STREAM1_DATA_WIDTH should be divisible by 8");
+    static_assert(STREAM2_DATA_WIDTH % 8 == 0, "STREAM2_DATA_WIDTH should be divisible by 8");
+	static_assert(ii_adj % FACTOR == 0, "Output ii is not divisible by input II");
+#endif 
+
+
+#ifndef __SYNTHESIS__
+    #ifdef DEBUG_LOG
+		printf("====================================================================================\n");
+        printf("|HLS DEBUG_LOG| %s | adj_ii: %d, num_big_pkts: %d\n"
+                , __func__, ii_adj , num_big_pkts);
+        printf("====================================================================================\n");
+    #endif
+#endif
+
+	// Array to collect chunks for reconstruction (indexed by [input_stream][chunk_position])
+	ap_uint<STREAM1_DATA_WIDTH> chunks[NUM_STRMS][FACTOR];
+	#pragma HLS ARRAY_PARTITION variable=chunks dim=0 complete
+
+	for (unsigned int pkt = 0; pkt < num_big_pkts; pkt++)
+	{
+	#pragma HLS PIPELINE II=ii_adj
+
+#ifdef DEBUG_LOG
+		printf("====================================================================================\n");
+        printf("|HLS DEBUG_LOG| aggregatedStream2streamStepup | combining pkt: %d \n", pkt);
+#endif 
+ 
+		// Read chunks from input streams using inverse mapping of stepdown distribution
+		read: if (is_small_tile) {
+				for (unsigned short output_cycle = 0; output_cycle < HALF_FACTOR; output_cycle++)
+			{
+			#pragma HLS PIPELINE II=ii_out
+#ifdef DEBUG_LOG
+			printf("====================================================================================\n");
+			printf("|HLS DEBUG_LOG| aggregatedStream2streamStepup (small tile) | read cycle: %d \n", pkt*FACTOR + output_cycle);
+#endif			
+				for (unsigned short out_strm = 0; out_strm < NUM_STRMS; out_strm++)
+				{
+				#pragma HLS UNROLL
+					// Reverse mapping: undo the round-robin distribution from stepdown
+					unsigned short chunk_idx = output_cycle * NUM_STRMS + out_strm;
+					unsigned short in_strm = chunk_idx / FACTOR;
+					unsigned short chunk_k = chunk_idx % FACTOR;
+					
+					chunks[in_strm][chunk_k] = strm_in[out_strm].read();
+#ifdef DEBUG_LOG
+					printf("[stream_in: %d → chunks[%d][%d]] = (", out_strm, in_strm, chunk_k);
+					for (unsigned j = 0; j < STREAM1_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); j++)
+					{
+						DataConv conv;
+						conv.i = chunks[in_strm][chunk_k].range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+						printf("%f%s ", conv.f, j != STREAM1_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8) ? "," : "");
+					}
+					printf(")\n");
+#endif
+				}
+			}
+		} else {
+			for (unsigned short output_cycle = 0; output_cycle < FACTOR; output_cycle++)
+			{
+			#pragma HLS PIPELINE II=ii_out
+#ifdef DEBUG_LOG
+			printf("====================================================================================\n");
+			printf("|HLS DEBUG_LOG| aggregatedStream2streamStepup | read cycle: %d \n", pkt*FACTOR + output_cycle);
+#endif			
+				for (unsigned short out_strm = 0; out_strm < NUM_STRMS; out_strm++)
+				{
+				#pragma HLS UNROLL
+					// Reverse mapping: undo the round-robin distribution from stepdown
+					unsigned short chunk_idx = output_cycle * NUM_STRMS + out_strm;
+					unsigned short in_strm = chunk_idx / FACTOR;
+					unsigned short chunk_k = chunk_idx % FACTOR;
+					
+					chunks[in_strm][chunk_k] = strm_in[out_strm].read();
+#ifdef DEBUG_LOG
+					printf("[stream_in: %d → chunks[%d][%d]] = (", out_strm, in_strm, chunk_k);
+					for (unsigned j = 0; j < STREAM1_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); j++)
+					{
+						DataConv conv;
+						conv.i = chunks[in_strm][chunk_k].range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+						printf("%f%s ", conv.f, j != STREAM1_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8) ? "," : "");
+					}
+					printf(")\n");
+#endif
+				}
+			}
+		}
 		// Reconstruct and write wide packets from collected chunks
 		write: for (unsigned short num_strm = 0; num_strm < NUM_STRMS; num_strm++)
 		{
