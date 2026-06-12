@@ -19,12 +19,14 @@
 #include <tuple>
 // #define DEBUG_LOG
 
-#ifndef __SYNTHESIS__
+
 #ifdef DEBUG_LOG
+	// #ifndef __SYNTHESIS__
 		#ifndef DEBUG_LOG_SIZE_OF
 			#define DEBUG_LOG_SIZE_OF 4
 		#endif
-#endif
+		#define DEBUG_LOG_PRINT
+	// #endif
 #endif
 
 
@@ -92,21 +94,17 @@ static void convMemBeat2axisPkt(ap_uint<MEM_DATA_WIDTH>* mem_in,
 	constexpr unsigned int bytes_per_axis_pkt = AXIS_DATA_WIDTH / 8;
 	constexpr unsigned int num_strm_pkts_per_beat = MEM_DATA_WIDTH / AXIS_DATA_WIDTH;
 
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("\n|HLS DEBUG_LOG| %s | bytes_per_beat: %d, bytes_per_axis_pkt: %d, num_strm_pkts_per_beat: %d\n"
 			, __func__, bytes_per_beat, bytes_per_axis_pkt, num_strm_pkts_per_beat);
 	printf("======================================================================================================\n");
-#endif
 #endif
 	
 	ap_uint<MEM_DATA_WIDTH> tmp;
 	tmp = mem_in[index];
 	
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("   |HLS DEBUG_LOG|%s| reading beat index: %d\n", __func__, index);
-#endif
 #endif
 
 	for (unsigned int pkt = 0; pkt < num_strm_pkts_per_beat; pkt++)
@@ -121,8 +119,7 @@ static void convMemBeat2axisPkt(ap_uint<MEM_DATA_WIDTH>* mem_in,
 			tmp_pkt.data = tmp.range((pkt + 1) * AXIS_DATA_WIDTH - 1, pkt * AXIS_DATA_WIDTH);
 			strm_out.write(tmp_pkt);
 
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 			printf("   |HLS DEBUG_LOG|%s| sending axis pkt: %d, val=(",__func__, pkt);
 
 			for (unsigned n = 0; n < bytes_per_axis_pkt/DEBUG_LOG_SIZE_OF; n++)
@@ -132,7 +129,6 @@ static void convMemBeat2axisPkt(ap_uint<MEM_DATA_WIDTH>* mem_in,
 				printf("%f,", tmp.f);
 			}
 			printf(")\n");
-#endif
 #endif
 		}
 	}
@@ -157,13 +153,12 @@ static void convAxisPkt2memBeat(ap_uint<MEM_DATA_WIDTH>* mem_out,
 	constexpr unsigned int bytes_per_axis_pkt = AXIS_DATA_WIDTH / 8;
 	constexpr unsigned int num_strm_pkts_per_beat = MEM_DATA_WIDTH / AXIS_DATA_WIDTH;
 
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("\n|HLS DEBUG_LOG| %s | bytes_per_beat: %d, bytes_per_axis_pkt: %d, num_strm_pkts_per_beat: %d, beat index: %d\n"
 			, __func__, bytes_per_beat, bytes_per_axis_pkt, num_strm_pkts_per_beat, index);
 	printf("======================================================================================================\n");
 #endif
-#endif
+
 	ap_uint<MEM_DATA_WIDTH> tmp;
 	
 	for (unsigned int pkt = 0; pkt < num_strm_pkts_per_beat; pkt++)
@@ -178,8 +173,7 @@ static void convAxisPkt2memBeat(ap_uint<MEM_DATA_WIDTH>* mem_out,
 			tmp_pkt = strm_in.read();
 			tmp.range((pkt + 1) * AXIS_DATA_WIDTH - 1, pkt * AXIS_DATA_WIDTH) = tmp_pkt.data;
 
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 			printf("   |HLS DEBUG_LOG||%s| receiving axis pkt: %d, val=(", __func__, pkt);
 
 			for (unsigned n = 0; n < bytes_per_axis_pkt/DEBUG_LOG_SIZE_OF; n++)
@@ -189,7 +183,6 @@ static void convAxisPkt2memBeat(ap_uint<MEM_DATA_WIDTH>* mem_out,
 				printf("%f,", tmp.f);
 			}
 			printf(")\n");
-#endif
 #endif
 		}
 	}
@@ -222,19 +215,16 @@ static void convAxisPkt2memBeatMasked(ap_uint<DATA_WIDTH>* mem_out,
 //	constexpr unsigned int shift_val = 1 << bytes_per_data;
 	ap_uint<1> cond_write = 0;
 
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("\n|HLS DEBUG_LOG|%s| bytes_per_axis_pkt: %d, bytes_per_data: %d, num_data_per_axis_pkt: %d, beat index: %d\n"
 			, __func__, bytes_per_axis_pkt, bytes_per_data, num_data_per_axis_pkt, index);
 	printf("======================================================================================================\n");
-#endif
 #endif
 	ap_axiu<AXIS_DATA_WIDTH,0,0,0> tmp_pkt;
 	
 	tmp_pkt = strm_in.read();
 
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("   |HLS DEBUG_LOG||%s| receiving axis , val=(", __func__);
 
 		for (unsigned n = 0; n < bytes_per_axis_pkt/DEBUG_LOG_SIZE_OF; n++)
@@ -247,7 +237,6 @@ static void convAxisPkt2memBeatMasked(ap_uint<DATA_WIDTH>* mem_out,
 		printf(") strb=(%x)\n", tmp_pkt.strb);
 
 #endif
-#endif
 //	ap_uint<bytes_per_axis_pkt> strb_pos = 1;
 
 	for (unsigned int idx = 0; idx < num_data_per_axis_pkt; idx++)
@@ -259,7 +248,7 @@ static void convAxisPkt2memBeatMasked(ap_uint<DATA_WIDTH>* mem_out,
 		cond_write = tmp_pkt.strb.range(idx * bytes_per_data + 1, idx * bytes_per_data);
 		ap_uint<DATA_WIDTH> write_val = tmp_pkt.data.range((idx+1) * DATA_WIDTH - 1, idx * DATA_WIDTH);
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		DataConv tmp;
 		tmp.i = write_val;
 		printf("   |HLS DEBUG_LOG||%s| writing to mem index: %d, strb_pos:%d, val: %f, cond: %d\n"
@@ -292,12 +281,10 @@ static void convStreamPkt2memBeat(ap_uint<MEM_DATA_WIDTH>* mem_out,
 	constexpr unsigned int bytes_per_stream_pkt = STREAM_DATA_WIDTH / 8;
 	constexpr unsigned int num_strm_pkts_per_beat = MEM_DATA_WIDTH / STREAM_DATA_WIDTH;
 
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("\n|HLS DEBUG_LOG| %s | bytes_per_beat: %d, bytes_per_stream_pkt: %d, num_strm_pkts_per_beat: %d, beat index: %d\n"
 			, __func__, bytes_per_beat, bytes_per_stream_pkt, num_strm_pkts_per_beat, index);
 	printf("======================================================================================================\n");
-#endif
 #endif
 	ap_uint<MEM_DATA_WIDTH> tmp;
 
@@ -313,8 +300,7 @@ static void convStreamPkt2memBeat(ap_uint<MEM_DATA_WIDTH>* mem_out,
 			tmp_pkt = strm_in.read();
 			tmp.range((pkt + 1) * STREAM_DATA_WIDTH - 1, pkt * STREAM_DATA_WIDTH) = tmp_pkt;
 
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 			printf("   |HLS DEBUG_LOG||%s| receiving axis pkt: %d, val=(", __func__, pkt);
 
 			for (unsigned n = 0; n < bytes_per_stream_pkt/DEBUG_LOG_SIZE_OF; n++)
@@ -324,7 +310,6 @@ static void convStreamPkt2memBeat(ap_uint<MEM_DATA_WIDTH>* mem_out,
 				printf("%f,", tmp.f);
 			}
 			printf(")\n");
-#endif
 #endif
 		}
 	}
@@ -359,21 +344,19 @@ static void convStreamPkt2memBeatMasked(ap_uint<DATA_WIDTH>* mem_out,
 //	constexpr unsigned int shift_val = 1 << bytes_per_data;
 	ap_uint<1> cond_write = 0;
 
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("\n|HLS DEBUG_LOG|%s| bytes_per_strm_pkt: %d, bytes_per_data: %d, num_data_per_strm_pkt: %d, beat index: %d\n"
 			, __func__, bytes_per_strm_pkt, bytes_per_data, num_data_per_strm_pkt, index);
 	printf("======================================================================================================\n");
 #endif
-#endif
+
 	ap_uint<STREAM_DATA_WIDTH> data_pkt;
 	ap_uint<STREAM_DATA_WIDTH/8> mask_pkt;
 
 	data_pkt = data_in.read();
 	mask_pkt = mask_in.read();
 
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("   |HLS DEBUG_LOG||%s| receiving axis , val=(", __func__);
 
 		for (unsigned n = 0; n < bytes_per_strm_pkt/DEBUG_LOG_SIZE_OF; n++)
@@ -386,7 +369,6 @@ static void convStreamPkt2memBeatMasked(ap_uint<DATA_WIDTH>* mem_out,
 		printf(") strb=(%x)\n", mask_pkt);
 
 #endif
-#endif
 
 	for (unsigned int idx = 0; idx < num_data_per_strm_pkt; idx++)
 	{
@@ -396,7 +378,7 @@ static void convStreamPkt2memBeatMasked(ap_uint<DATA_WIDTH>* mem_out,
 		cond_write = mask_pkt.range(idx * bytes_per_data + 1, idx * bytes_per_data);
 		ap_uint<DATA_WIDTH> write_val = data_pkt.range((idx+1) * DATA_WIDTH - 1, idx * DATA_WIDTH);
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		DataConv tmp;
 		tmp.i = write_val;
 		printf("   |HLS DEBUG_LOG||%s| writing to mem index: %d, strb_pos:%d, val: %f, cond: %d\n"
@@ -442,7 +424,7 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
 	const unsigned int non_burst_beats = num_beats & BURST_MASK; // num_beats % BURST_SIZE
     const unsigned int burst_beats = num_beats & ~BURST_MASK; // num_beats / BURST_SIZE
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
     const unsigned int num_bursts = num_beats / BURST_SIZE; 
 	print("====================================================================================\n");
 	print("|HLS DEBUG_LOG| mem2stream | num_beats: %d\n", num_beats);
@@ -461,8 +443,7 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
 
         ap_uint<MEM_DATA_WIDTH> tmp = mem_in[index];
         strm_out << tmp;
-
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		print("====================================================================================\n");
         print("|HLS DEBUG_LOG| mem2stream | reading burst index: %d, val=(\n", index);
 
@@ -475,7 +456,6 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
         print(")\n\n");
 		print("====================================================================================\n");
 #endif
-
         index++;
 	}
 
@@ -484,7 +464,7 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
 	#pragma HLS PIPELINE II=ii
 		ap_uint<MEM_DATA_WIDTH> tmp = mem_in[index];
 		strm_out << tmp;
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	print("====================================================================================\n");
         print("|HLS DEBUG_LOG| mem2stream | reading non-burst index: %d, val=(\n", index);
 
@@ -540,8 +520,7 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
     
     const unsigned int non_burst_beats = num_beats & BURST_MASK; //num_beats % BURST_SIZE
     const unsigned int burst_beats = num_beats & ~BURST_MASK; //num_beats / BURST_SIZE
-
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
     const unsigned int num_bursts = num_beats / BURST_SIZE; 
     print("====================================================================================\n");
     print("|HLS DEBUG_LOG| mem2stream_v2 | num_beats: %d\n", num_beats);
@@ -551,7 +530,6 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
 	print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | adjusted_ii: %d \n", ii_adj);
     print("====================================================================================\n");
 #endif
-
     unsigned int index = 0;
 
     for (unsigned int beat = 0; beat < burst_beats; beat++)
@@ -565,8 +543,7 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
         #pragma HLS UNROLL
             strm_out << tmp.range((i + 1) * STREAM_DATA_WIDTH - 1, i * STREAM_DATA_WIDTH);
         }
-
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
         print("====================================================================================\n");
         print("|HLS DEBUG_LOG| mem2stream_v2 | reading burst index: %d, val=(\n", index);
 
@@ -594,8 +571,7 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
         #pragma HLS UNROLL
             strm_out << tmp.range((i + 1) * STREAM_DATA_WIDTH - 1, i * STREAM_DATA_WIDTH);
         }
-
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
         print("====================================================================================\n");
         print("|HLS DEBUG_LOG| mem2stream_v2 | reading non-burst index: %d, val=(\n", index);
 
@@ -651,7 +627,7 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
 //     const unsigned int burst_beats = num_beats - non_burst_beats;
 
 
-// #ifdef DEBUG_LOG
+// #ifdef DEBUG_LOG_PRINT
 //     const unsigned int num_bursts = num_beats / BURST_SIZE; 
 // 	print("|HLS DEBUG_LOG| mem2stream | num_beats: %d\n", num_beats);
 // 	print("|HLS DEBUG_LOG| mem2stream | num_burst: %d\n", num_bursts);
@@ -670,7 +646,7 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
 //         strm_u_out << tmp.range(MEM_DATA_WIDTH - 1, mem_data_width_by_2);
 // 		strm_l_out << tmp.range(mem_data_width_by_2_min_1, 0);
 
-//  #ifdef DEBUG_LOG
+//  #ifdef DEBUG_LOG_PRINT
 //         print("|HLS DEBUG_LOG| mem2stream | reading burst index: %d, val=(\n", index);
 
 //         for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
@@ -691,7 +667,7 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
 // 		ap_uint<MEM_DATA_WIDTH> tmp  = mem_in[index];
 // 		strm_u_out << tmp.range(MEM_DATA_WIDTH - 1, mem_data_width_by_2);
 // 		strm_l_out << tmp.range(mem_data_width_by_2_min_1, 0);
-// #ifdef DEBUG_LOG
+// #ifdef DEBUG_LOG_PRINT
 //         print("|HLS DEBUG_LOG| mem2stream | reading non-burst index: %d, val=(\n", index);
 
 //         for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
@@ -722,16 +698,16 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
 				::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out,
 				const MemConfig& config)
 {
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| starting\n", __func__);
 #endif
 	if (config.isContinous)
 	{
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| continuous read\n", __func__);
 #endif
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| init offset:%d, size_bytes:%d\n", __func__, config.start_offset, config.total_size_bytes);
 #endif
 		mem2stream<MEM_DATA_WIDTH>((ap_uint<MEM_DATA_WIDTH>* )(mem_in + config.start_offset), strm_out, config.total_xblocks);
@@ -744,7 +720,7 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
 			{
 			#pragma HLS LOOP_FLATTEN
 				unsigned int offset = config.start_x + j * config.grid_xblocks + k * config.grid_size_y * config.grid_xblocks;
-    #ifdef DEBUG_LOG
+    #ifdef DEBUG_LOG_PRINT
 				printf("|HLS DEBUG_LOG|%s| reading. offset:%d, j:%d, k:%d\n"
 						, __func__,offset, j, k);
     #endif
@@ -752,7 +728,7 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
 			}
 		}
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
@@ -799,13 +775,11 @@ void stream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out,
 	const unsigned int non_burst_beats = num_beats % BURST_SIZE;
     const unsigned int burst_beats = num_beats - non_burst_beats;
 
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
     const unsigned int num_bursts = num_beats / BURST_SIZE;
 	printf("|HLS DEBUG_LOG| %s | num_beats: %d, num_burst: %d, non_burst_beats: %d\n"
 			, __func__, num_beats, num_bursts, non_burst_beats);
 	printf("====================================================================================\n");
-#endif
 #endif
 
 	unsigned int index = 0;
@@ -815,8 +789,8 @@ void stream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out,
     #pragma HLS PIPELINE II=ii
 
         ap_uint<MEM_DATA_WIDTH> tmp = strm_in.read();
-        mem_out[index] = tmp;		
-#ifdef DEBUG_LOG
+        mem_out[index] = tmp;	
+#ifdef DEBUG_LOG_PRINT
         printf("|HLS DEBUG_LOG| %s | writing burst index: %d, val=(\n", __func__, index);
 
         for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
@@ -836,7 +810,7 @@ void stream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out,
 	#pragma HLS PIPELINE II=ii
 		ap_uint<MEM_DATA_WIDTH> tmp = strm_in.read();
 		mem_out[index] = tmp;
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
         printf("|HLS DEBUG_LOG| %s | writing non-burst index: %d, val=(\n", __func__, index);
 
         for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
@@ -849,7 +823,7 @@ void stream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out,
 #endif
         index++;
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
@@ -868,20 +842,20 @@ template <unsigned int HLS_DATA_WIDTH, unsigned int II=1>
 void hlsTerminate(::hls::stream<ap_uint<HLS_DATA_WIDTH>>& strm_in,
 		unsigned int num_pkts)
 {
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| starting.\n"
 			, __func__);
 #endif
 	for (unsigned int i = 0; i < num_pkts; i++)
 	{
 #pragma HLS PIPELINE II=II
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| terminating pkt:%d.\n"
 				, __func__, i);
 #endif
 		auto pkt = strm_in.read();
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
@@ -923,8 +897,7 @@ void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
     const unsigned int burst_beats = writing_beats - non_burst_beats;
 	const unsigned int num_bursts = burst_beats >> burst_shift;
 
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	print("====================================================================================\n");
 	print("|HLS DEBUG_LOG| stream2memWithAvoid | num_beats: %d\n", num_beats);
 	print("|HLS DEBUG_LOG| stream2memWithAvoid | burst_beats: %d\n", burst_beats);
@@ -933,7 +906,6 @@ void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
 	print("|HLS DEBUG_LOG| stream2memWithAvoid | avoid_beats: %d\n", avoid_beats);
 	print("====================================================================================\n");
 #endif
-#endif
 
 	unsigned int index = 0;
 
@@ -941,7 +913,7 @@ void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
 	{
 	#pragma HLS PIPELINE II=ii
 		auto tmp = strm_in.read(); //Discarding
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		print("====================================================================================\n");
 		print("|HLS DEBUG_LOG| stream2memWithAvoid | discarding index: %d, val=(\n", index);
 		for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
@@ -963,8 +935,8 @@ void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
 		#pragma HLS PIPELINE II=ii
 
 			ap_uint<MEM_DATA_WIDTH> tmp = strm_in.read();
-			mem_out[index] = tmp;		
-#ifdef DEBUG_LOG
+			mem_out[index] = tmp;	
+#ifdef DEBUG_LOG_PRINT
 			print("====================================================================================\n");
         	print("|HLS DEBUG_LOG| stream2memWithAvoid | writing burst index: %d, val=(\n", index);
 			for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
@@ -985,7 +957,7 @@ void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
 	#pragma HLS PIPELINE II=ii
 		ap_uint<MEM_DATA_WIDTH> tmp = strm_in.read();
 		mem_out[index] = tmp;
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
         print("====================================================================================\n");
 		print("|HLS DEBUG_LOG| stream2memWithAvoid | writing non-burst index: %d, val=(\n", index);
 
@@ -1051,8 +1023,7 @@ void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
     const unsigned int burst_beats = writing_beats & ~BURST_MASK;
     const unsigned int num_bursts = burst_beats >> burst_shift;
 
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
     print("====================================================================================\n");
     print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | num_beats: %d\n", num_beats);
     print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | burst_beats: %d\n", burst_beats);
@@ -1062,7 +1033,6 @@ void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
     print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | pkts_per_beats: %d \n", pkts_per_beats);
 	print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | adjusted_ii: %d \n", ii_adj);
     print("====================================================================================\n");
-#endif
 #endif
 
     unsigned int index = 0;
@@ -1080,7 +1050,7 @@ void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
             tmp.range((i + 1) * STREAM_DATA_WIDTH - 1, i * STREAM_DATA_WIDTH) = strm_in.read();
         }
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
         print("====================================================================================\n");
         print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | discarding index: %d, val=(\n", index);
         for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
@@ -1113,7 +1083,7 @@ void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
             
             mem_out[index] = tmp;       
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
             print("====================================================================================\n");
             print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | writing burst index: %d, val=(\n", index);
             for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
@@ -1145,7 +1115,7 @@ void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
         
         mem_out[index] = tmp;
         
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
         print("====================================================================================\n");
         print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | writing non-burst index: %d, val=(\n", index);
 
@@ -1161,7 +1131,7 @@ void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
         index++;
     }
     
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
     printf("|HLS DEBUG_LOG|%s| exiting.\n"
             , __func__);
 #endif
@@ -1183,16 +1153,16 @@ void stream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out,
 				::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
 				 const MemConfig& config)
 {
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| starting\n", __func__);
 #endif
 	if (config.isContinous)
 	{
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| continuous read\n", __func__);
 #endif
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| init offset:%d, size_bytes:%d\n", __func__, config.start_offset, config.total_size_bytes);
 #endif
 		stream2mem<MEM_DATA_WIDTH>((ap_uint<MEM_DATA_WIDTH>* )(mem_out + config.start_offset), strm_in, config.total_xblocks);
@@ -1205,7 +1175,7 @@ void stream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out,
 			{
 			#pragma HLS LOOP_FLATTEN
 				unsigned int offset = config.start_x + j * config.grid_xblocks + k * config.grid_size_y * config.grid_xblocks;
-    #ifdef DEBUG_LOG
+    #ifdef DEBUG_LOG_PRINT
 				printf("|HLS DEBUG_LOG|%s| reading. offset:%d, j:%d, k:%d\n"
 						, __func__,offset, j, k);
     #endif
@@ -1213,7 +1183,7 @@ void stream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out,
 			}
 		}
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
@@ -1261,6 +1231,18 @@ void stream2interleave(::hls::stream<ap_uint<MEM_DATA_WIDTH>> in_stream[NUM_STRE
 
 	const unsigned int num_pkts_plus_1 = register_it(num_pkts + 1);
 
+#ifdef DEBUG_LOG_PRINT
+	printf("==== DATAMOVER STREAM2INTERLEAVE INITIAL PARAMETERS ====\n");
+	printf("MEM_DATA_WIDTH: %u\n", (unsigned int)MEM_DATA_WIDTH);
+	printf("DATA_WIDTH: %u\n", (unsigned int)DATA_WIDTH);
+	printf("OVERLAP_SIZE: %u\n", (unsigned int)OVERLAP_SIZE);
+	printf("NUM_STREAMS: %u\n", (unsigned int)NUM_STREAMS);
+	printf("REALISED_OVERLAP_SIZE: %u\n", (unsigned int)REALISED_OVERLAP_SIZE);
+	printf("MEM_DATA_WIDTH_OUT: %u\n", (unsigned int)MEM_DATA_WIDTH_OUT);
+	printf("num_pkts: %u\n", num_pkts);
+	printf("========================================================\n");
+#endif
+
 	// 3 step shift registers
 	ap_uint<MEM_DATA_WIDTH> data_front[NUM_STREAMS], data[NUM_STREAMS], data_back[NUM_STREAMS];
 	#pragma HLS ARRAY_PARTITION variable=data_front dim=0 complete
@@ -1279,6 +1261,20 @@ void stream2interleave(::hls::stream<ap_uint<MEM_DATA_WIDTH>> in_stream[NUM_STRE
 			{
 				#pragma HLS UNROLL
 				tmp[n] = in_stream[n].read();	
+
+#ifdef DEBUG_LOG_PRINT
+				printf("==== STREAM2INTERLEAVE READ ====\n");
+				printf("Stream[%u], Iteration[%u]\n", n, itr);
+				printf("Values (float): (");
+				for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
+					DataConv conv;
+					conv.i = tmp[n].range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+					if (j > 0) printf(", ");
+					printf("%f", conv.f);
+				}
+				printf(")\n");
+				printf("===============================\n");
+#endif
 			}
 		}
 
@@ -1318,6 +1314,20 @@ void stream2interleave(::hls::stream<ap_uint<MEM_DATA_WIDTH>> in_stream[NUM_STRE
 			{
 				#pragma HLS UNROLL
 				out_stream[n].write(tmp_out[n]);
+
+#ifdef DEBUG_LOG_PRINT
+				printf("==== STREAM2INTERLEAVE WRITE ====\n");
+				printf("Stream[%u], Iteration[%u]\n", n, itr);
+				printf("Values (float): (");
+				for (unsigned int j = 0; j < MEM_DATA_WIDTH_OUT / (DEBUG_LOG_SIZE_OF * 8); j++) {
+					DataConv conv;
+					conv.i = tmp_out[n].range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+					if (j > 0) printf(", ");
+					printf("%f", conv.f);
+				}
+				printf(")\n");
+				printf("================================\n");
+#endif
 			}
 		}
 	}
@@ -1390,7 +1400,7 @@ static ap_uint<144> commandGen2D(const ap_uint<64>& offset, const ap_uint<16>& s
     command.range(127,112) = size_y;
     command.range(143,128) = avoid_x;
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
     printf("|HLS DEBUG_LOG|%s| offset:%llu, stride_x:%u, size_x:%u, stride_y:%u, size_y:%u, avoid_x:%u\n", __func__, 
 		(unsigned long long)offset, (unsigned int)stride_x, (unsigned int)size_x, (unsigned int)stride_y, (unsigned int)size_y, (unsigned int)avoid_x);
 #endif
@@ -1407,7 +1417,7 @@ static ap_uint<128> commandGen2D(const ap_uint<64>& offset, const ap_uint<16>& s
     command.range(111,96) = stride_y;
     command.range(127,112) = size_y;
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
     printf("|HLS DEBUG_LOG|%s| offset:%llu, stride_x:%u, size_x:%u, stride_y:%u, size_y:%u\n", __func__, 
 		(unsigned long long)offset, (unsigned int)stride_x, (unsigned int)size_x, (unsigned int)stride_y, (unsigned int)size_y);
 #endif
@@ -1427,7 +1437,7 @@ static ap_uint<160> commandGen3D(const ap_uint<64>& offset, const ap_uint<16>& s
     command.range(143,128) = stride_z;
     command.range(159,144) = size_z;
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
     printf("|HLS DEBUG_LOG|%s| offset:%llu, stride_x:%u, size_x:%u, stride_y:%u, size_y:%u, stride_z:%u, size_z:%u\n", __func__, (unsigned long long)offset, (unsigned int)stride_x, (unsigned int)size_x, (unsigned int)stride_y, (unsigned int)size_y, (unsigned int)stride_z, (unsigned int)size_z);
 #endif
     return command;
@@ -1449,7 +1459,7 @@ static ap_uint<192> commandGen3D(const ap_uint<64>& offset, const ap_uint<16>& s
 	command.range(175,160) = avoid_x;
 	command.range(191,176) = avoid_y;
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
     printf("|HLS DEBUG_LOG|%s| offset:%llu, stride_x:%u, size_x:%u, stride_y:%u, size_y:%u, stride_z:%u, size_z:%u, avoid_x:%u, avoid_y:%u\n", __func__, 
 		(unsigned long long)offset, (unsigned int)stride_x, (unsigned int)size_x, (unsigned int)stride_y, (unsigned int)size_y, 
 		(unsigned int)stride_z, (unsigned int)size_z, (unsigned int)avoid_x, (unsigned int)avoid_y);
@@ -1476,7 +1486,7 @@ static void tileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uin
             #pragma HLS PIPELINE
             ap_uint<64> s2 = s3 + y * stride_y;
 
-            #ifdef DEBUG_LOG
+            #ifdef DEBUG_LOG_PRINT
                 printf("|HLS DEBUG_LOG|%s| offset:%llu, size_x:%u, stride_y:%u, size_y:%u, stride_z:%u, size_z:%u z:%u y:%u\n", 
                        __func__, (unsigned long long)s2, (unsigned int)size_x, (unsigned int)stride_y, (unsigned int)size_y, 
                        (unsigned int)stride_z, (unsigned int)size_z, (unsigned int)z, (unsigned int)y);
@@ -1504,7 +1514,7 @@ static void tileStream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out, ::hls::stream<ap_ui
         {
             #pragma HLS PIPELINE
             ap_uint<64> s2 = s3 + y * stride_y;
-            // #ifdef DEBUG_LOG
+            // #ifdef DEBUG_LOG_PRINT
                 printf("|HLS DEBUG_LOG|%s| offset:%llu, size_x:%u, stride_y:%u, size_y:%u, stride_z:%u, size_z:%u z:%u y:%u\n", 
                        __func__, (unsigned long long)s2, (unsigned int)size_x, (unsigned int)stride_y, (unsigned int)size_y, 
                        (unsigned int)stride_z, (unsigned int)size_z, (unsigned int)z, (unsigned int)y);
@@ -1534,7 +1544,7 @@ static void tileStream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out, ::hls::str
         {
             #pragma HLS PIPELINE
             ap_uint<64> s2 = s3 + y * stride_y;
-            #ifdef DEBUG_LOG
+            #ifdef DEBUG_LOG_PRINT
                 printf("|HLS DEBUG_LOG|%s| offset:%llu, size_x:%u, stride_y:%u, size_y:%u, stride_z:%u, size_z:%u avoid_x:%u avoid_y:%u z:%u y:%u\n", 
                        __func__, (unsigned long long)s2, (unsigned int)size_x, (unsigned int)stride_y, (unsigned int)size_y, 
                        (unsigned int)stride_z, (unsigned int)size_z, (unsigned int)avoid_x, (unsigned int)avoid_y, (unsigned int)z, (unsigned int)y);
@@ -1575,7 +1585,7 @@ template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned 
 static void tileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, const ops::hls::MemConfigTile& config)
 {
     // #pragma HLS INLINE off
-    #ifdef DEBUG_LOG
+    #ifdef DEBUG_LOG_PRINT
         printf("|HLS DEBUG_LOG|%s| reading tile. tile_start:%d, tile_size:%d\n", __func__, config.start_offset, config.total_size_bytes);
     #endif
 
@@ -1610,7 +1620,7 @@ static void tileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uin
                     unsigned int j_offset  = j * config.grid_xblocks;
                     unsigned int offset = offset_3 + j_offset; 
                     
-                    #ifdef DEBUG_LOG
+                    #ifdef DEBUG_LOG_PRINT
                         printf("|HLS DEBUG_LOG|%s| offset_1:%u offset_2:%u offset_3:%u j_offset:%u offset:%u tile_y:%u tile_x:%u k:%u j:%u tile_size_x:%u\n",
                                __func__,
                                (unsigned int)offset_1,
@@ -1661,7 +1671,7 @@ template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned 
 static void tileStream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out, ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, const ops::hls::MemConfigTile& config)
 {
     // #pragma HLS INLINE off
-    #ifdef DEBUG_LOG
+    #ifdef DEBUG_LOG_PRINT
         printf("|HLS DEBUG_LOG|%s| writing tile. tile_start:%d, tile_size:%d\n", __func__, config.start_offset, config.total_size_bytes);
     #endif
 
@@ -1695,7 +1705,7 @@ static void tileStream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out, ::hls::stream<ap_ui
                     unsigned int offset_3 = offset_1 + offset_2;
                     unsigned int j_offset  = j * config.grid_xblocks;
                     unsigned int offset = offset_3 + j_offset;
-                    #ifdef DEBUG_LOG
+                    #ifdef DEBUG_LOG_PRINT
                         printf("|HLS DEBUG_LOG|%s| offset_1:%u offset_2:%u offset_3:%u j_offset:%u offset:%u tile_y:%u tile_x:%u k:%u j:%u tile_size_x:%u\n",
                                __func__,
                                (unsigned int)offset_1,
@@ -1748,7 +1758,7 @@ template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned 
 static void stridedTileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, const ops::hls::MemConfigTile& config, unsigned short stride_start = 0)
 {
     // #pragma HLS INLINE off
-    #ifdef DEBUG_LOG
+    #ifdef DEBUG_LOG_PRINT
         printf("|HLS DEBUG_LOG|%s| reading tile. tile_start:%d, tile_size:%d, stride_start:%d\n", __func__, config.start_offset, config.total_size_bytes, stride_start);
     #endif
 
@@ -1784,7 +1794,7 @@ static void stridedTileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream
                     unsigned int j_offset  = j * config.grid_xblocks;
                     unsigned int offset = offset_3 + j_offset;
 
-                    #ifdef DEBUG_LOG
+                    #ifdef DEBUG_LOG_PRINT
                         printf("|HLS DEBUG_LOG|%s| offset_1:%u offset_2:%u offset_3:%u j_offset:%u offset:%u tile_y:%u tile_x:%u k:%u j:%u tile_size_x:%u\n",
                                __func__,
                                (unsigned int)offset_1,
@@ -2056,7 +2066,7 @@ static void stridedTileMem2streamV2(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stre
 			auto command = strm_command.read();
 			unsigned int bank_offset = command.range(31,0);
 			unsigned short size_x = command.range(47,32);
-			#ifdef DEBUG_LOG
+			#ifdef DEBUG_LOG_PRINT
 			    printf("|HLS DEBUG_LOG|%s| reading tile from mem to stream, bank_offset:%d, size_x:%d \n", __func__, bank_offset, size_x);
 			#endif
 			ops::hls::mem2stream<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(mem_in + bank_offset, strm_out, size_x);
@@ -2077,7 +2087,7 @@ static void stridedTileMem2streamV2(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stre
 			auto command = strm_command.read();
 			unsigned int bank_offset = command.range(31,0);
 			unsigned short size_x = command.range(47,32);
-			#ifdef DEBUG_LOG
+			#ifdef DEBUG_LOG_PRINT
 			    printf("|HLS DEBUG_LOG|%s| reading tile from mem to stream, bank_offset:%d, size_x:%d \n", __func__, bank_offset, size_x);
 			#endif
 			ops::hls::mem2stream<MEM_DATA_WIDTH, AXIS_DATA_WIDTH, BURST_SIZE, IN_ITR>(mem_in + bank_offset, strm_out, size_x);
@@ -2125,7 +2135,7 @@ static void stridedTileStream2memWithAvoidV2(::hls::stream<ap_uint<MEM_DATA_WIDT
             unsigned int bank_offset = command.range(31,0);
             unsigned short size_x = command.range(47,32);
             unsigned short avoid_x = command.range(63, 48);
-            #ifdef DEBUG_LOG
+            #ifdef DEBUG_LOG_PRINT
                 printf("|HLS DEBUG_LOG|%s| reading tile from mem to stream, bank_offset:%d, size_x:%d \n", __func__, bank_offset, size_x);
             #endif
             ops::hls::stream2memWithAvoid<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(out + bank_offset, strm_in, size_x, avoid_x);
@@ -2189,7 +2199,7 @@ static void redirect(
     // Optimized modulo using bitwise AND
     unsigned int size_x_mod_banks = size_x & BANK_MASK;
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
     printf("==== DATAMOVER REDIRECT INITIAL PARAMETERS ====\n");
     printf("offset_x: %lu\n", offset_x);
     printf("size_x: %u\n", (unsigned int)size_x);
@@ -2254,7 +2264,7 @@ static void redirect(
                     const bool read_cond = is_x_lt_bank_x_size || bank_cond[i];
                     tmp[i] = read_cond ? register_it(strm_in[i].read()) : ap_uint<MEM_DATA_WIDTH>(0);
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 					auto read_val = tmp[i]; 
 					if (read_cond) {
 						printf("==== REDIRECT READ ====\n");
@@ -2285,7 +2295,8 @@ static void redirect(
                 {
                     #pragma HLS UNROLL
                     strm_out[i] << swap[i];
-#ifdef DEBUG_LOG
+
+#ifdef DEBUG_LOG_PRINT
 					auto write_val = swap[i];
 					printf("==== REDIRECT WRITE ====\n");
 					printf("Bank[%u],  X[%u], Y[%u], Z[%u]\n", i, x, (unsigned int)y, (unsigned int)z);
@@ -2347,14 +2358,14 @@ static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_W
 #endif 
 
 
-#ifndef __SYNTHESIS__
-    #ifdef DEBUG_LOG
+
+#ifdef DEBUG_LOG_PRINT
 		printf("====================================================================================\n");
         printf("|HLS DEBUG_LOG| %s | adj_ii: %d, num_big_pkts: %d\n"
                 , __func__, ii_adj , num_big_pkts);
         printf("====================================================================================\n");
-    #endif
 #endif
+
 
 	ap_uint<STREAM1_DATA_WIDTH> read_val[NUM_STRMS];
 	#pragma HLS ARRAY_PARTITION variable=read_val
@@ -2363,7 +2374,7 @@ static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_W
 	{
 	#pragma HLS PIPELINE II=ii_adj
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("====================================================================================\n");
         printf("|HLS DEBUG_LOG| aggreatedStream2streamStepdown | reading pkt: %d, read values \n", pkt);
 #endif 
@@ -2371,7 +2382,7 @@ static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_W
 		{
 		#pragma HLS UNROLL
 			read_val[num_strm] = strm_in[num_strm].read();
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("[sream: %d] = (", num_strm);
 			for (unsigned k = 0; k < STREAM1_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
 			{
@@ -2382,14 +2393,14 @@ static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_W
         printf(")\n");
 #endif
 		}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("====================================================================================\n");
 #endif 
  
 		write: for (unsigned short output_cycle = 0; output_cycle < FACTOR; output_cycle++)
 		{
 		#pragma HLS PIPELINE II=ii_out
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("====================================================================================\n");
         printf("|HLS DEBUG_LOG| aggreatedStream2streamStepdown | output pkt: %d \n", pkt*FACTOR + output_cycle);
 #endif			
@@ -2404,7 +2415,7 @@ static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_W
 				ap_uint<STREAM2_DATA_WIDTH> out_val = 
 					read_val[in_strm].range((chunk_k+1) * STREAM2_DATA_WIDTH - 1, chunk_k * STREAM2_DATA_WIDTH);
 				strm_out[out_strm].write(out_val);
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 				printf("[stream_out: %d, from_in_stream: %d, chunk: %d] = (", out_strm, in_strm, chunk_k);
 				for (unsigned j = 0; j < STREAM2_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); j++)
 				{
@@ -2465,13 +2476,11 @@ static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_W
 #endif 
 
 
-#ifndef __SYNTHESIS__
-    #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("====================================================================================\n");
         printf("|HLS DEBUG_LOG| %s | adj_ii: %d, num_big_pkts: %d\n"
                 , __func__, ii_adj , num_big_pkts);
         printf("====================================================================================\n");
-    #endif
 #endif
 
 	ap_uint<STREAM1_DATA_WIDTH> read_val[NUM_STRMS];
@@ -2481,7 +2490,7 @@ static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_W
 	{
 	#pragma HLS PIPELINE II=ii_adj
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("====================================================================================\n");
         printf("|HLS DEBUG_LOG| aggreatedStream2streamStepdown | reading pkt: %d, read values \n", pkt);
 #endif 
@@ -2489,7 +2498,7 @@ static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_W
 		{
 		#pragma HLS UNROLL
 			read_val[num_strm] = strm_in[num_strm].read();
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("[sream: %d] = (", num_strm);
 			for (unsigned k = 0; k < STREAM1_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
 			{
@@ -2500,7 +2509,7 @@ static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_W
         printf(")\n");
 #endif
 		}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("====================================================================================\n");
 #endif 
  
@@ -2508,7 +2517,7 @@ static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_W
 			for (unsigned short output_cycle = 0; output_cycle < HALF_FACTOR; output_cycle++)
 			{
 			#pragma HLS PIPELINE II=ii_out
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 			printf("====================================================================================\n");
 			printf("|HLS DEBUG_LOG| aggreatedStream2streamStepdown (small tile) | output pkt: %d \n", pkt*FACTOR + output_cycle);
 #endif			
@@ -2523,7 +2532,7 @@ static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_W
 					ap_uint<STREAM2_DATA_WIDTH> out_val = 
 						read_val[in_strm].range((chunk_k+1) * STREAM2_DATA_WIDTH - 1, chunk_k * STREAM2_DATA_WIDTH);
 					strm_out[out_strm].write(out_val);
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 					printf("[stream_out: %d, from_in_stream: %d, chunk: %d] = (", out_strm, in_strm, chunk_k);
 					for (unsigned j = 0; j < STREAM2_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); j++)
 					{
@@ -2539,7 +2548,7 @@ static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_W
 			for (unsigned short output_cycle = 0; output_cycle < FACTOR; output_cycle++)
 			{
 			#pragma HLS PIPELINE II=ii_out
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 			printf("====================================================================================\n");
 			printf("|HLS DEBUG_LOG| aggreatedStream2streamStepdown | output pkt: %d \n", pkt*FACTOR + output_cycle);
 #endif			
@@ -2554,7 +2563,7 @@ static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_W
 					ap_uint<STREAM2_DATA_WIDTH> out_val = 
 						read_val[in_strm].range((chunk_k+1) * STREAM2_DATA_WIDTH - 1, chunk_k * STREAM2_DATA_WIDTH);
 					strm_out[out_strm].write(out_val);
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 					printf("[stream_out: %d, from_in_stream: %d, chunk: %d] = (", out_strm, in_strm, chunk_k);
 					for (unsigned j = 0; j < STREAM2_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); j++)
 					{
@@ -2613,13 +2622,11 @@ static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WID
 #endif 
 
 
-#ifndef __SYNTHESIS__
-    #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("====================================================================================\n");
         printf("|HLS DEBUG_LOG| %s | adj_ii: %d, num_big_pkts: %d\n"
                 , __func__, ii_adj , num_big_pkts);
         printf("====================================================================================\n");
-    #endif
 #endif
 
 	// Array to collect chunks for reconstruction (indexed by [input_stream][chunk_position])
@@ -2630,7 +2637,7 @@ static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WID
 	{
 	#pragma HLS PIPELINE II=ii_adj
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("====================================================================================\n");
         printf("|HLS DEBUG_LOG| aggregatedStream2streamStepup | combining pkt: %d \n", pkt);
 #endif 
@@ -2639,7 +2646,7 @@ static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WID
 		read: for (unsigned short output_cycle = 0; output_cycle < FACTOR; output_cycle++)
 		{
 		#pragma HLS PIPELINE II=ii_out
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("====================================================================================\n");
         printf("|HLS DEBUG_LOG| aggregatedStream2streamStepup | read cycle: %d \n", pkt*FACTOR + output_cycle);
 #endif			
@@ -2652,7 +2659,7 @@ static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WID
 				unsigned short chunk_k = chunk_idx % FACTOR;
 				
 				chunks[in_strm][chunk_k] = strm_in[out_strm].read();
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 				printf("[stream_in: %d → chunks[%d][%d]] = (", out_strm, in_strm, chunk_k);
 				for (unsigned j = 0; j < STREAM1_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); j++)
 				{
@@ -2676,7 +2683,7 @@ static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WID
 				out_val.range((k+1) * STREAM1_DATA_WIDTH - 1, k * STREAM1_DATA_WIDTH) = chunks[num_strm][k];
 			}
 			strm_out[num_strm].write(out_val);
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 			printf("[stream_out: %d] = (", num_strm);
 			for (unsigned j = 0; j < STREAM2_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); j++)
 			{
@@ -2737,13 +2744,11 @@ static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WID
 #endif 
 
 
-#ifndef __SYNTHESIS__
-    #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("====================================================================================\n");
         printf("|HLS DEBUG_LOG| %s | adj_ii: %d, num_big_pkts: %d\n"
                 , __func__, ii_adj , num_big_pkts);
         printf("====================================================================================\n");
-    #endif
 #endif
 
 	// Array to collect chunks for reconstruction (indexed by [input_stream][chunk_position])
@@ -2754,7 +2759,7 @@ static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WID
 	{
 	#pragma HLS PIPELINE II=ii_adj
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("====================================================================================\n");
         printf("|HLS DEBUG_LOG| aggregatedStream2streamStepup | combining pkt: %d \n", pkt);
 #endif 
@@ -2764,7 +2769,7 @@ static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WID
 				for (unsigned short output_cycle = 0; output_cycle < HALF_FACTOR; output_cycle++)
 			{
 			#pragma HLS PIPELINE II=ii_out
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 			printf("====================================================================================\n");
 			printf("|HLS DEBUG_LOG| aggregatedStream2streamStepup (small tile) | read cycle: %d \n", pkt*FACTOR + output_cycle);
 #endif			
@@ -2777,7 +2782,7 @@ static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WID
 					unsigned short chunk_k = chunk_idx % FACTOR;
 					
 					chunks[in_strm][chunk_k] = strm_in[out_strm].read();
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 					printf("[stream_in: %d → chunks[%d][%d]] = (", out_strm, in_strm, chunk_k);
 					for (unsigned j = 0; j < STREAM1_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); j++)
 					{
@@ -2793,7 +2798,7 @@ static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WID
 			for (unsigned short output_cycle = 0; output_cycle < FACTOR; output_cycle++)
 			{
 			#pragma HLS PIPELINE II=ii_out
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 			printf("====================================================================================\n");
 			printf("|HLS DEBUG_LOG| aggregatedStream2streamStepup | read cycle: %d \n", pkt*FACTOR + output_cycle);
 #endif			
@@ -2806,7 +2811,7 @@ static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WID
 					unsigned short chunk_k = chunk_idx % FACTOR;
 					
 					chunks[in_strm][chunk_k] = strm_in[out_strm].read();
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 					printf("[stream_in: %d → chunks[%d][%d]] = (", out_strm, in_strm, chunk_k);
 					for (unsigned j = 0; j < STREAM1_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); j++)
 					{
@@ -2830,7 +2835,7 @@ static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WID
 				out_val.range((k+1) * STREAM1_DATA_WIDTH - 1, k * STREAM1_DATA_WIDTH) = chunks[num_strm][k];
 			}
 			strm_out[num_strm].write(out_val);
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 			printf("[stream_out: %d] = (", num_strm);
 			for (unsigned j = 0; j < STREAM2_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); j++)
 			{
@@ -2909,7 +2914,7 @@ static void redirect(
     // Optimized modulo using bitwise AND
     unsigned int size_x_mod_banks = size_x & BANK_MASK;
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
     printf("==== DATAMOVER REDIRECT V2 INITIAL PARAMETERS ====\n");
     printf("offset_x: %lu\n", offset_x);
     printf("size_x: %u\n", (unsigned int)size_x);
@@ -2979,7 +2984,7 @@ static void redirect(
 						ap_uint<STREAM_DATA_WIDTH> read_val = read_cond ? register_it(strm_in[i].read()) : ap_uint<STREAM_DATA_WIDTH>(0);
 						tmp[i].range((k + 1) * STREAM_DATA_WIDTH - 1, k * STREAM_DATA_WIDTH) = read_val;
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 						if (read_cond) {
 							printf("==== REDIRECT READ ====\n");
 							printf("Bank[%u], Packet[%u], X[%u], Y[%u], Z[%u]\n", i, k, x, (unsigned int)y, (unsigned int)z);
@@ -3015,7 +3020,7 @@ static void redirect(
 						ap_uint<STREAM_DATA_WIDTH> write_val = swap[i].range((k + 1) * STREAM_DATA_WIDTH - 1, k * STREAM_DATA_WIDTH);
 						strm_out[i] << write_val;
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 						printf("==== REDIRECT WRITE ====\n");
 						printf("Bank[%u], Packet[%u], X[%u], Y[%u], Z[%u]\n", i, k, x, (unsigned int)y, (unsigned int)z);
 						printf("Values (float): (");
@@ -3084,7 +3089,7 @@ static void reverseRedirect(
     
     unsigned int size_x_mod_banks = size_x & BANK_MASK; // size_x % NUM_BANKS
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
     printf("==== DATAMOVER REVERSE REDIRECT INITIAL PARAMETERS ====\n");
     printf("offset_x: %lu\n", offset_x);
     printf("size_x: %u\n", (unsigned int)size_x);
@@ -3145,7 +3150,7 @@ static void reverseRedirect(
                 {
                     #pragma HLS UNROLL
                     tmp[i] = register_it(strm_in[i].read());
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
                     printf("==== REVERSE REDIRECT READ ====\n");
                     printf("Bank[%u], X[%u], Y[%u], Z[%u]\n", i, x, (unsigned int)y, (unsigned int)z);
                     printf("Values (float): (");
@@ -3176,7 +3181,7 @@ static void reverseRedirect(
                     
                     if (write_cond) {
                         strm_out[i] << swap[i];
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
                         printf("==== REVERSE REDIRECT WRITE ====\n");
                         printf("Bank[%u], X[%u], Y[%u], Z[%u]\n", i, x, (unsigned int)y, (unsigned int)z);
                         printf("Values (float): (");
@@ -3252,7 +3257,7 @@ static void reverseRedirect(
     
     unsigned int size_x_mod_banks = size_x & BANK_MASK; // size_x % NUM_BANKS
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
     printf("==== DATAMOVER REVERSE REDIRECT V2 INITIAL PARAMETERS ====\n");
     printf("offset_x: %lu\n", offset_x);
     printf("size_x: %u\n", (unsigned int)size_x);
@@ -3318,7 +3323,7 @@ static void reverseRedirect(
 						#pragma HLS UNROLL
 						ap_uint<STREAM_DATA_WIDTH> read_val = register_it(strm_in[i].read());
 						tmp[i].range((k + 1) * STREAM_DATA_WIDTH - 1, k * STREAM_DATA_WIDTH) = read_val;
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
                             printf("==== REVERSE REDIRECT READ ====\n");
                             printf("Bank[%u], Packet[%u], X[%u], Y[%u], Z[%u]\n", i, k, x, (unsigned int)y, (unsigned int)z);
                             printf("Values (float): (");
@@ -3354,7 +3359,7 @@ static void reverseRedirect(
                     	if (write_cond) {
                         ap_uint<STREAM_DATA_WIDTH> write_val = swap[i].range((k + 1) * STREAM_DATA_WIDTH - 1, k * STREAM_DATA_WIDTH);
                         strm_out[i] << write_val;
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
                         printf("==== REVERSE REDIRECT WRITE ====\n");
                         printf("Bank[%u], Packet[%u], X[%u], Y[%u], Z[%u]\n", i, k, x, (unsigned int)y, (unsigned int)z);
                         printf("Values (float): (");
@@ -3396,7 +3401,7 @@ static void reverseRedirect(
 // static void stridedTileMem2stream(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, const ops::hls::MemConfigTile& config, BUFF_TYPE*... mem_in)
 // {
 //     // #pragma HLS INLINE off
-//     #ifdef DEBUG_LOG
+//     #ifdef DEBUG_LOG_PRINT
 //         printf("|HLS DEBUG_LOG|%s| reading tile. tile_start:%d, tile_size:%d, stride_start:%d\n", __func__, config.start_offset, config.total_size_bytes, stride_start);
 //     #endif
 
@@ -3432,7 +3437,7 @@ static void reverseRedirect(
 //                     unsigned int j_offset  = j * config.grid_xblocks;
 //                     unsigned int offset = offset_3 + j_offset;
 
-//                     #ifdef DEBUG_LOG
+//                     #ifdef DEBUG_LOG_PRINT
 //                         printf("|HLS DEBUG_LOG|%s| offset_1:%u offset_2:%u offset_3:%u j_offset:%u offset:%u tile_y:%u tile_x:%u k:%u j:%u tile_size_x:%u\n",
 //                                __func__,
 //                                (unsigned int)offset_1,
@@ -3492,7 +3497,7 @@ template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned 
 static void stridedTileStream2mem(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, ap_uint<MEM_DATA_WIDTH>* mem_out, const ops::hls::MemConfigTile& config, unsigned short stride_start = 0)
 {
     // #pragma HLS INLINE off
-    #ifdef DEBUG_LOG
+    #ifdef DEBUG_LOG_PRINT
         printf("|HLS DEBUG_LOG|%s| writing tile. tile_start:%d, tile_size:%d\n", __func__, config.start_offset, config.total_size_bytes);
     #endif
 
@@ -3525,7 +3530,7 @@ static void stridedTileStream2mem(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_i
                     unsigned int offset_3 = offset_1 + offset_2;
                     unsigned int j_offset  = j * config.grid_xblocks;
                     unsigned int offset = offset_3 + j_offset;
-                    #ifdef DEBUG_LOG
+                    #ifdef DEBUG_LOG_PRINT
                         printf("|HLS DEBUG_LOG|%s| offset:%u tile_y:%u tile_x:%u k:%u j:%u tile_size_x:%u\n",
                                __func__,
                                (unsigned int)offset,
@@ -3563,7 +3568,7 @@ static void stridedTileStream2mem(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_i
 // static void stridedTileStream2mem(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, const ops::hls::MemConfigTile& config, BUFF_TYPE*... mem_out)
 // {
 //     // #pragma HLS INLINE off
-//     #ifdef DEBUG_LOG
+//     #ifdef DEBUG_LOG_PRINT
 //         printf("|HLS DEBUG_LOG|%s| writing tile. tile_start:%d, tile_size:%d\n", __func__, config.start_offset, config.total_size_bytes);
 //     #endif
 
@@ -3597,7 +3602,7 @@ static void stridedTileStream2mem(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_i
 //                     unsigned int offset_3 = offset_1 + offset_2;
 //                     unsigned int j_offset  = j * config.grid_xblocks;
 //                     unsigned int offset = offset_3 + j_offset;
-//                     #ifdef DEBUG_LOG
+//                     #ifdef DEBUG_LOG_PRINT
 //                         printf("|HLS DEBUG_LOG|%s| offset:%u tile_y:%u tile_x:%u k:%u j:%u tile_size_x:%u\n",
 //                                __func__,
 //                                (unsigned int)offset,
@@ -3685,7 +3690,7 @@ static void combineSteams(
                     #pragma HLS PIPELINE //TODO: Check whether this is effective or not. Most probaly not required as mem2stream already has PIPELINE pragma inside.
                         if (local_tile_row_id % 2 == 0)
                         {
-                            #ifdef DEBUG_LOG
+                            #ifdef DEBUG_LOG_PRINT
                                 printf("|HLS DEBUG_LOG|%s| reading from bank 1. tile_y:%u tile_x:%u k:%u j:%u i:%u local_tile_row_id:%u\n",
                                        __func__,
                                        (unsigned int)tile_y,
@@ -3696,8 +3701,7 @@ static void combineSteams(
                                        (unsigned int)local_tile_row_id);
                             #endif
                             ap_uint<MEM_DATA_WIDTH> data_b1 = strm_in_b1.read();
-                            #ifdef DEBUG_LOG
-                                #ifndef __SYNTHESIS__
+#ifdef DEBUG_LOG_PRINT
                                     printf("   |HLS DEBUG_LOG||%s| read data_b1 val=(", __func__);
                                     ops::hls::DataConv tmp;
                                     for (unsigned n = 0; n < MEM_DATA_WIDTH; n+=32)
@@ -3706,13 +3710,12 @@ static void combineSteams(
                                         printf("%f,", tmp.f);
                                     }
                                     printf(")\n");
-                                #endif
-                            #endif
+#endif
                             strm_out.write(data_b1);
                         }
                         else
                         {
-                            #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
                                 printf("|HLS DEBUG_LOG|%s| reading from bank 2. tile_y:%u tile_x:%u k:%u j:%u i:%u local_tile_row_id:%u\n",
                                         __func__,
                                         (unsigned int)tile_y,
@@ -3721,10 +3724,9 @@ static void combineSteams(
                                         (unsigned int)j,
                                         (unsigned int)i,
                                         (unsigned int)local_tile_row_id);
-                            #endif
+#endif
                             ap_uint<MEM_DATA_WIDTH> data_b2 = strm_in_b2.read();
-                            #ifdef DEBUG_LOG
-                                #ifndef __SYNTHESIS__
+#ifdef DEBUG_LOG_PRINT
                                     printf("   |HLS DEBUG_LOG||%s| read data_b2 val=(", __func__);
                                     ops::hls::DataConv tmp;
                                     for (unsigned n = 0; n < MEM_DATA_WIDTH; n+=32)
@@ -3733,8 +3735,7 @@ static void combineSteams(
                                         printf("%f,", tmp.f);
                                     }
                                     printf(")\n");
-                                #endif
-                            #endif
+#endif
                             strm_out.write(data_b2);
                         }
                     }
@@ -3804,8 +3805,7 @@ static void splitStream(
                     {
                     #pragma HLS PIPELINE //TODO: Check whether this is effective or not. Most probaly not required as mem2stream already has PIPELINE pragma inside.
                         ap_uint<MEM_DATA_WIDTH> data = strm_in.read();
-                        #ifdef DEBUG_LOG
-                            #ifndef __SYNTHESIS__
+#ifdef DEBUG_LOG_PRINT
                                 printf("   |HLS DEBUG_LOG||%s| read data val=(", __func__);
                                 ops::hls::DataConv tmp;
                                 for (unsigned n = 0; n < MEM_DATA_WIDTH; n+=32)
@@ -3814,11 +3814,10 @@ static void splitStream(
                                     printf("%f,", tmp.f);
                                 }
                                 printf(")\n");
-                            #endif
-                        #endif
+#endif
                         if (local_tile_row_id % 2 == 0)
                         {
-                            #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
                                 printf("|HLS DEBUG_LOG|%s| writing to bank 1. tile_y:%u tile_x:%u k:%u j:%u i:%u local_tile_row_id:%u\n",
                                        __func__,
                                        (unsigned int)tile_y,
@@ -3828,12 +3827,12 @@ static void splitStream(
                                        (unsigned int)i,
                                        (unsigned int)local_tile_row_id);
                                 printf("|HLS DEBUG_LOG|%s| writing data to bank 1\n", __func__);
-                            #endif
+#endif
                             strm_out_b1.write(data);
                         }
                         else
                         {
-                            #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
                                 printf("|HLS DEBUG_LOG|%s| writing to bank 2. tile_y:%u tile_x:%u k:%u j:%u i:%u local_tile_row_id:%u\n",
                                        __func__,
                                        (unsigned int)tile_y,
@@ -3843,7 +3842,7 @@ static void splitStream(
                                        (unsigned int)i,
                                        (unsigned int)local_tile_row_id);
                                 printf("|HLS DEBUG_LOG|%s| writing data to bank 2\n", __func__);
-                            #endif
+#endif
                             strm_out_b2.write(data);
                         }
                     }
@@ -3873,16 +3872,16 @@ void mem2streamTiled(ap_uint<MEM_DATA_WIDTH>* mem_in_b1,
 				::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out,
 				const ops::hls::MemConfigTile& config)
 {
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| starting\n", __func__);
 #endif
 	if (config.isContinous)
 	{
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| continuous read\n", __func__);
 #endif
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| init offset:%d, size_bytes:%d\n", __func__, config.start_offset, config.total_size_bytes);
 #endif
 	ops::hls::mem2stream<MEM_DATA_WIDTH>((ap_uint<MEM_DATA_WIDTH>* )(mem_in_b1 + config.start_offset), strm_out, config.total_xblocks);
@@ -3898,7 +3897,7 @@ void mem2streamTiled(ap_uint<MEM_DATA_WIDTH>* mem_in_b1,
         stridedTileMem2stream<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(mem_in_b2, strm_in_b2, config, 1);
         combineSteams<MEM_DATA_WIDTH, IN_ITR>(strm_in_b1, strm_in_b2, strm_out, config);
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
@@ -3924,16 +3923,16 @@ void stream2memTiled(ap_uint<MEM_DATA_WIDTH>* mem_out_b1,
                 ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
 				const ops::hls::MemConfigTile& config)
 {
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| starting\n", __func__);
 #endif
 	if (config.isContinous)
 	{
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| continuous write\n", __func__);
 #endif
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| init offset:%d, size_bytes:%d\n", __func__, config.start_offset, config.total_size_bytes);
 #endif
 		ops::hls::stream2mem<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>((ap_uint<MEM_DATA_WIDTH>* )(mem_out_b1 + config.start_offset), strm_in, config.total_xblocks);
@@ -3949,7 +3948,7 @@ void stream2memTiled(ap_uint<MEM_DATA_WIDTH>* mem_out_b1,
         stridedTileStream2mem<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(strm_out_b1, mem_out_b1,  config, 0);
         stridedTileStream2mem<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(strm_out_b2, mem_out_b2,  config, 1);
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
@@ -3979,13 +3978,13 @@ DEPRECATED void stream2stream(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_i
 	constexpr unsigned short BIG_STREAM_DATA_WIDTH_BYTES = BIG_STREAM_DATA_WIDTH / 8;
 	constexpr unsigned short TYPE = STREAM1_DATA_WIDTH > STREAM2_DATA_WIDTH ? 1 : 0;
 
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG| %s | type: %d, num_big_pkts: %d\n"
 			, __func__,TYPE, num_big_pkts);
 	printf("====================================================================================\n");
 #endif
-#endif
+
 	if (TYPE)
 	{
 		ap_uint<STREAM1_DATA_WIDTH> tmp1;
@@ -3999,8 +3998,8 @@ DEPRECATED void stream2stream(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_i
 				if (n == 0)
 				{
 					tmp1 = strm_in.read();
-#ifndef __SYNTHESIS__
-	#ifdef DEBUG_LOG
+
+#ifdef DEBUG_LOG_PRINT
 					printf("   |HLS DEBUG_LOG||%s| receiving pkt: %d, val=(", __func__, pkt);
 
 					for (unsigned n = 0; n < STREAM1_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); n++)
@@ -4010,14 +4009,14 @@ DEPRECATED void stream2stream(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_i
 						printf("%f,", conv.f);
 					}
 					printf(")\n");
-	#endif
 #endif
+
 				}
 
 				ap_uint<STREAM2_DATA_WIDTH> tmp2 = tmp1.range((n+1)* STREAM2_DATA_WIDTH -1, n * STREAM2_DATA_WIDTH);
 				strm_out.write(tmp2);
-#ifndef __SYNTHESIS__
-	#ifdef DEBUG_LOG
+
+#ifdef DEBUG_LOG_PRINT
 				printf("   |HLS DEBUG_LOG||%s| writing pkt: %d, val=(", __func__, pkt*FACTOR + n);
 
 				for (unsigned k = 0; k < STREAM2_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
@@ -4027,8 +4026,8 @@ DEPRECATED void stream2stream(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_i
 					printf("%f,", conv.f);
 				}
 				printf(")\n");
-	#endif
 #endif
+
 			}
 		}
 	}
@@ -4043,8 +4042,8 @@ DEPRECATED void stream2stream(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_i
 			#pragma HLS LOOP_FLATTEN
 
 				ap_uint<STREAM1_DATA_WIDTH> tmp1 = strm_in.read();
-#ifndef __SYNTHESIS__
-	#ifdef DEBUG_LOG
+
+#ifdef DEBUG_LOG_PRINT
 				printf("   |HLS DEBUG_LOG||%s| reading pkt: %d, val=(", __func__, pkt*FACTOR + n);
 
 				for (unsigned k = 0; k < STREAM1_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
@@ -4054,14 +4053,14 @@ DEPRECATED void stream2stream(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_i
 					printf("%f,", conv.f);
 				}
 				printf(")\n");
-	#endif
 #endif
+
 				tmp2.range((n+1)* STREAM1_DATA_WIDTH -1, n * STREAM1_DATA_WIDTH) = tmp1;
 
 				if (n == FACTOR - 1)
 				{
-#ifndef __SYNTHESIS__
-	#ifdef DEBUG_LOG
+
+#ifdef DEBUG_LOG_PRINT
 				printf("   |HLS DEBUG_LOG||%s| writing pkt: %d, val=(", __func__, pkt*FACTOR + n);
 
 				for (unsigned k = 0; k < STREAM2_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
@@ -4071,7 +4070,6 @@ DEPRECATED void stream2stream(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_i
 					printf("%f,", conv.f);
 				}
 				printf(")\n");
-	#endif
 #endif
 
 				strm_out.write(tmp2);
@@ -4079,7 +4077,7 @@ DEPRECATED void stream2stream(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_i
 			}
 		}
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
@@ -4109,13 +4107,13 @@ void stream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_in,
 
 constexpr unsigned short FACTOR = STREAM2_DATA_WIDTH / STREAM1_DATA_WIDTH;
 
-#ifndef __SYNTHESIS__
-    #ifdef DEBUG_LOG
+
+#ifdef DEBUG_LOG_PRINT
         printf("|HLS DEBUG_LOG| %s | num_big_pkts: %d\n"
                 , __func__, num_big_pkts);
         printf("====================================================================================\n");
-    #endif
 #endif
+
 
     ap_uint<STREAM2_DATA_WIDTH> tmp2;
     for (unsigned int pkt = 0; pkt < num_big_pkts; pkt++)
@@ -4126,8 +4124,8 @@ constexpr unsigned short FACTOR = STREAM2_DATA_WIDTH / STREAM1_DATA_WIDTH;
         #pragma HLS LOOP_FLATTEN
 
             ap_uint<STREAM1_DATA_WIDTH> tmp1 = strm_in.read();
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+
+#ifdef DEBUG_LOG_PRINT
             printf("   |HLS DEBUG_LOG||%s| reading pkt: %d, val=(", __func__, pkt*FACTOR + n);
 
             for (unsigned k = 0; k < STREAM1_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
@@ -4138,13 +4136,11 @@ constexpr unsigned short FACTOR = STREAM2_DATA_WIDTH / STREAM1_DATA_WIDTH;
             }
             printf(")\n");
 #endif
-#endif
             tmp2.range((n+1)* STREAM1_DATA_WIDTH -1, n * STREAM1_DATA_WIDTH) = tmp1;
 
             if (n == FACTOR - 1)
             {
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
             printf("   |HLS DEBUG_LOG||%s| writing pkt: %d, val=(", __func__, pkt*FACTOR + n);
 
             for (unsigned k = 0; k < STREAM2_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
@@ -4155,14 +4151,14 @@ constexpr unsigned short FACTOR = STREAM2_DATA_WIDTH / STREAM1_DATA_WIDTH;
             }
             printf(")\n");
 #endif
-#endif
+
 
             strm_out.write(tmp2);
             }
         }
     }
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
@@ -4192,12 +4188,10 @@ void stream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>>& strm_in,
 
 constexpr unsigned short FACTOR = STREAM1_DATA_WIDTH / STREAM2_DATA_WIDTH;
 
-#ifndef __SYNTHESIS__
-    #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
         printf("|HLS DEBUG_LOG| %s | num_big_pkts: %d\n"
                 , __func__, num_big_pkts);
         printf("====================================================================================\n");
-    #endif
 #endif
 
     ap_uint<STREAM1_DATA_WIDTH> tmp1;
@@ -4212,8 +4206,8 @@ constexpr unsigned short FACTOR = STREAM1_DATA_WIDTH / STREAM2_DATA_WIDTH;
             if (n == 0)
             {
                 tmp1 = strm_in.read();
-#ifndef __SYNTHESIS__
-    #ifdef DEBUG_LOG
+
+#ifdef DEBUG_LOG_PRINT
                     printf("   |HLS DEBUG_LOG||%s| receiving pkt: %d, val=(", __func__, pkt);
 
                     for (unsigned n = 0; n < STREAM1_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); n++)
@@ -4223,14 +4217,14 @@ constexpr unsigned short FACTOR = STREAM1_DATA_WIDTH / STREAM2_DATA_WIDTH;
                         printf("%f,", conv.f);
                     }
                     printf(")\n");
-    #endif
 #endif
+
             }
 
             ap_uint<STREAM2_DATA_WIDTH> tmp2 = tmp1.range((n+1)* STREAM2_DATA_WIDTH -1, n * STREAM2_DATA_WIDTH);
             strm_out.write(tmp2);
-#ifndef __SYNTHESIS__
-    #ifdef DEBUG_LOG
+
+#ifdef DEBUG_LOG_PRINT
                 printf("   |HLS DEBUG_LOG||%s| writing pkt: %d, val=(", __func__, pkt*FACTOR + n);
 
                 for (unsigned k = 0; k < STREAM2_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
@@ -4240,8 +4234,8 @@ constexpr unsigned short FACTOR = STREAM1_DATA_WIDTH / STREAM2_DATA_WIDTH;
                     printf("%f,", conv.f);
                 }
                 printf(")\n");
-    #endif
 #endif
+
         }
     }
 
@@ -4258,27 +4252,27 @@ template <unsigned int STREAM_DATA_WIDTH>
 void stream2axis(::hls::stream<ap_uint<STREAM_DATA_WIDTH>>& strm_in,
 				::hls::stream<ap_axiu<STREAM_DATA_WIDTH,0,0,0>>& strm_out,
 				const unsigned int pkts
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 				, const bool print_enbl = true
 #endif
 			)
 {
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+
+#ifdef DEBUG_LOG_PRINT
 
 	if (print_enbl) {
 		// print("\n=======================================================\n");
 		print("|HLS DEBUG_LOG| stream2axis | starting. pkts: %d\n", pkts);
 	}
 #endif
-#endif
+
 	for (unsigned itr = 0; itr < pkts; itr++){
 		#pragma HLS PIPELINE II=1
 
 		ap_axiu<STREAM_DATA_WIDTH,0,0,0> tmp;
 		tmp.data = strm_in.read();
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+
+#ifdef DEBUG_LOG_PRINT
 			if (print_enbl) {
 				// print("------------------------------------------------------------------------------------\n");
 				print(" |HLS DEBUG_LOG| stream2axis | sending axis pkt: %d, val=(\n", itr);
@@ -4294,10 +4288,9 @@ void stream2axis(::hls::stream<ap_uint<STREAM_DATA_WIDTH>>& strm_in,
 			// 	print("------------------------------------------------------------------------------------\n");
 			// }
 #endif
-#endif
 		strm_out << tmp;
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	if (print_enbl){print("|HLS DEBUG_LOG| stream2axis | Exit \n");}
 #endif
 }
@@ -4313,25 +4306,25 @@ template <unsigned int STREAM_DATA_WIDTH>
 void axis2stream(::hls::stream<ap_axiu<STREAM_DATA_WIDTH,0,0,0>>& strm_in,
 		::hls::stream<ap_uint<STREAM_DATA_WIDTH>>& strm_out,
 		unsigned int pkts
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		, const bool print_enbl = true
 #endif	
 	)
 {
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+
+#ifdef DEBUG_LOG_PRINT
 	if (print_enbl) {
 		print("\n=======================================================\n");
 		print("|HLS DEBUG_LOG| axis2stream | starting. pkts: %d\n", pkts);
 	}
 #endif
-#endif
+
 	for (int itr = 0; itr < pkts; itr++){
 		#pragma HLS PIPELINE II=1
 
 		ap_axiu<STREAM_DATA_WIDTH,0,0,0> tmp = strm_in.read();
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+
+#ifdef DEBUG_LOG_PRINT
 			if (print_enbl) {
 				// print("------------------------------------------------------------------------------------\n");
 				print(" |HLS DEBUG_LOG| axis2stream | sending hls pkt: %d, val=(\n", itr);
@@ -4347,10 +4340,10 @@ void axis2stream(::hls::stream<ap_axiu<STREAM_DATA_WIDTH,0,0,0>>& strm_in,
 			// 	print("------------------------------------------------------------------------------------\n");
 			// }
 #endif
-#endif
+
 		strm_out << tmp.data;
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	if (print_enbl) {print("|HLS DEBUG_LOG| axis2stream | Exit \n");}
 #endif
 }
@@ -4392,12 +4385,10 @@ void mem2axis(ap_uint<MEM_DATA_WIDTH>* mem_in,
 	const unsigned int num_bursts = num_beats / BURST_SIZE;
 	const unsigned int non_burst_beats = num_beats % BURST_SIZE;
 
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG| %s | size: %d, num_beats: %d, num_burst: %d, non_burst_beats: %d\n"
 			, __func__, size, num_beats, num_bursts, non_burst_beats);
 	printf("====================================================================================\n");
-#endif
 #endif
 
 	unsigned int index = 0;
@@ -4460,13 +4451,12 @@ void mem2axisV2(ap_uint<MEM_DATA_WIDTH>* mem_in,
 
 	const unsigned int num_beats = (size + bytes_per_beat - 1) / bytes_per_beat;
 
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG| %s | size: %d, num_beats: %d\n"
 			, __func__, size, num_beats);
 	printf("====================================================================================\n");
 #endif
-#endif
+
 	::hls::stream<ap_uint<MEM_DATA_WIDTH>> mem_strm;
 	::hls::stream<ap_uint<AXIS_DATA_WIDTH>> red_mem_strm;
 #pragma HLS STREAM variable = mem_strm depth = max_depth_v16
@@ -4680,13 +4670,13 @@ void axis2memV2(ap_uint<MEM_DATA_WIDTH>* mem_out,
 
 	const unsigned int num_beats = (size + bytes_per_beat - 1) / bytes_per_beat;
 
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG| %s | size: %d, num_beats: %d\n"
 			, __func__, size, num_beats);
 	printf("====================================================================================\n");
 #endif
-#endif
+
 	::hls::stream<ap_uint<MEM_DATA_WIDTH>> mem_strm;
 	::hls::stream<ap_uint<AXIS_DATA_WIDTH>> red_mem_strm;
 #pragma HLS STREAM variable = mem_strm depth = max_depth_v16
@@ -4865,7 +4855,7 @@ void axis2stream(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_in,
 	
 	const unsigned int num_axis_pkts = (size + bytes_per_axis_pkt - 1) / bytes_per_axis_pkt;
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 			printf("|HLS DEBUG_LOG|%s| starting. size_bytes: %d, num_axis_pkt: %d, num_hls_pkt_per_axis_pkt: %d\n"
 						, __func__, size, num_axis_pkts, num_hls_pkt_per_axis_pkt);
 #endif
@@ -4884,8 +4874,8 @@ void axis2stream(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_in,
 				axisPkt = axis_in.read();
 			}
 			strm_out <<  axisPkt.data.range((j+1) * STREAM_DATA_WIDTH - 1, j * STREAM_DATA_WIDTH);
-#ifndef __SYNTHESIS__
-#ifdef DEBUG_LOG
+
+#ifdef DEBUG_LOG_PRINT
 			printf("   |HLS DEBUG_LOG|%s| sending axis pkt: %d, val=(",__func__, itr);
 
 			for (unsigned n = 0; n < STREAM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); n++)
@@ -4896,14 +4886,14 @@ void axis2stream(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_in,
 			}
 			printf(")\n");
 #endif
-#endif
-#ifdef DEBUG_LOG
+
+#ifdef DEBUG_LOG_PRINT
 			printf("|HLS DEBUG_LOG|%s| reading axis pkt: %d.\n"
 						, __func__, itr);
 #endif
 		}
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
@@ -4953,8 +4943,7 @@ void axis2streamMasked(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_in,
 //	{
 	cycleBuf[cycleBufIndex] = axis_in.read();
 
-#ifndef __SYNTHESIS__
-	#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("   |HLS DEBUG_LOG||%s| Iter 0. Cycle Buff, ", __func__);
 
 	for (unsigned int i = 0; i < 2; i++)
@@ -4970,7 +4959,6 @@ void axis2streamMasked(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_in,
 		printf(") strb=(%x)", cycleBuf[i].strb);
 	}
 	printf("\n");
-	#endif
 #endif
 
 	for (unsigned int j = 0; j < num_hls_pkt_per_axis_pkt; j++)
@@ -4985,8 +4973,7 @@ void axis2streamMasked(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_in,
 	for (unsigned int itr = 1; itr < num_axis_pkts; itr++)
 	{
 		cycleBuf[cycleBufIndex] = axis_in.read();
-#ifndef __SYNTHESIS__
-	#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("   |HLS DEBUG_LOG||%s| Iter %d. Cycle Buff, ", __func__, itr);
 
 		for (unsigned int i = 0; i < 2; i++)
@@ -5002,7 +4989,6 @@ void axis2streamMasked(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_in,
 			printf(") strb=(%x)", cycleBuf[i].strb);
 		}
 		printf("\n");
-	#endif
 #endif
 		ap_uint<1> cycleBufIndexPlusOne = cycleBufIndex + 1;
 
@@ -5020,8 +5006,7 @@ void axis2streamMasked(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_in,
 					= cycleBuf[cycleBufIndexPlusOne].strb.range(bytes_per_axis_pkt - 1, bytes_per_axis_pkt - shiftBytes);
 		}
 
-#ifndef __SYNTHESIS__
-	#ifdef DEBUG_LOG
+	#ifdef DEBUG_LOG_PRINT
 		printf("   |HLS DEBUG_LOG||%s| shifted axis , val=(", __func__);
 
 		for (unsigned n = 0; n < bytes_per_axis_pkt/DEBUG_LOG_SIZE_OF; n++)
@@ -5033,7 +5018,7 @@ void axis2streamMasked(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_in,
 
 		printf(") strb=(%x)\n", axisPkt.strb);
 	#endif
-#endif
+
 		for (unsigned int j = 0; j < num_hls_pkt_per_axis_pkt; j++)
 		{
 		#pragma HLS PIPELINE II=1
@@ -5068,14 +5053,14 @@ void getNumStreamPkts(const AccessRange& range, unsigned int& n_pkts)
 	unsigned short num_xblocks = end_x - start_x;
 	unsigned short num_xpkts = num_xblocks * num_pkts_per_mem_beat;
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| range: (%d, %d, %d) -> (%d, %d, %d)\n"
 			, __func__, range.start[0], range.start[1], range.start[2], range.end[0], range.end[1], range.end[2]);
 #endif
 	unsigned short diff_y = range.end[1] - range.start[1];
 	unsigned short diff_z = range.end[2] - range.start[2];
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| num_xpkts: %d, diff_y: %d, diff_z: %d \n"
 			, __func__, num_xpkts, diff_y, diff_z);
 #endif
@@ -5107,7 +5092,7 @@ void axisLoopbackV2(
 	{
 #pragma HLS PIPELINE II=1
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| writing. pkt:%d\n"
 			, __func__, pkt);
 #endif
@@ -5115,7 +5100,7 @@ void axisLoopbackV2(
 		strm_out.write(tmp);
 	}
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 			printf("|HLS DEBUG_LOG|%s| exiting. \n"
 					, __func__);
 #endif
@@ -5154,7 +5139,7 @@ void axisLoopback(
 	unsigned short grid_xblocks = gridSize[0] >> ShiftBits; //GridSize[0] has to be MEM_DATA_WIDTH aligned
 	unsigned short num_xpkts = end_x - start_x;
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 			printf("|HLS DEBUG_LOG|%s| starting range: (%d,%d,%d) -> (%d,%d,%d), start_x: %d, end_x:%d, num xpkts: %d\n"
 					, __func__, range.start[0], range.start[1], range.start[2], range.end[0], range.end[1], range.end[2],
 					start_x, end_x, num_xpkts);
@@ -5178,7 +5163,7 @@ void axisLoopback(
 			{
  #pragma HLS PIPELINE II = 1
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 			printf("|HLS DEBUG_LOG|%s| writing. offset:%d, j:%d, k:%d\n"
 					, __func__, x_pkt, j, k);
 #endif
@@ -5187,7 +5172,7 @@ void axisLoopback(
 			}
 		}
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 			printf("|HLS DEBUG_LOG|%s| exiting. \n"
 					, __func__);
 #endif
@@ -5206,20 +5191,20 @@ template <unsigned int AXIS_DATA_WIDTH, unsigned int II=1>
 void axisTerminate(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_in,
 		unsigned int num_pkts)
 {
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| starting.\n"
 			, __func__);
 #endif
 	for (unsigned int i = 0; i < num_pkts; i++)
 	{
 #pragma HLS PIPELINE II=II
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| terminating pkt:%d.\n"
 				, __func__, i);
 #endif
 		auto pkt = axis_in.read();
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
@@ -5256,7 +5241,7 @@ void stream2axis(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_out,
 	
 	const unsigned int num_axis_pkts = (size + bytes_per_axis_pkt - 1) / bytes_per_axis_pkt;
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| stream to axis. size (bytes): %d, num_hls_pkt_per_axis_pkt: %d, bytes_per_axis_pkt: %d, bytes_per_hls_pkt:%d, num_axis_pkts:%d\n"
 				, __func__, size, num_hls_pkt_per_axis_pkt, bytes_per_axis_pkt, bytes_per_hls_pkt, num_axis_pkts);
 		printf("====================================================================================\n");
@@ -5265,27 +5250,27 @@ void stream2axis(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_out,
 	for (unsigned int itr = 0; itr < num_axis_pkts; itr++)
 	{
 		ap_axiu<AXIS_DATA_WIDTH,0,0,0> axisPkt;
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| flag 2. itr:%d\n",
 							__func__, itr);
 #endif
 		for (unsigned int j = 0; j < num_hls_pkt_per_axis_pkt; j++)
 		{
 		#pragma HLS PIPELINE II=1
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 			unsigned int hls_pkt_index = itr * num_hls_pkt_per_axis_pkt + j;
 			printf("|HLS DEBUG_LOG|%s| reading hls pkt: %d\n",
 					__func__, hls_pkt_index);
 #endif
 			axisPkt.data.range((j+1) * STREAM_DATA_WIDTH - 1, j * STREAM_DATA_WIDTH) = strm_in.read();
 		}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| wrting axis pkt: %d\n",
 				__func__, itr);
 #endif
 		axis_out.write(axisPkt);
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
@@ -5325,7 +5310,7 @@ void stream2axisMasked(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_out,
 	
 	const unsigned int num_axis_pkts = (size + bytes_per_axis_pkt - 1) / bytes_per_axis_pkt;
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| stream to axis. size (bytes): %d, num_hls_pkt_per_axis_pkt: %d, bytes_per_axis_pkt: %d, bytes_per_hls_pkt:%d, num_axis_pkts:%d\n"
 				, __func__, size, num_hls_pkt_per_axis_pkt, bytes_per_axis_pkt, bytes_per_hls_pkt, num_axis_pkts);
 		printf("====================================================================================\n");
@@ -5334,14 +5319,14 @@ void stream2axisMasked(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_out,
 	for (unsigned int itr = 0; itr < num_axis_pkts; itr++)
 	{
 		ap_axiu<AXIS_DATA_WIDTH,0,0,0> axisPkt;
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| flag 2. itr:%d\n",
 							__func__, itr);
 #endif
 		for (unsigned int j = 0; j < num_hls_pkt_per_axis_pkt; j++)
 		{
 		#pragma HLS PIPELINE II=1
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 			unsigned int hls_pkt_index = itr * num_hls_pkt_per_axis_pkt + j;
 			printf("|HLS DEBUG_LOG|%s| reading hls pkt: %d\n",
 					__func__, hls_pkt_index);
@@ -5350,13 +5335,13 @@ void stream2axisMasked(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& axis_out,
 			axisPkt.strb.range((j+1) * bytes_per_hls_pkt - 1, j * bytes_per_hls_pkt) = mask_in.read();
 
 		}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| wrting axis pkt: %d\n",
 				__func__, itr);
 #endif
 		axis_out.write(axisPkt);
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
@@ -5500,7 +5485,7 @@ void memReadGrid(ap_uint<DATA_WIDTH>* mem_in,
 		range.end[1] = 1;
 	}
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| starting memReadGrid. grid_size: (%d, %d, %d), range: (%d, %d, %d) --> (%d, %d, %d)\n "
 			"x_tile_size:%d, x_tile_size_bytes:%d, num_xblocks:%d\n"
 			, __func__, ShiftBits, DataShiftBits, gridSize[0], gridSize[1], gridSize[2], range.start[0], range.start[1], range.start[2],
@@ -5514,14 +5499,14 @@ void memReadGrid(ap_uint<DATA_WIDTH>* mem_in,
 		{
 			unsigned int offset = range.start[0] + j * gridSize[0] + k * gridSize[1] * gridSize[0];
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 			printf("|HLS DEBUG_LOG|%s| reading. offset:%d, j:%d, k:%d\n"
 					, __func__,offset, j, k);
 #endif
 			mem2axis<MEM_DATA_WIDTH, AXIS_DATA_WIDTH>((ap_uint<MEM_DATA_WIDTH>*)(mem_in + offset), strm_out, x_tile_size_bytes);
 		}
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
@@ -5554,7 +5539,7 @@ void memReadGridV2(ap_uint<MEM_DATA_WIDTH>* mem_in,
 		range.end[1] = 1;
 	}
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| starting memReadGrid. shiftbits: %d, data shift bits: %d, grid_size: (%d, %d, %d), grid_xblocks: %d, range: (%d, %d, %d) --> (%d, %d, %d)\n "
 			"start_x_block: %d --> end_x_block: %d, x_tile_size:%d, x_tile_size_bytes:%d, num_xblocks:%d\n"
 			, __func__, ShiftBits, DataShiftBits, gridSize[0], gridSize[1], gridSize[2], grid_xblocks, range.start[0], range.start[1], range.start[2],
@@ -5566,7 +5551,7 @@ void memReadGridV2(ap_uint<MEM_DATA_WIDTH>* mem_in,
 
 	if (isContinous)
 	{
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| continuous read\n", __func__);
 #endif
 		unsigned int offset = start_x + range.start[1] * grid_xblocks + range.start[2] * gridSize[1] * grid_xblocks;
@@ -5574,7 +5559,7 @@ void memReadGridV2(ap_uint<MEM_DATA_WIDTH>* mem_in,
 		unsigned int size_z = range.end[2] - range.start[2];
 		unsigned int  size_bytes = x_tile_size_bytes * size_y * size_z;
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| init offset:%d, size_y:%d, size_z:%d, size_bytes:%d\n", __func__, offset, size_y, size_z, size_bytes);
 #endif
 		mem2axisV2<MEM_DATA_WIDTH, AXIS_DATA_WIDTH>((ap_uint<MEM_DATA_WIDTH>* )(mem_in + offset), strm_out, size_bytes);
@@ -5587,7 +5572,7 @@ void memReadGridV2(ap_uint<MEM_DATA_WIDTH>* mem_in,
 			{
 				unsigned int offset = start_x + j * grid_xblocks + k * gridSize[1] * grid_xblocks;
 
-		#ifdef DEBUG_LOG
+		#ifdef DEBUG_LOG_PRINT
 				printf("|HLS DEBUG_LOG|%s| reading. offset:%d, j:%d, k:%d\n"
 						, __func__,offset, j, k);
 		#endif
@@ -5595,7 +5580,7 @@ void memReadGridV2(ap_uint<MEM_DATA_WIDTH>* mem_in,
 			}
 		}
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
@@ -5670,7 +5655,7 @@ void memWriteGrid(ap_uint<DATA_WIDTH>* mem_out,
 	unsigned short init_offset = range.start[0];
 	unsigned short k_coef = gridSize[1] * gridSize[0];
 	unsigned short j_coef = gridSize[0];
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| starting memWriteGrid. grid_size: (%d, %d, %d), range: (%d, %d, %d) --> (%d, %d, %d)\n "
 			"front partial xtile size:%d, whole xtile size:%d, back partial xtile size:%d, xtile_alignment_point:%d\n"
 			, __func__, gridSize[0], gridSize[1], gridSize[2], range.start[0], range.start[1], range.start[2],
@@ -5685,7 +5670,7 @@ void memWriteGrid(ap_uint<DATA_WIDTH>* mem_out,
 			unsigned short offset = init_offset + k * k_coef + j * j_coef;
 			unsigned short whole_offset = front_part_xtile_size + offset;
 			unsigned short back_part_offset = whole_offset + whole_xtile_size;
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 			printf("|HLS DEBUG_LOG|%s| writing. front_offset:%d, whole_offset:%d, back_part_offset:%d, j:%d, k:%d\n"
 					, __func__, offset, whole_offset, back_part_offset, j, k);
 #endif
@@ -5698,7 +5683,7 @@ void memWriteGrid(ap_uint<DATA_WIDTH>* mem_out,
 
 		}
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
@@ -5750,7 +5735,7 @@ void memWriteGridSimple(ap_uint<DATA_WIDTH>* mem_out,
 		range.end[1] = 1;
 	}
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| starting memWriteGrid. grid_size: (%d, %d, %d), range: (%d, %d, %d) --> (%d, %d, %d)\n whole_xtile_size:%d, partial_xtile_size:%d\n"
 			, __func__, gridSize[0], gridSize[1], gridSize[2], range.start[0], range.start[1], range.start[2],
 			range.end[0], range.end[1], range.end[2], whole_xtile_size, partial_xtile_size);
@@ -5764,7 +5749,7 @@ void memWriteGridSimple(ap_uint<DATA_WIDTH>* mem_out,
 			unsigned short offset = register_it(k * gridSize[1]) + j;
 			offset = offset * gridSize[0];
 			offset = range.start[0] + offset;
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 			printf("|HLS DEBUG_LOG|%s| writing. offset:%d, j:%d, k:%d\n"
 					, __func__, offset, j, k);
 #endif
@@ -5772,7 +5757,7 @@ void memWriteGridSimple(ap_uint<DATA_WIDTH>* mem_out,
 			axis2memMasked<DATA_WIDTH, AXIS_DATA_WIDTH>(mem_out + offset + whole_xtile_size, strm_in, partial_xtile_size_bytes);
 		}
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
@@ -5824,7 +5809,7 @@ void memWriteGridSimpleV2(ap_uint<MEM_DATA_WIDTH>* mem_out,
 		range.end[1] = 1;
 	}
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| starting memWriteGrid. shiftbits: %d, data shift bits: %d, grid_size: (%d, %d, %d), grid_xblocks: %d, range: (%d, %d, %d) --> (%d, %d, %d)\n "
 			"start_x_block: %d --> end_x_block: %d, x_tile_size:%d, x_tile_size_bytes:%d, num_xblocks:%d\n"
 			, __func__, ShiftBits, DataShiftBits, gridSize[0], gridSize[1], gridSize[2], grid_xblocks, range.start[0], range.start[1], range.start[2],
@@ -5837,7 +5822,7 @@ void memWriteGridSimpleV2(ap_uint<MEM_DATA_WIDTH>* mem_out,
 
 	if (isContinous)
 	{
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| continuous read\n", __func__);
 #endif
 		unsigned int offset = start_x + range.start[1] * grid_xblocks + range.start[2] * gridSize[1] * grid_xblocks;
@@ -5845,7 +5830,7 @@ void memWriteGridSimpleV2(ap_uint<MEM_DATA_WIDTH>* mem_out,
 		unsigned int size_z = range.end[2] - range.start[2];
 		unsigned int  size_bytes = x_tile_size_bytes * size_y * size_z;
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| init offset:%d, size_y:%d, size_z:%d, size_bytes:%d\n", __func__, offset, size_y, size_z, size_bytes);
 #endif
 		axis2memV2<MEM_DATA_WIDTH, AXIS_DATA_WIDTH>((ap_uint<MEM_DATA_WIDTH>*)(mem_out + offset), strm_in, size_bytes);
@@ -5858,7 +5843,7 @@ void memWriteGridSimpleV2(ap_uint<MEM_DATA_WIDTH>* mem_out,
 			{
 	// #pragma HLS PIPELINE II = II_factor
 				unsigned int offset = start_x + j * grid_xblocks + k * gridSize[1] * grid_xblocks;
-	#ifdef DEBUG_LOG
+	#ifdef DEBUG_LOG_PRINT
 				printf("|HLS DEBUG_LOG|%s| writing. offset:%d, j:%d, k:%d\n"
 						, __func__, offset, j, k);
 	#endif
@@ -5866,7 +5851,7 @@ void memWriteGridSimpleV2(ap_uint<MEM_DATA_WIDTH>* mem_out,
 			}
 		}
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
@@ -5916,14 +5901,14 @@ void memWriteGridTerminate(::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& strm_i
 
 	unsigned int num_pkts = num_xpkts * (range.end[1] - range.start[1]) * (range.end[2] - range.start[2]);
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| Terminate memGridWrite with total pkts %d. num of x_pkts:%d, range dim: %d, range:(%d,%d,%d) -> (%d,%d,%d) \n"
 			, __func__, num_pkts, num_xpkts, range.dim, range.start[0], range.start[1], range.start[2], range.end[0], range.end[1], range.end[2]);
 #endif
 
 	axisTerminate<AXIS_DATA_WIDTH>(strm_in, num_pkts);
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
@@ -5959,7 +5944,7 @@ void memReadGrid_test(ap_uint<MEM_DATA_WIDTH>* mem_in,
 // 		range.end[1] = 1;
 // 	}
 
-// #ifdef DEBUG_LOG
+// #ifdef DEBUG_LOG_PRINT
 // 	printf("|HLS DEBUG_LOG|%s| starting memReadGrid. shiftbits: %d, data shift bits: %d, grid_size: (%d, %d, %d), grid_xblocks: %d, range: (%d, %d, %d) --> (%d, %d, %d)\n "
 // 			"start_x_block: %d --> end_x_block: %d, x_tile_size:%d, x_tile_size_bytes:%d, num_xblocks:%d\n"
 // 			, __func__, ShiftBits, DataShiftBits, gridSize[0], gridSize[1], gridSize[2], grid_xblocks, range.start[0], range.start[1], range.start[2],
@@ -5971,7 +5956,7 @@ void memReadGrid_test(ap_uint<MEM_DATA_WIDTH>* mem_in,
 
 	if (config.isContinous)
 	{
-//#ifdef DEBUG_LOG
+//#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| continuous read\n", __func__);
 //#endif
 // 		unsigned int offset = start_x + range.start[1] * grid_xblocks + range.start[2] * gridSize[1] * grid_xblocks;
@@ -5979,7 +5964,7 @@ void memReadGrid_test(ap_uint<MEM_DATA_WIDTH>* mem_in,
 // 		unsigned int size_z = range.end[2] - range.start[2];
 // 		unsigned int  size_bytes = x_tile_size_bytes * size_y * size_z;
 
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 		printf("|HLS DEBUG_LOG|%s| init offset:%d, size_bytes:%d\n", __func__, config.start_offset, config.total_size_bytes);
 #endif
 		mem2axis<MEM_DATA_WIDTH, AXIS_DATA_WIDTH>((ap_uint<MEM_DATA_WIDTH>* )(mem_in + config.start_offset), strm_out, config.total_size_bytes);
@@ -5991,7 +5976,7 @@ void memReadGrid_test(ap_uint<MEM_DATA_WIDTH>* mem_in,
 			for (unsigned short j = config.start_y; j < config.end_y; j++)
 			{
 				unsigned int offset = config.start_x + j * config.grid_xblocks + k * config.grid_size_y * config.grid_xblocks;
-    #ifdef DEBUG_LOG
+    #ifdef DEBUG_LOG_PRINT
 				printf("|HLS DEBUG_LOG|%s| reading. offset:%d, j:%d, k:%d\n"
 						, __func__,offset, j, k);
     #endif
@@ -5999,7 +5984,7 @@ void memReadGrid_test(ap_uint<MEM_DATA_WIDTH>* mem_in,
 			}
 		}
 	}
-#ifdef DEBUG_LOG
+#ifdef DEBUG_LOG_PRINT
 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
 			, __func__);
 #endif
