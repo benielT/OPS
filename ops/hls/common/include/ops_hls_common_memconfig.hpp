@@ -489,8 +489,8 @@ void genTileMetadata(
                 "MEM_DATA_WIDTH failed limit check");
 #endif
         constexpr unsigned short data_vector_factor = MEM_DATA_WIDTH / DATA_WIDTH;
-        const unsigned short ShiftBits = (unsigned short)LOG2(data_vector_factor);
-        const unsigned short DataShiftBits = (unsigned short)LOG2(DATA_WIDTH/8);
+        constexpr unsigned short ShiftBits = (unsigned short)LOG2(data_vector_factor);
+        constexpr unsigned short DataShiftBits = (unsigned short)LOG2(DATA_WIDTH/8);
         const unsigned short start_x = range.start[0] >> ShiftBits;
         const unsigned short end_x = (range.end[0] + data_vector_factor - 1) >> ShiftBits;
         const unsigned short grid_xblocks = gridSize[0] >> ShiftBits; //GridSize[0] has to be MEM_DATA_WIDTH aligned
@@ -579,8 +579,8 @@ void genTileMetadata(
     template <unsigned short MEM_DATA_WIDTH, unsigned short AXIS_DATA_WIDTH, unsigned short DATA_WIDTH=32>
     void genMemConfig(SizeType& gridSize, AccessRange& range, MemConfig& config, const unsigned short& batch_size = 1){
         constexpr unsigned short data_vector_factor = MEM_DATA_WIDTH / DATA_WIDTH;
-        unsigned short ShiftBits = (unsigned short)LOG2(data_vector_factor);
-        unsigned short DataShiftBits = (unsigned short)LOG2(DATA_WIDTH/8);
+        constexpr unsigned short ShiftBits = (unsigned short)LOG2(data_vector_factor);
+        constexpr unsigned short DataShiftBits = (unsigned short)LOG2(DATA_WIDTH/8);
         unsigned short start_x = range.start[0] >> ShiftBits;
         unsigned short end_x = (range.end[0] + data_vector_factor - 1) >> ShiftBits;
         unsigned short grid_xblocks = gridSize[0] >> ShiftBits; //GridSize[0] has to be MEM_DATA_WIDTH aligned
