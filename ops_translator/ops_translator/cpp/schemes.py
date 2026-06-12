@@ -350,16 +350,16 @@ class CppHLS(Scheme):
                 consts_map[kernel_idx] = kernel_consts
                 consts.extend(x for x in kernel_consts if x not in consts)
         
-        output = [(iterloop_datamover_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_datamover_inc_extension),
-                (iterLoop_datamover_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_datamover_src_extension)]
+        output = [(iterloop_datamover_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, isTiling = program.isTiling(), tiles=program.getTileSizes(), prog=program), self.iterloop_datamover_inc_extension),
+                (iterLoop_datamover_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, isTiling = program.isTiling(), tiles=program.getTileSizes(), prog=program), self.iterloop_datamover_src_extension)]
         
         if not isinstance(config["iter_par_factor"],list):
-                output.extend([(iterLoop_kernel_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_device_inc_extension),
-                (iterLoop_kernel_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, consts_map = consts_map, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_device_src_extension)])    
+                output.extend([(iterLoop_kernel_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, isTiling = program.isTiling(), tiles=program.getTileSizes(), prog=program), self.iterloop_device_inc_extension),
+                (iterLoop_kernel_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, consts_map = consts_map, isTiling = program.isTiling(), tiles=program.getTileSizes(), prog=program), self.iterloop_device_src_extension)])    
         else:
             for iter_par_fact_id in range(len(config["iter_par_factor"])):
-                output.extend([(iterLoop_kernel_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, isTiling = program.isTiling(), tiles=program.getTileSizes(), slr_iter_par_fact = iter_par_fact_id), self.iterloop_device_inc_extension),
-                (iterLoop_kernel_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, consts_map = consts_map, isTiling = program.isTiling(), tiles=program.getTileSizes(), slr_iter_par_fact = iter_par_fact_id), self.iterloop_device_src_extension)])    
+                output.extend([(iterLoop_kernel_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, isTiling = program.isTiling(), tiles=program.getTileSizes(), slr_iter_par_fact = iter_par_fact_id, prog=program), self.iterloop_device_inc_extension),
+                (iterLoop_kernel_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, consts_map = consts_map, isTiling = program.isTiling(), tiles=program.getTileSizes(), slr_iter_par_fact = iter_par_fact_id, prog=program), self.iterloop_device_src_extension)])    
             
         return output
     
@@ -461,7 +461,8 @@ class CppHLS(Scheme):
         self,
         env: Environment,
         config: dict,
-        app: Application
+        app: Application,
+        prog: Program
     ) -> Tuple[str, str]:
         template = env.get_template(str(self.host_config_template))     
         
@@ -471,13 +472,12 @@ class CppHLS(Scheme):
         else:
             placer = None
             
-        return (
-            template.render(
+        return (template.render(
                 config=config,
                 app=app,
                 FPGABankPlacer = placer,
-            ), self.host_config_extension
-        ) 
+                prog = prog
+            ), self.host_config_extension) 
     
     def genStencilDecl(
         self,

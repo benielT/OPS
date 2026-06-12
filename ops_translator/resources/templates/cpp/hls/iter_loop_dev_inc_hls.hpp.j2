@@ -6,6 +6,13 @@ arg{{arg.id}}_axis_{{"in" if (arg is ops_read) else ("out" if (arg is ops_write)
 {% macro axis_name_t2(arg, suffix) -%}
 arg{{arg.id}}_axis_{{suffix}}
 {%- endmacro -%}
+{% macro axis_name_t3(arg, infix, suffix=none) -%}
+    {%- if arg is not ops_rw and suffix==none -%}
+arg{{arg.id}}_{{infix}}_axis_{{"in" if (arg is ops_read) else ("out" if (arg is ops_write))}}
+    {%- else -%}
+arg{{arg.id}}_{{infix}}_axis_{{suffix}}
+    {%- endif -%}
+{%- endmacro -%}
 {% macro hls_name(arg) -%}
     {%- if arg is not ops_rw -%}
 arg{{arg.id}}_hls_stream_{{"in" if (arg is ops_read) else ("out" if (arg is ops_write))}}
@@ -122,11 +129,27 @@ extern "C" void kernel_outerloop_{{ilh.id}}
     {% endfor %}
     {% for arg in ilh.joint_args|ops_dat %}
     //{{ilh.dats[arg.dat_id][0].ptr}}
+        {% set first_loop_last = loop.last %}
         {% if arg is not ops_rw %}
+            {% if prog.is_interleave() %}
+                {% for tile in range(config["tile_banks"]) %}
+        hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name_t3(arg,tile)-}}{{"," if not (loop.last and first_loop_last)}}
+                {% endfor %}
+            {% else %}
         hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name(arg)-}}{{"," if not loop.last}}
+            {% endif %}
         {% else %}
+            {% if prog.is_interleave() %}
+                {% for tile in range(config["tile_banks"]) %}
+       hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name_t3(arg, tile, "in")-}},
+                {% endfor %}
+                {% for tile in range(config["tile_banks"]) %}
+       hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name_t3(arg, tile, "out")-}}{{"," if not (loop.last and first_loop_last)}}
+                {% endfor %}
+            {% else %}
         hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name_t2(arg, "in")-}},
         hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name_t2(arg, "out")-}}{{"," if not loop.last}}
+            {% endif %}
         {% endif %}
     {% endfor %}
 )

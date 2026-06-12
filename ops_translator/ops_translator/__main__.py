@@ -498,7 +498,7 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
             print(f"Generated Device common_config.hpp")
 
     #Generate host linking config cfg file
-    source, extension = scheme.genConfigHost(env, target_config, app)
+    source, extension = scheme.genConfigHost(env, target_config, app, app.programs[0])
     new_source = re.sub(r'\n\s*\n', '\n\n', source)
     
     # From output files path

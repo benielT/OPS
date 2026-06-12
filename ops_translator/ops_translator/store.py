@@ -185,6 +185,11 @@ class Program:
         logging.warning(f"couldn't find stencil name: {name_ptr}\n")
         return None
     
+    def is_interleave(self) -> bool:
+        if self.tiling and self.tiling_type == TilingType.TILE_TYPE_INTERLEAVE:
+            return True
+        return False
+    
     def __str__(self) -> str:
         outString = "\nprogram path=" + str(self.path)  + ",\n"
         outString += "ndim=" + str(self.ndim) + ",\n"

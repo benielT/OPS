@@ -11,14 +11,32 @@ nk=kernel_outerloop_{{ilh.id}}{% if is_slr_iter_par %}_{{slr_id}}{% endif %}:1:k
 {% for ilh, program in app.uniqueOuterLoops() %}
     {% for arg in ilh.joint_args|ops_dat %}
         {% if arg is ops_read or arg is ops_rw %}
+            {% if prog.is_interleave() %}
+                {% for i in range(config["tile_banks"]) %}
+stream_connect=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_out:kernel_outerloop_inst_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                {% endfor %}
+            {% else %}
 stream_connect=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_out:kernel_outerloop_inst_{{ilh.id}}_1.arg{{arg.id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+            {% endif %}
         {% endif %}
         {% if arg is ops_write or arg is ops_rw %}
             {% for slr_id in range(config["SLR_count"]) %}
                 {% if loop.last %}
+                    {% if prog.is_interleave() %}
+                        {% for i in range(config["tile_banks"]) %}
+stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_{{i}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                        {% endfor %}
+                    {% else %}
 stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                    {% endif %}
                 {% else %}
+                    {% if prog.is_interleave() %}
+                        {% for i in range(config["tile_banks"]) %}
+stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_{{i}}_axis_out:kernel_outerloop_inst_{{ilh.id}}_{{slr_id+2}}.arg{{ilh.getSwapArg(arg).id}}_{{i}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                        {% endfor %}
+                    {% else %}
 stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_out:kernel_outerloop_inst_{{ilh.id}}_{{slr_id+2}}.arg{{ilh.getSwapArg(arg).id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                    {% endif %}
                 {% endif %}
             {% endfor %}
         {% endif %}

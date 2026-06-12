@@ -9,6 +9,13 @@ arg{{arg.id}}_axis_{{"out" if (arg is ops_read) else ("in" if (arg is ops_write)
 {% macro axis_name_t2(arg, suffix) -%}
 arg{{arg.id}}_axis_{{suffix}}
 {%- endmacro -%}
+{% macro axis_name_t3(arg, infix, suffix=none) -%}
+    {%- if arg is not ops_rw and suffix==none -%}
+arg{{arg.id}}_{{infix}}_axis_{{"out" if (arg is ops_read) else ("in" if (arg is ops_write))}}
+    {%- else -%}
+arg{{arg.id}}_{{infix}}_axis_{{suffix}}
+    {%- endif -%}
+{%- endmacro -%}
 {% macro axis_data_width(arg) -%}
     {%- if ilh.dats[arg.dat_id][0].isMultiDim() -%}
 multidim_axis_data_width_{{ilh.id}}_{{ilh.dats[arg.dat_id][0].ptr}}
@@ -50,6 +57,60 @@ memconfig
 {{tiles[idx]}}
     {%- endif -%}
 {%- endmacro -%}
+{% macro axis_parameter_set() %}
+    {% for arg in ilh.joint_args|ops_dat %}
+    //{{ilh.dats[arg.dat_id][0].ptr}}
+        {% set first_loop_last = loop.last %}
+        {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
+            {% if prog.is_interleave() %}
+                {% for tile in range(config["tile_banks"])%}
+        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{axis_name_t3(arg, tile)-}}{{"," if not (loop.last and first_loop_last)}}
+                {% endfor %}
+            {% else %}
+        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{axis_name(arg)-}}{{"," if not loop.last}}
+            {% endif %}
+        {% else %}
+            {% if prog.is_interleave() %}
+                {% for tile in range(config["tile_banks"])%}
+        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{axis_name_t3(arg, tile, "out")-}},
+                {% endfor %}
+                {% for tile in range(config["tile_banks"])%}
+        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{axis_name_t3(arg, tile, "in")-}}{{"," if not (loop.last and first_loop_last)}}
+                {% endfor %}
+            {% else %}
+        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{axis_name_t2(arg, "out")-}},
+        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{axis_name_t2(arg, "in")-}}{{"," if not loop.last}}
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+{% endmacro %}
+{% macro axis_argument_set() %}
+        {% for arg in ilh.joint_args|ops_dat %}
+            {% set first_loop_last = loop.last %}
+            {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
+                {% if prog.is_interleave() %}
+                    {% for tile in range(config["tile_banks"])%}
+                {{axis_name_t3(arg, tile)-}}{{"," if not (loop.last and first_loop_last)}}
+                    {% endfor %}
+                {% else %}
+                {{axis_name(arg)-}}{{"," if not loop.last}}
+                {% endif %}
+            {% else %}
+                {% if prog.is_interleave() %}
+                    {% for tile in range(config["tile_banks"]) %}
+                {{axis_name_t3(arg, tile, "out")-}},
+                    {% endfor %}
+                    {% for tile in range(config["tile_banks"]) %}
+                {{axis_name_t3(arg, tile, "in")-}}{{"," if not loop.last}}
+                    {% endfor %}
+                {% else %}
+                {{axis_name_t2(arg, "out")-}},
+                {{axis_name_t2(arg, "in")-}}{{"," if not loop.last}}
+                {% endif %}
+            {% endif %}
+        {% endfor %}
+{% endmacro %}
+
 {% block header_block %}
 
 #pragma once
@@ -123,15 +184,7 @@ extern "C" void datamover_outerloop_{{ilh.id}}(
     {% endif %}
         {#% endif %#}
     {% endfor %}
-    {% for arg in ilh.joint_args|ops_dat %}
-    //{{ilh.dats[arg.dat_id][0].ptr}}
-        {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
-        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{axis_name(arg)-}}{{"," if not loop.last}}
-        {% else %}
-        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{axis_name_t2(arg, "out")-}},
-        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{axis_name_t2(arg, "in")-}}{{"," if not loop.last}}
-        {% endif %}
-    {% endfor %}
+    {{axis_parameter_set()}}
     )
 {% endblock %}
 {% block datamover_body %}
