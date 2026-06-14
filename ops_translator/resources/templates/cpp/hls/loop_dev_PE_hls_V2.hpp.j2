@@ -449,24 +449,27 @@ public:
                 {% if buffer.buffer_type == ops.BufferType.LINE_BUFF %}
                     {% if buffer.is_read_write_aligned %}
             unsigned short {{stencil_name}}_{{buffer_read_idx(buffer)}} = 0;
-            const short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len = {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} - 1;
+            const short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len_init = {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} - 1;
                     {% else %}
             unsigned short {{stencil_name}}_{{buffer_read_idx(buffer)}} = 0;
             constexpr short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff = {{buffer.read_point.x - buffer.write_point.x}};
-            const short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len = {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} - 1  + {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff;
+            // constexpr short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff = {{((buffer.read_point.x - buffer.write_point.x)/config["vector_factor"])|int}};
+            const short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len_init = {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} - 1  + {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff;
                     {% endif %}
                 {% else %}
                     {% if buffer.is_read_write_aligned %}
             unsigned short {{stencil_name}}_{{buffer_read_idx(buffer)}} = 0;
-            const short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len = plane_diff;
+            const short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len_init = plane_diff;
                     {% else %}
             unsigned short {{stencil_name}}_{{buffer_read_idx(buffer)}} = 0;
             constexpr short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff_x = {{(buffer.read_point - buffer.write_point).x}};
+            // constexpr short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff_x = {{((buffer.read_point.x - buffer.write_point.x)/config["vector_factor"])|int}};
             constexpr short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff_y = {{(buffer.read_point - buffer.write_point).y}};
             const short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff = {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff_y * {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}} + {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff_x;
-            const short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len = plane_diff  + {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff;
+            const short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len_init = plane_diff  + {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_diff;
                     {% endif %}
                 {% endif %}
+            const unsigned short {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len = {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len_init < 0 ? 0 : {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len_init;
             {% endfor %}
         {% endfor %}
 
@@ -688,7 +691,7 @@ public:
                 true_tile_size_x,
                 {% endif %}
             {% elif lh.ndim == 3 %}
-                stencilConfig.tile_size[0], stencilConfig.tile_size[1], stencilConfig.tile_size[1],
+                stencilConfig.tile_size[0], stencilConfig.tile_size[1], stencilConfig.tile_size[2],
             {% endif %}
         {% else %}
             {% if lh.ndim == 1 %}
@@ -729,6 +732,9 @@ public:
             {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
                         "{{stencil_name}}_{{buffer_read_idx(buffer)}}: %d, "\
             {% endfor %}
+            {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
+                        "{{stencil_name}}_{{buffer_read_idx(buffer)}}_cont_buf_len: %d, "\
+            {% endfor %}
         {% endfor %}
                         "reg_itr(%d)\n", m_PEId, {%if prog.is_interleave() %}SUB_TILE_ID, {% endif %} i, 
         {% if lh.ndim > 1 %}
@@ -740,6 +746,9 @@ public:
         {% for stencil_name in lh.get_unique_read_stencil_names() %}
             {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
                         {{stencil_name}}_{{buffer_read_idx(buffer)}}, 
+            {% endfor %}
+            {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
+                        {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len, 
             {% endfor %}
         {% endfor %}
                         reg_itr);
@@ -828,19 +837,22 @@ public:
         {% endfor %}
 
     #ifdef DEBUG_LOG
-                    printf("[DEBUG][INTERNAL][{{lh.kernel}}_PE_%d{%if prog.is_interleave() %}:%d{% endif %}] loop params after update i(%d), "\
+                    printf("[DEBUG][INTERNAL][{{lh.kernel}}_PE_%d{%if prog.is_interleave() %}:%d{% endif %}] loop params after update i: %d, "\
                     {% if lh.ndim > 1 %}
-                                    "j(%d), "\
+                                    "j: %d, "\
                     {% endif %}
                     {% if lh.ndim > 2 %}
-                                    "k(%d), "\
+                                    "k: %d, "\
                     {% endif %}
                     {% for stencil_name in lh.get_unique_read_stencil_names() %}
                         {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
                                     "{{stencil_name}}_{{buffer_read_idx(buffer)}}(%d), "\
                         {% endfor %}
+                        {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
+                                    "{{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len: %d, "\
+                        {% endfor %}
                     {% endfor %}
-                                    "reg_itr(%d)\n", m_PEId, {%if prog.is_interleave() %}SUB_TILE_ID, {% endif %}i, 
+                                    "reg_itr: %d\n", m_PEId, {%if prog.is_interleave() %}SUB_TILE_ID, {% endif %}i, 
                     {% if lh.ndim > 1 %}
                                     j,
                     {% endif %}
@@ -850,6 +862,9 @@ public:
                     {% for stencil_name in lh.get_unique_read_stencil_names() %}
                         {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
                                     {{stencil_name}}_{{buffer_read_idx(buffer)}},  
+                        {% endfor %}
+                        {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
+                                    {{stencil_name}}_{{buffer_read_idx(buffer)}}_const_buf_len,  
                         {% endfor %}
                     {% endfor %}
                                     reg_itr);

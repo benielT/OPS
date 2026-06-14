@@ -59,7 +59,7 @@ static void joint_PE_outerloop_{{ilh.id}}(const unsigned short PEId, const ops::
     #pragma HLS STREAM variable = arg{{loop.index0}}_{{lh.kernel}}_subtile_stream depth = 10
             {% endfor %}
             {% for arg in lh.args| ops_dat | ops_read_or_rw %}
-    ops::hls::stream2interleave<{{axis_data_width(arg)}}, {{config["data_width"]}}, {{config["tile_banks"]}}, {{((lh.read_stencil.stencil_size.x - 1)/2)|int}}>({{ilh.PE_args[loop_idx][arg.id]}}, arg{{loop.index0}}_{{lh.kernel}}_subtile_stream, num_pkts);
+    ops::hls::stream2interleave<{{axis_data_width(arg)}}, {{config["data_width"]}}, {{config["tile_banks"]}}, {{((lh.read_stencil.stencil_size.x - 1)/2)|int}}>({{ilh.PE_args[loop_idx][arg.id]}}, arg{{arg.id}}_{{lh.kernel}}_subtile_stream, num_pkts);
             {% endfor %}
             {% for subtile in range((config["tile_banks"]/2)|int) %}
     kernel_{{lh.kernel}}_PE<{{(config["tile_banks"]/2)|int}}, {{subtile}}>(PEId, stencilConfig,
@@ -85,7 +85,7 @@ static void joint_PE_outerloop_{{ilh.id}}(const unsigned short PEId, const ops::
             );
             {% endfor %}
             {% for arg in lh.args| ops_dat | ops_write_or_rw %}
-    ops::hls::interleave2stream<{{axis_data_width(arg)}}, {{config["data_width"]}}, {{config["tile_banks"]}}, {{((lh.read_stencil.stencil_size.x - 1)/2)|int}}>(arg{{loop.index0}}_{{lh.kernel}}_subtile_stream, {{ilh.PE_args[loop_idx][arg.id]}}, num_pkts);
+    ops::hls::interleave2stream<{{axis_data_width(arg)}}, {{config["data_width"]}}, {{config["tile_banks"]}}, {{((lh.read_stencil.stencil_size.x - 1)/2)|int}}>(arg{{arg.id}}_{{lh.kernel}}_subtile_stream, {{ilh.PE_args[loop_idx][arg.id]}}, num_pkts);
             {% endfor %}
         {% else %}
     kernel_{{lh.kernel}}_PE(PEId, stencilConfig,
