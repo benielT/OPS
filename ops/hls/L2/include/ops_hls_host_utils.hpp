@@ -542,6 +542,10 @@ void printGrid3D(T* p_grid, ops::hls::GridPropertyCoreV2& gridProperty, std::str
 	std::cout << " [DEBUG] grid values: " << prompt << std::endl;
 	std::cout << "----------------------------------------------" << std::endl;
 
+#if defined(OPS_HLS_TILE_INTERLEAVE)
+	unsigned short alt_bank_counter = 0;
+	unsigned short bank_data_counter = 0;
+#endif 
 	for (int k = 0; k < gridProperty.grid_size[2]; k++)
 	{
 		std::cout << "----------- plane: " << k <<"----------" << std::endl;
@@ -551,8 +555,27 @@ void printGrid3D(T* p_grid, ops::hls::GridPropertyCoreV2& gridProperty, std::str
 			for (int i = 0; i < gridProperty.grid_size[0]; i++)
 			{
 				int index = i + j * gridProperty.grid_size[0] + k * gridProperty.grid_size[0] * gridProperty.grid_size[1];
+#if defined(OPS_HLS_TILE_INTERLEAVE)
+				if (bank_data_counter == 0)
+					std::cout << std::setw(4) << "|b" << alt_bank_counter;
+#endif
 				std::cout << std::setw(12) << p_grid[index];
+#if defined(OPS_HLS_TILE_INTERLEAVE)
+				bank_data_counter++;
+				
+				if (bank_data_counter == mem_vector_factor) {
+					alt_bank_counter++;
+					bank_data_counter = 0;
+				}
+
+				if (alt_bank_counter == OPS_HLS_TILE_BANKS) {
+					alt_bank_counter = 0;
+				}
+#endif
 			}
+#if defined(OPS_HLS_TILE_INTERLEAVE)
+				std::cout << "|";
+#endif
 			std::cout << std::endl;
 		}
 	}

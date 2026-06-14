@@ -168,9 +168,9 @@ public:
             alt_buffer_sizes[bank] = row_size * alt_buffer_row_counts[bank];
             alt_buffer_sizes[bank] *= originalProperty.batch_size;
     #endif
-    #ifdef DEBUG_LOG
-            printf("[DEBUG]| %s | Bank %d: %zu bank_buffer_size\n", __func__, bank, alt_buffer_sizes[bank]);
-    #endif
+    // #ifdef DEBUG_LOG
+    //         printf("[DEBUG]| %s | Bank %d: %zu bank_buffer_size\n", __func__, bank, alt_buffer_sizes[bank]);
+    // #endif
         }
         return alt_buffer_sizes;
     }

@@ -58,7 +58,7 @@ static T register_it(T x){
 #define INT_SUM(...) (add(NUMARGS(int, __VA_ARGS__), __VA_ARGS__))
 #define INT_MUL(...) (multiply(NUMARGS(int, __VA_ARGS__), __VA_ARGS__))
 
-// static inline unsigned short log2_int(unsigned int num) {
+// constexpr unsigned short log2_int(unsigned int num) {
 //     unsigned short res = 0;
 //     while (num > 1) {
 //         num >>= 1;
@@ -67,11 +67,36 @@ static T register_it(T x){
 //     return res;
 // }
 
+// #define LOG2(num) (log2_int(num))
+
+
+// This fails at synthesis due to HLS compiler unable to use it only on compilation stage
 constexpr unsigned short log2_int(unsigned int num) {
     return (num <= 1) ? 0: 1 + log2_int(num >> 1);
 }
 
-#define LOG2(num) (log2_int(num))
+#define LOG2_NON_CONSTEXPR(num) (log2_int(num))
+
+// this implementation is template metaprogramming forcing on compile time
+template <unsigned int N>
+struct Log2 {
+    static const unsigned short value = 1 + Log2<N / 2>::value;
+};
+
+// Base case for 1
+template <>
+struct Log2<1> {
+    static const unsigned short value = 0;
+};
+
+// Base case for 0 (to prevent infinite loops on invalid input)
+template <>
+struct Log2<0> {
+    static const unsigned short value = 0; 
+};
+
+#define LOG2(num) (Log2<num>::value)
+
 
 
 static inline unsigned int pow2_int(unsigned int num) {

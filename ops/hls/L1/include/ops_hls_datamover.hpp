@@ -1359,6 +1359,18 @@ void interleave2stream(::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_S
 	constexpr unsigned short MSB_OUT = MEM_DATA_WIDTH - 1;
 	constexpr unsigned short NUM_STREAMS_BY_2 = NUM_STREAMS >> 1;
 
+#ifdef DEBUG_LOG_PRINT
+    printf("==== DATAMOVER INTERLEAVE2STREAM INITIAL PARAMETERS ====\n");
+    printf("MEM_DATA_WIDTH: %u\n", (unsigned int)MEM_DATA_WIDTH);
+    printf("DATA_WIDTH: %u\n", (unsigned int)DATA_WIDTH);
+    printf("OVERLAP_SIZE: %u\n", (unsigned int)OVERLAP_SIZE);
+    printf("NUM_STREAMS: %u\n", (unsigned int)NUM_STREAMS);
+    printf("REALISED_OVERLAP_SIZE: %u\n", (unsigned int)REALISED_OVERLAP_SIZE);
+    printf("MEM_DATA_WIDTH_IN: %u\n", (unsigned int)MEM_DATA_WIDTH_IN);
+    printf("num_pkts: %u\n", num_pkts);
+    printf("========================================================\n");
+#endif
+
 	ap_uint<MEM_DATA_WIDTH_IN> tmp_in[NUM_STREAMS];
 	#pragma HLS ARRAY_PARTITION variable = tmp_in dim=0 complete
 	ap_uint<MEM_DATA_WIDTH> tmp_out[NUM_STREAMS];
@@ -1372,6 +1384,20 @@ void interleave2stream(::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_S
 		{
 			#pragma HLS UNROLL
 			tmp_in[n] = register_it(in_stream[n].read());
+
+#ifdef DEBUG_LOG_PRINT
+            printf("==== INTERLEAVE2STREAM READ ====\n");
+            printf("Stream[%u], Iteration[%u]\n", n, itr);
+            printf("Values (float): (");
+            for (unsigned int j = 0; j < MEM_DATA_WIDTH_IN / (DEBUG_LOG_SIZE_OF * 8); j++) {
+                DataConv conv;
+                conv.i = tmp_in[n].range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+                if (j > 0) printf(", ");
+                printf("%f", conv.f);
+            }
+            printf(")\n");
+            printf("================================\n");
+#endif
 		}
 
 		for (unsigned short n = 0; n < NUM_STREAMS_BY_2; n++)
@@ -1385,6 +1411,20 @@ void interleave2stream(::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_S
 		{
 			#pragma HLS UNROLL
 			out_stream[n].write(tmp_out[n]);
+
+#ifdef DEBUG_LOG_PRINT
+            printf("==== INTERLEAVE2STREAM WRITE ====\n");
+            printf("Stream[%u], Iteration[%u]\n", n, itr);
+            printf("Values (float): (");
+            for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
+                DataConv conv;
+                conv.i = tmp_out[n].range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+                if (j > 0) printf(", ");
+                printf("%f", conv.f);
+            }
+            printf(")\n");
+            printf("=================================\n");
+#endif
 		}
 	}
 }
