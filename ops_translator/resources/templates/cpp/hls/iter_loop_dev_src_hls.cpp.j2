@@ -42,7 +42,7 @@ static void joint_PE_outerloop_{{ilh.id}}(const unsigned short PEId, const ops::
         const {{const.typ}}& {{const.ptr}}{{", " if not loop.last }}
     {% endfor %})
 {
-    {% if ilh.get_active_df_graph().getAllLoopNodes()|length > 1 %}
+    {% if ilh.get_active_df_graph().getAllLoopNodes()|length > 1 or prog.is_interleave() %}
 #pragma HLS DATAFLOW
     {% endif %}
     {% for stream_interconnector, dat_id in ilh.interconnectors %}
