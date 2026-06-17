@@ -1903,6 +1903,12 @@ static void readConfigStreamGenerator(const ap_uint<160>& command, ::hls::stream
     ap_uint<16> stride_z = command.range(143,128);
     ap_uint<16> size_z = command.range(159,144);
 
+#ifdef DEBUG_LOG_PRINT
+	printf("|HLS DEBUG_LOG|%s| command parsed. offset_x:%llu, size_x:%u, stride_y:%u, size_y:%u, stride_z:%u, size_z:%u\n", 
+			__func__, (unsigned long long)offset_x, (unsigned int)size_x, (unsigned int)stride_y, 
+			(unsigned int)size_y, (unsigned int)stride_z, (unsigned int)size_z);
+#endif
+
 	const unsigned short size_x_div_by_banks_floor = size_x >> NUM_BANKS_SHIFT;
 	const unsigned int size_x_mod_num_banks = size_x & BANK_MASK;
 
@@ -1921,6 +1927,12 @@ static void readConfigStreamGenerator(const ap_uint<160>& command, ::hls::stream
             // Optimized wrap-around calculation
             const unsigned int banks_upper_limit = (starting_bank + size_x_mod_num_banks) & BANK_MASK;  //Equivalent to (...) % NUM_BANKS
             const bool is_t1_or_t2 = banks_upper_limit < starting_bank;
+
+#ifdef DEBUG_LOG_PRINT
+			printf("|HLS DEBUG_LOG|%s| z:%u, y:%u, abs_offset:%llu, bank_offset:%u, starting_bank:%u\n", 
+					__func__, (unsigned int)z, (unsigned int)y, (unsigned long long)abs_offset, 
+					(unsigned int)bank_offset, (unsigned int)starting_bank);
+#endif
 
             for (unsigned int i = 0; i < NUM_BANKS; i++)
             {
@@ -1944,6 +1956,11 @@ static void readConfigStreamGenerator(const ap_uint<160>& command, ::hls::stream
                 ap_uint<48> b_command;
                 b_command.range(31,0) = current_bank_offset;
                 b_command.range(47,32) = b_size_x;
+
+#ifdef DEBUG_LOG_PRINT
+				printf("|HLS DEBUG_LOG|%s| bank_idx:%u, current_bank_offset:%u, b_size_x:%u\n", 
+						__func__, (unsigned int)i, (unsigned int)current_bank_offset, (unsigned int)b_size_x);
+#endif
 
                 strms[i] << b_command;
             }
@@ -2003,6 +2020,12 @@ static void writeConfigStreamGenerator(const ap_uint<192>& command, ::hls::strea
     ap_uint<16> avoid_x = command.range(175,160);
     ap_uint<16> avoid_y = command.range(191,176);
 
+#ifdef DEBUG_LOG_PRINT
+	printf("|HLS DEBUG_LOG|%s| command parsed. offset_x:%llu, size_x:%u, stride_y:%u, size_y:%u, stride_z:%u, size_z:%u, avoid_x:%u, avoid_y:%u\n", 
+			__func__, (unsigned long long)offset_x, (unsigned int)size_x, (unsigned int)stride_y, 
+			(unsigned int)size_y, (unsigned int)stride_z, (unsigned int)size_z, (unsigned int)avoid_x, (unsigned int)avoid_y);
+#endif
+
     const unsigned short avoid_x_per_bank = avoid_x >> NUM_BANKS_SHIFT;
     const ap_uint<3> avoid_x_mod_banks = avoid_x & BANK_MASK;
 
@@ -2021,6 +2044,11 @@ static void writeConfigStreamGenerator(const ap_uint<192>& command, ::hls::strea
             const unsigned int bank_offset = abs_offset >> NUM_BANKS_SHIFT;
             const unsigned int starting_bank = abs_offset & BANK_MASK; //Equivalent to abs_offset % NUM_BANKS
             
+#ifdef DEBUG_LOG_PRINT
+			printf("|HLS DEBUG_LOG|%s| z:%u, y:%u, abs_offset:%llu, bank_offset:%u, starting_bank:%u\n", 
+					__func__, (unsigned int)z, (unsigned int)y, (unsigned long long)abs_offset, 
+					(unsigned int)bank_offset, (unsigned int)starting_bank);
+#endif
             // Optimized wrap-around calculation
             const unsigned int banks_upper_limit = (starting_bank + size_x_mod_num_banks) & BANK_MASK;  //Equivalent to (...) % NUM_BANKS
             const bool is_t1_or_t2 = banks_upper_limit < starting_bank;
@@ -2066,6 +2094,10 @@ static void writeConfigStreamGenerator(const ap_uint<192>& command, ::hls::strea
                 // Fixed out-of-bounds range mapping (64 is invalid for ap_uint<64>)
                 b_command.range(63,48) = b_avoid_x; 
 
+#ifdef DEBUG_LOG_PRINT
+				printf("|HLS DEBUG_LOG|%s| bank_idx:%u, current_bank_offset:%u, b_size_x:%u, b_avoid_x:%u\n", 
+						__func__, (unsigned int)i, (unsigned int)current_bank_offset, (unsigned int)b_size_x, (unsigned int)b_avoid_x);
+#endif
                 strms[i] << b_command;
             }
         }
@@ -2096,7 +2128,11 @@ static void writeConfigStreamGenerator(const ap_uint<192>& command, ::hls::strea
  */
 template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
 static void stridedTileMem2streamV2(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uint<48>>& strm_command,
-		::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, unsigned short size_y, unsigned short size_z=1)
+		::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, unsigned short size_y, unsigned short size_z=1
+#ifdef DEBUG_LOG_PRINT
+		, const char* print_prompt = ""
+#endif	
+	)
 {
 	for (unsigned short z = 0; z < size_z; z++)
 	{
@@ -2107,7 +2143,7 @@ static void stridedTileMem2streamV2(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stre
 			unsigned int bank_offset = command.range(31,0);
 			unsigned short size_x = command.range(47,32);
 			#ifdef DEBUG_LOG_PRINT
-			    printf("|HLS DEBUG_LOG|%s| reading tile from mem to stream, bank_offset:%d, size_x:%d \n", __func__, bank_offset, size_x);
+			    printf("|HLS DEBUG_LOG|%s|%s| reading tile from mem to stream, bank_offset:%d, size_x:%d \n", __func__, print_prompt, bank_offset, size_x);
 			#endif
 			ops::hls::mem2stream<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(mem_in + bank_offset, strm_out, size_x);
 
@@ -2164,7 +2200,11 @@ static void stridedTileMem2streamV2(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stre
  * @see generated by the `writeConfigStreamGenerator` utility.
  */
 template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-static void stridedTileStream2memWithAvoidV2(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, ap_uint<MEM_DATA_WIDTH>* out, ::hls::stream<ap_uint<64>>& strm_command, unsigned short size_y, unsigned short size_z)
+static void stridedTileStream2memWithAvoidV2(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, ap_uint<MEM_DATA_WIDTH>* out, ::hls::stream<ap_uint<64>>& strm_command, unsigned short size_y, unsigned short size_z=1
+#ifdef DEBUG_LOG_PRINT
+		, const char* print_prompt = ""
+#endif	
+)
 {
     for (unsigned short z = 0; z < size_z; z++)
     {
@@ -2176,7 +2216,7 @@ static void stridedTileStream2memWithAvoidV2(::hls::stream<ap_uint<MEM_DATA_WIDT
             unsigned short size_x = command.range(47,32);
             unsigned short avoid_x = command.range(63, 48);
             #ifdef DEBUG_LOG_PRINT
-                printf("|HLS DEBUG_LOG|%s| reading tile from mem to stream, bank_offset:%d, size_x:%d \n", __func__, bank_offset, size_x);
+                printf("|HLS DEBUG_LOG|%s|%s| reading tile from mem to stream, bank_offset:%d, size_x:%d \n", __func__, print_prompt, bank_offset, size_x);
             #endif
             ops::hls::stream2memWithAvoid<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(out + bank_offset, strm_in, size_x, avoid_x);
         }
