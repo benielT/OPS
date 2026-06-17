@@ -56,6 +56,7 @@ class CppHLS(Scheme):
     iterloop_datamover_src_template = Path("cpp/hls/iter_loop_datamover_dev_src_hls.cpp.j2")
     iterloop_device_inc_template = Path("cpp/hls/iter_loop_dev_inc_hls.hpp.j2")
     iterloop_device_src_template = Path("cpp/hls/iter_loop_dev_src_hls.cpp.j2")
+    iterloop_repeater_src_template = Path("cpp/hls/repeater.cpp.j2")
     iterloop_host_kernelwrap_template = Path("cpp/hls/iter_loop_host_kernelwrap.hpp.j2")
     
     stencil_device_template = Path("cpp/hls/stencil_dev_hls.hpp.j2")
@@ -71,6 +72,7 @@ class CppHLS(Scheme):
     iterloop_device_src_extension = "cpp"
     iterloop_datamover_inc_extension = "hpp"
     iterloop_datamover_src_extension = "cpp"
+    iterloop_repeater_src_extension = "cpp"
     iterloop_host_kernelwrap_extension = "hpp"
     loop_device_PE_extension = "hpp"
     stencil_device_extension = "hpp"
@@ -322,6 +324,22 @@ class CppHLS(Scheme):
             
             logging.debug(f"iterloop after optimization : {iterLoop}")
             
+    def genIterLoopRepeater(
+        self,
+        env: Environment,
+        iterLoop: ops.IterLoop,
+        program: Program,
+        app: Application,
+        config: dict
+    ) -> List[Tuple[str, str]]:
+        iterloop_repeater_src_template = env.get_template(str(self.iterloop_repeater_src_template))
+        
+        output = [(iterloop_repeater_src_template.render(
+                ilh=iterLoop,
+                config=config), self.iterloop_repeater_src_extension)]
+        return output
+        
+
     def genIterLoopDevice(
         self,
         env: Environment,
