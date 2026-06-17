@@ -422,7 +422,12 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
                 {% if prog.is_interleave() %}
         ops::hls::readConfigStreamGenerator<{{config["tile_banks"]}}, {{II(arg)}}>(short_command, arg{{arg.id}}_read_command_strm);
                     {% for i in range(config["tile_banks"]) %}
-        ops::hls::stridedTileMem2streamV2<mem_data_width, {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b{{i}}, arg{{arg.id}}_read_command_strm[{{i}}], arg{{arg.id}}_read_mem_strm[{{i}}], size_y{%if ndim == 3%}, size_z{%endif%});
+        ops::hls::stridedTileMem2streamV2<mem_data_width, {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b{{i}}, arg{{arg.id}}_read_command_strm[{{i}}], arg{{arg.id}}_read_mem_strm[{{i}}], size_y{%if ndim == 3%}, size_z{% endif %} 
+
+#ifdef DEBUG_LOG 
+        , "bank_{{i}}"
+#endif
+        );
                     {% endfor %}
         ops::hls::redirect<mem_data_width, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_read_mem_strm, arg{{arg.id}}_read_mem_redirect_strm, short_command);          
                 {% else %}
@@ -467,12 +472,14 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm[{{i}}], {% if arg is ops_read %}{{axis_name_t3(arg, i)}}{% else %}{{axis_name_t3(arg, i, "out")}}{% endif %}, small_tile_pkts);
                 {% endfor %}
             {% else %}
-        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm, {% if arg is ops_read %}{{axis_name(arg)}}{% else %}{{axis_name_t2(arg, "out")}}{% endif %}, {%if isTiling %}{% if prog.is_interleave() %}is_small_tile ? num_pkts >> 1 : num_pkts{%else%}num_pkts{%endif%}{% else %}{{num_pkts(arg)}}{% endif %});
+        {#TODO: small tile case - need to be fixed
+        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm, {% if arg is ops_read %}{{axis_name(arg)}}{% else %}{{axis_name_t2(arg, "out")}}{% endif %}, {%if isTiling %}{% if prog.is_interleave() %}is_small_tile ? num_pkts >> 1 : num_pkts{%else%}num_pkts{%endif%}{% else %}{{num_pkts(arg)}}{% endif %});#}
+        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm, {% if arg is ops_read %}{{axis_name(arg)}}{% else %}{{axis_name_t2(arg, "out")}}{% endif %}, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
             {% endif %}
         {% else %}
-            {% if prog.is_interleave() %}}
+            {% if prog.is_interleave() %}
                 {% for i in range(config["tile_banks"]) %}
-        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_strm[{{i}}], {% if arg is ops_read %}{{axis_name_t3(arg, i)}}{% else %}{{axis_name_t3(arg, i, "out")}}{% endif %}, small_tile_pkts);
+        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_redirect_strm[{{i}}], {% if arg is ops_read %}{{axis_name_t3(arg, i)}}{% else %}{{axis_name_t3(arg, i, "out")}}{% endif %}, small_tile_pkts);
                 {% endfor %}
             {% else %}
         ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_strm, {% if arg is ops_read %}{{axis_name(arg)}}{% else %}{{axis_name_t2(arg, "out")}}{% endif %}, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
@@ -483,7 +490,9 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
     {% for arg in ilh.joint_args|ops_dat|ops_write_or_rw %}
         {% if arg is ops_write_or_rw %}
             {% if arg is read_only_rw %}
-        ops::hls::axisTerminate<{{axis_data_width(arg)-}}>({{axis_name_t2(arg, "in")}}, {%if isTiling %}{% if prog.is_interleave() %}is_small_tile ? num_pkts >> 1 : num_pkts{%else%}num_pkts{%endif%}{% else %}{{num_pkts(arg)}}{% endif %});
+        {# TODO: small tile case - need to be fixed
+        ops::hls::axisTerminate<{{axis_data_width(arg)-}}>({{axis_name_t2(arg, "in")}}, {%if isTiling %}{% if prog.is_interleave() %}is_small_tile ? num_pkts >> 1 : num_pkts{%else%}num_pkts{%endif%}{% else %}{{num_pkts(arg)}}{% endif %});#}
+        ops::hls::axisTerminate<{{axis_data_width(arg)-}}>({{axis_name_t2(arg, "in")}}, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
             {% else %}
                 {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
                     {% if prog.is_interleave() %}
@@ -496,7 +505,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
                 {% else %}
                     {% if prog.is_interleave() %}
                         {% for i in range(config["tile_banks"]) %}
-        ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{axis_name_t3(arg, i)}}{% else %}{{axis_name_t3(arg, i, "in")}}{% endif %}, arg{{arg.id}}_write_mem_strm[{{i}}], small_tile_pkts);
+        ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{axis_name_t3(arg, i)}}{% else %}{{axis_name_t3(arg, i, "in")}}{% endif %}, arg{{arg.id}}_write_mem_redirect_strm[{{i}}], small_tile_pkts);
                         {% endfor %}
                     {% else %}
         ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{axis_name(arg)}}{% else %}{{axis_name_t2(arg, "in")}}{% endif %}, arg{{arg.id}}_write_mem_strm, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
@@ -522,7 +531,12 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         ops::hls::reverseRedirect<mem_data_width, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_redirect_strm, arg{{arg.id}}_write_mem_strm, short_command);
         ops::hls::writeConfigStreamGenerator<{{config["tile_banks"]}}, {{II(arg)}}>(command, arg{{arg.id}}_write_command_strm);
                         {% for i in range(config["tile_banks"]) %}
-        ops::hls::stridedTileStream2memWithAvoidV2<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm[{{i}}], arg{{arg.id}}_b{{i}}, arg{{arg.id}}_write_command_strm[{{i}}], size_y{% if ndim == 3 %}, size_z{% endif %});
+        ops::hls::stridedTileStream2memWithAvoidV2<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm[{{i}}], arg{{arg.id}}_b{{i}}, arg{{arg.id}}_write_command_strm[{{i}}], size_y{% if ndim == 3 %}, size_z{% endif %}
+        
+#ifdef DEBUG_LOG 
+        , "bank_{{i}}"
+#endif
+        );
                         {% endfor %}
                     {% else %}
                         {% if config["tile_banks"] > 1 %}
@@ -596,7 +610,7 @@ static void datamover_outerloop_{{ilh.id}}_tile_config_wrapper(const ops::hls::M
     const unsigned int total_beats = tile_size_x * y_diff;
     {% endif %}
     {% if prog.is_interleave() %}
-    const unsigned int x_pkts = (tile_size_x + {{config["tile_banks"]}} - 1) >> LOG2({{config["tile_banks"]}});
+    const unsigned int x_pkts = (tile_size_x + {{config["tile_banks"] -1}}) >> {{log2(config["tile_banks"])|int}};
         {% if ndim == 3 %}
     const unsigned int total_pkts = x_pkts * tile_size_y_mul_z_diff;
         {% else %}
@@ -622,7 +636,9 @@ static void datamover_outerloop_{{ilh.id}}_tile_config_wrapper(const ops::hls::M
         {% if ndim == 3 %}
     size_y = tile_size_y;
         {% endif %}
-    is_small_tile = tile_size_x <= {{config["tile_banks"]/2}};
+    {#TODO: small tile case - need to be fixed
+    is_small_tile = tile_size_x <= {{(config["tile_banks"]/2)|int}};#}
+    is_small_tile = false;
     {% endif %} 
 
 #ifdef DEBUG_LOG
@@ -749,7 +765,9 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
     
             ap_uint<{%if ndim == 3 %}160{%else%}128{%endif%}> short_command = command.range({%if ndim == 3 %}159{%else%}127{%endif%},0);
         {% if prog.is_interleave() %}
-            unsigned int small_tile_pkts = is_small_tile ? total_pkts : total_pkts << {{log2(config["mem_vector_factor"]/config["vector_factor"])|int}};
+            {#TODO: small tile case - need to be fixed
+            unsigned int small_tile_pkts = is_small_tile ? total_pkts : total_pkts << {{log2(config["mem_vector_factor"]/config["vector_factor"])|int}};#}
+            unsigned int small_tile_pkts = total_pkts << {{log2(config["mem_vector_factor"]/config["vector_factor"])|int}};
         {% endif %}
 
     {% endif %}
@@ -842,7 +860,9 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
     
             ap_uint<{%if ndim == 3 %}160{%else%}128{%endif%}> short_command = command.range({%if ndim == 3 %}159{%else%}127{%endif%},0);
         {% if prog.is_interleave() %}
-            unsigned int small_tile_pkts = is_small_tile ? total_pkts : total_pkts << {{log2(config["mem_vector_factor"]/config["vector_factor"])|int}};
+            {#TODO: small tile case - need to be fixed
+            unsigned int small_tile_pkts = is_small_tile ? total_pkts : total_pkts << {{log2(config["mem_vector_factor"]/config["vector_factor"])|int}};#}
+            unsigned int small_tile_pkts = total_pkts << {{log2(config["mem_vector_factor"]/config["vector_factor"])|int}};
         {% endif %}
 
     {% endif %}
@@ -1059,22 +1079,22 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
         {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
             {% if prog.is_interleave() %}
                 {% for tile in range(config["tile_banks"]) %}
-    #pragma HLS INTERFACE mode=axis port={{axis_name_t3(arg, tile)}} register
+    #pragma HLS INTERFACE mode=axis port={{axis_name_t3(arg, tile)}} register register_mode=both
                 {% endfor %}
             {% else %}
-    #pragma HLS INTERFACE mode=axis port={{axis_name(arg)}} register
+    #pragma HLS INTERFACE mode=axis port={{axis_name(arg)}} register register_mode=both
             {% endif %}
         {% else %}
             {% if prog.is_interleave() %}
                 {% for tile in range(config["tile_banks"]) %}
-    #pragma HLS INTERFACE mode=axis port={{axis_name_t3(arg, tile, "out")}} register
+    #pragma HLS INTERFACE mode=axis port={{axis_name_t3(arg, tile, "out")}} register register_mode=both
                 {% endfor %}
                 {% for tile in range(config["tile_banks"]) %}
-    #pragma HLS INTERFACE mode=axis port={{axis_name_t3(arg, tile, "in")}} register
+    #pragma HLS INTERFACE mode=axis port={{axis_name_t3(arg, tile, "in")}} register register_mode=both
                 {% endfor %}
             {% else %}
-    #pragma HLS INTERFACE mode=axis port={{axis_name_t2(arg, "out")}} register
-    #pragma HLS INTERFACE mode=axis port={{axis_name_t2(arg, "in")}} register
+    #pragma HLS INTERFACE mode=axis port={{axis_name_t2(arg, "out")}} register register_mode=both
+    #pragma HLS INTERFACE mode=axis port={{axis_name_t2(arg, "in")}} register register_mode=both
             {% endif %}
         {% endif %}
     {% endfor %}

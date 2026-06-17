@@ -45,9 +45,15 @@ stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_
 
 {% if config["platform_is_multi_slr"] %}
     {% for ilh, program in app.uniqueOuterLoops() %}
-        {% for slr_id in range(config["max_SLR_count"] - config["SLR_count"], config["max_SLR_count"]) %}
+        {% if config["max_SLR_count"] - config["SLR_count"] > 1 %}
+            {% for slr_id in range(config["max_SLR_count"] - config["SLR_count"] - 1, config["max_SLR_count"] - 1) %}
 slr=kernel_outerloop_inst_{{ilh.id}}_{{loop.index0+1}}:SLR{{slr_id}}
-        {% endfor %}
+            {% endfor %}
+        {% else %}
+            {% for slr_id in range(config["max_SLR_count"] - config["SLR_count"], config["max_SLR_count"]) %}
+slr=kernel_outerloop_inst_{{ilh.id}}_{{loop.index0+1}}:SLR{{slr_id}}
+            {% endfor %}
+        {% endif %}
     {% endfor %}
 {% endif %}
 

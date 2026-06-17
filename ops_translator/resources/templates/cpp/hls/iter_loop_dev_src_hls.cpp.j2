@@ -357,7 +357,12 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short& slr_re
             {% if prog.is_interleave() %}
             bool small_tile = tile_size_x <= {{(config["tile_banks"]/2)|int}};
             const unsigned int tile_size_y_mul_z_diff = tile_size_y * z_diff;
+            {% if config["vector_factor"] < config["mem_vector_factor"] %}
+            const unsigned int mem_tile_size_x = tile_size_x >> {{log2(config["mem_vector_factor"]/config["vector_factor"])|int}};
+            const unsigned int widen_tile_size_x = ((mem_tile_size_x + {{(config["tile_banks"]) - 1}}) >> {{log2(config["tile_banks"])|int}}) << {{log2(config["mem_vector_factor"]/config["vector_factor"])|int}};
+            {% else %}
             const unsigned int widen_tile_size_x = (tile_size_x + {{(config["tile_banks"]) - 1}}) >> {{log2(config["tile_banks"])|int}};
+            {% endif %}
             {#const unsigned int adj_widen_tile_size_x = small_tile ? widen_tile_size_x << 1 : widen_tile_size_x;#}
             const unsigned int num_pkts_div_by_banks = widen_tile_size_x * tile_size_y_mul_z_diff;
             {% else %}
@@ -366,7 +371,12 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short& slr_re
         {% else %}
             {% if prog.is_interleave() %}
             bool small_tile = tile_size_x =< {{(config["tile_banks"]/2)|int}}; 
+            {% if config["vector_factor"] < config["mem_vector_factor"] %}
+            const unsigned int mem_tile_size_x = tile_size_x >> {{log2(config["mem_vector_factor"]/config["vector_factor"])|int}};
+            const unsigned int widen_tile_size_x = ((mem_tile_size_x + {{(config["tile_banks"]) - 1}}) >> {{log2(config["tile_banks"])|int}}) << {{log2(config["mem_vector_factor"]/config["vector_factor"])|int}};
+            {% else %}
             const unsigned int widen_tile_size_x = (tile_size_x + {{(config["tile_banks"]) - 1}}) >> {{log2(config["tile_banks"])|int}};
+            {% endif %}
             {#const unsigned int adj_widen_tile_size_x = small_tile ? widen_tile_size_x << 1 : widen_tile_size_x;#}
             const unsigned int num_pkts_div_by_banks = widen_tile_size_x * y_diff;
             {% else %}
@@ -536,22 +546,22 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short& slr_re
         {% if arg is not ops_rw %}
             {% if prog.is_interleave() %}
                 {% for tile in range(config["tile_banks"]) %}
-    #pragma HLS INTERFACE axis port = {{axis_name_t3(arg, tile)}} register
+    #pragma HLS INTERFACE axis port = {{axis_name_t3(arg, tile)}} register register_mode=both
                 {% endfor %}
             {% else %}
-    #pragma HLS INTERFACE axis port = {{axis_name(arg)}} register
+    #pragma HLS INTERFACE axis port = {{axis_name(arg)}} register register_mode=both
             {% endif %}
         {% else %}
             {% if prog.is_interleave() %}
                 {% for tile in range["tile_banks"] %}
-    #pragma HLS INTERFACE axis port = {{axis_name_t3(arg, tile, "in")}} register
+    #pragma HLS INTERFACE axis port = {{axis_name_t3(arg, tile, "in")}} register register_mode=both
                 {% endfor %}
                 {% for tile in range["tile_banks"] %}
-    #pragma HLS INTERFACE axis port = {{axis_name_t3(arg, tile, "out")}} register
+    #pragma HLS INTERFACE axis port = {{axis_name_t3(arg, tile, "out")}} register register_mode=both
                 {% endfor %}
             {% else %}
-    #pragma HLS INTERFACE axis port = {{axis_name_t2(arg, "in")}} register
-    #pragma HLS INTERFACE axis port = {{axis_name_t2(arg, "out")}} register
+    #pragma HLS INTERFACE axis port = {{axis_name_t2(arg, "in")}} register register_mode=both
+    #pragma HLS INTERFACE axis port = {{axis_name_t2(arg, "out")}} register register_mode=both
             {% endif %}
         {% endif %}
     {% endfor %}
