@@ -602,7 +602,7 @@ static void datamover_outerloop_{{ilh.id}}_tile_config_wrapper(const ops::hls::M
     abs_row_offset = tile_y * memconfig.effective_tile_size_y;
     const ap_uint<64> tile_y_offset = abs_row_offset * memconfig.grid_xblocks;
     const unsigned short tile_size_y = tile_y == (memconfig.tile_count_y -1) ? memconfig.last_tile_size_y : memconfig.tile_size_y;
-    const ap_uint<64> offset = memconfig.start_offset + tile_x_offset {%if not config["tile_banks"] > 1 %}+ tile_y_offset{% endif %};
+    const ap_uint<64> offset = memconfig.start_offset + tile_x_offset + tile_y_offset;
     const unsigned int tile_size_y_mul_z_diff = tile_size_y * z_diff;
     const unsigned int total_beats = tile_size_x * tile_size_y_mul_z_diff;
     {% else %}
