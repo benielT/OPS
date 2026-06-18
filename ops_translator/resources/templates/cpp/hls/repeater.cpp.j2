@@ -1,6 +1,31 @@
-{% extends "cpp/hls/iter_loop_dev_inc_hls.hpp.j2" %}
 
-extern "C" void repeater_{{ilh.id}}(
+{% macro axis_name(arg) -%}
+    {%- if arg is not ops_rw -%}
+arg{{arg.id}}_axis_{{"in" if (arg is ops_read) else ("out" if (arg is ops_write))}}
+    {%- endif -%}
+{%- endmacro -%}
+{% macro axis_name_t2(arg, suffix) -%}
+arg{{arg.id}}_axis_{{suffix}}
+{%- endmacro -%}
+{% macro axis_name_t3(arg, infix, suffix=none) -%}
+    {%- if arg is not ops_rw and suffix==none -%}
+arg{{arg.id}}_{{infix}}_axis_{{"in" if (arg is ops_read) else ("out" if (arg is ops_write))}}
+    {%- else -%}
+arg{{arg.id}}_{{infix}}_axis_{{suffix}}
+    {%- endif -%}
+{%- endmacro -%}
+{% macro axis_data_width(arg) -%}
+    {%- if ilh.dats[arg.dat_id][0].isMultiDim() -%}
+multidim_axis_data_width_{{ilh.id}}_{{ilh.dats[arg.dat_id][0].ptr}}
+    {%- else -%}
+axis_data_width
+    {%- endif -%}
+{%- endmacro -%}
+#pragma once
+#include <ops_hls_kernel_support.h>
+#include "../../common/include/common_config.hpp"
+
+extern "C" void repeater_outerloop_{{ilh.id}}(
 {% for arg in ilh.joint_args|ops_dat %}
     //{{ilh.dats[arg.dat_id][0].ptr}}
     {% set first_loop_last = loop.last %}
@@ -56,7 +81,7 @@ extern "C" void repeater_{{ilh.id}}(
     
     #pragma HLS pipline II=1 style=flp
     {% for arg in ilh.joint_args|ops_dat %}
-        {% if arg is not ops_rw and arg is ops_read %}    
+        {% if arg is ops_read_or_rw %}    
             {% if prog.is_interleave() %}
                 {% for tile in range(config["tile_banks"]) %}
     if (!{{axis_name_t3(arg, tile)}}.empty()) {
@@ -68,20 +93,6 @@ extern "C" void repeater_{{ilh.id}}(
     if (!{{axis_name(arg)}}.empty()) {
         auto data = {{axis_name(arg)}}.read();
         {{axis_name(ilh.getSwapArg(arg))}}.write(data);
-    }
-            {% endif %}
-        {% else %}
-            {% if prog.is_interleave() %}
-                {% for tile in range(config["tile_banks"]) %}
-    if (!{{axis_name_t3(arg, tile, "in")}}.empty()) {
-        auto data = {{axis_name_t3(arg, tile, "in")}}.read();
-        {{axis_name_t3(arg, tile, "out")}}.write(data);
-    }
-                {% endfor %}
-            {% else %}
-    if (!{{axis_name_t2(arg, "in")}}.empty()) {
-        auto data = {{axis_name_t2(arg, "in")}}.read();
-        {{axis_name_t2(arg, "out")}}.write(data);
     }
             {% endif %}
         {% endif %}

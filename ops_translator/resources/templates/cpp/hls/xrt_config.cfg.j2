@@ -24,10 +24,20 @@ stream_connect=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_out:kernel_ou
                 {% if loop.last %}
                     {% if prog.is_interleave() %}
                         {% for i in range(config["tile_banks"]) %}
+                           {% if config["max_SLR_count"] == 3 and config["SLR_count"] >= 2 %}
+stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_{{i}}_axis_out:repeater_outerloop_{{ilh.id}}_1.arg{{ilh.getSwapArg(arg).id}}_{{i}}_axis_in
+stream_connect=repeater_outerloop_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                           {% else %}
 stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_{{i}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                           {% endif %}
                         {% endfor %}
                     {% else %}
+                        {% if config["max_SLR_count"] == 3 and config["SLR_count"] >= 2 %}
+stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_out:repeater_outerloop_{{ilh.id}}_1.arg{{ilh.getSwapArg(arg).id}}_axis_in
+stream_connect=repeater_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                        {% else %}
 stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                        {% endif %}
                     {% endif %}
                 {% else %}
                     {% if prog.is_interleave() %}
@@ -54,6 +64,9 @@ slr=kernel_outerloop_inst_{{ilh.id}}_{{loop.index0+1}}:SLR{{slr_id}}
 slr=kernel_outerloop_inst_{{ilh.id}}_{{loop.index0+1}}:SLR{{slr_id}}
             {% endfor %}
         {% endif %}
+        {% if config["max_SLR_count"] == 3 and config["SLR_count"] >= 2 %}
+slr=repeater_outerloop_{{ilh.id}}_1:SLR1
+        {% endif%}
     {% endfor %}
 {% endif %}
 

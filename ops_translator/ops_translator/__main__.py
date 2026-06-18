@@ -587,7 +587,7 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
             file.write(iter_datamov_inc_source)
 
             if args.verbose:
-                print(f"Generated loop device datamover include {j} of {len(app.uniqueOuterLoops())}: {path}")
+                print(f"Generated iter loop device datamover include {j} of {len(app.uniqueOuterLoops())}: {path}")
  
         ## iterloop datamover src
         path = None
@@ -605,7 +605,7 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
             file.write(iter_datemov_src_source)
 
             if args.verbose:
-                print(f"Generated loop device datamover src {i} of {len(app.uniqueOuterLoops())}: {path}")
+                print(f"Generated iter loop device datamover src {i} of {len(app.uniqueOuterLoops())}: {path}")
 
         if len(out) > 4:
             for k_ in range(len(iter_kernel_inc_tups)):
@@ -625,7 +625,7 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
                     file.write(iter_kernel_inc_tups[k_][0])
 
                     if args.verbose:
-                        print(f"Generated loop device kernel include {j} of {len(app.uniqueLoops())}: {path}")
+                        print(f"Generated iter loop device kernel include {j} of {len(app.uniqueLoops())}: {path}")
 
                 ## iterloop kernel src
                 path = None
@@ -643,7 +643,7 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
                     file.write(iter_kernel_src_tups[k_][0])
 
                     if args.verbose:
-                        print(f"Generated loop device kernel src {j} of {len(app.uniqueLoops())}: {path}")
+                        print(f"Generated iter loop device kernel src {j} of {len(app.uniqueLoops())}: {path}")
         else:
             ## iterloop kernel inc
             path = None
@@ -661,7 +661,7 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
                 file.write(iter_kernel_inc_tups[0][0])
 
                 if args.verbose:
-                    print(f"Generated loop device kernel include {j} of {len(app.uniqueLoops())}: {path}")
+                    print(f"Generated iter loop device kernel include {j} of {len(app.uniqueLoops())}: {path}")
 
             ## iterloop kernel src
             path = None
@@ -679,8 +679,37 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
                 file.write(iter_kernel_src_tups[0][0])
 
                 if args.verbose:
-                    print(f"Generated loop device kernel src {j} of {len(app.uniqueLoops())}: {path}")
+                    print(f"Generated iter loop device kernel src {j} of {len(app.uniqueLoops())}: {path}")
     
+        if target_config["max_SLR_count"] == 3 and target_config["SLR_count"] >= 2:
+            # Generate reapeater if data-path from SLR2 to SLR0
+            # def genIterLoopRepeater(
+            #     self,
+            #     env: Environment,
+            #     iterLoop: ops.IterLoop,
+            #     program: Program,
+            #     app: Application,
+            #     config: dict
+            # ) -> List[Tuple[str, str]]:
+            repeater_src, repeater_extension = scheme.genIterLoopRepeater(env, iterloop, program, app, target_config)
+            
+            path = None
+            
+            if scheme.lang.kernel_dir:
+                Path(args.out, scheme.target.name, "device", "src").mkdir(parents=True, exist_ok=True)
+                path = Path(args.out, scheme.target.name, "device", "src", f"repeater_outerloop_{j}.{repeater_extension}")                
+            else:
+                path = Path(args.out,f"outerloop_{j}_{scheme.target.name}_repeater.{repeater_extension}")
 
+            logging.debug(f"writing repeater src for: outerloop_{j} to {path}")
+            
+            # Write the gernerated repeater src file
+            with open(path, "w") as file:
+                file.write(f"{scheme.lang.com_delim} Auto-generated at {datetime.now()} by ops-translator\n")
+                file.write(repeater_src)
+
+                if args.verbose:
+                    print(f"Generated iterloop repeater src {i} of {len(app.uniqueOuterLoops())}: {path}")
+            
 if __name__ == "__main__":
     main()

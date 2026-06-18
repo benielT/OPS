@@ -334,9 +334,11 @@ class CppHLS(Scheme):
     ) -> List[Tuple[str, str]]:
         iterloop_repeater_src_template = env.get_template(str(self.iterloop_repeater_src_template))
         
-        output = [(iterloop_repeater_src_template.render(
+        output = [iterloop_repeater_src_template.render(
                 ilh=iterLoop,
-                config=config), self.iterloop_repeater_src_extension)]
+                prog=program,
+                ndim=program.ndim,
+                config=config), self.iterloop_repeater_src_extension]
         return output
         
 
