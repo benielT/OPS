@@ -22,7 +22,7 @@ iter_par_factor
 {% endblock %}
 
 {% block joint_PE %}
-static void joint_PE_outerloop_{{ilh.id}}(const unsigned short PEId, const ops::hls::{{"StencilConfigCoreSingleTile" if isTiling else "StencilConfigCore"}} & stencilConfig, 
+static void joint_PE_outerloop_{{ilh.id}}(const unsigned short PEId, const ops::hls::{{"StencilConfigCoreSingleTile" if isTiling else "StencilConfigCore"}} stencilConfig, 
     {% if prog.is_interleave() %}
         const unsigned int num_pkts,
     {% endif %}
@@ -43,7 +43,7 @@ static void joint_PE_outerloop_{{ilh.id}}(const unsigned short PEId, const ops::
     {% endfor %})
 {
     {% if ilh.get_active_df_graph().getAllLoopNodes()|length > 1 or prog.is_interleave() %}
-#pragma HLS DATAFLOW
+#pragma HLS INLINE
     {% endif %}
     {% for stream_interconnector, dat_id in ilh.interconnectors %}
     ::hls::stream<ap_uint<{{axis_data_width_datid(dat_id)}}>> {{stream_interconnector}}{% if prog.is_interleave() %}[{{config["tile_banks"]}}]{% endif %};
@@ -116,7 +116,7 @@ static void joint_PE_outerloop_{{ilh.id}}(const unsigned short PEId, const ops::
 
 {% block kernel_dataflow_region %}
 
-static void kernel_outerloop_{{ilh.id}}_dataflow_region_cascaded(const unsigned short& slr_region, const ops::hls::{{"StencilConfigCoreSingleTile" if isTiling else "StencilConfigCore"}}& stencilConfig,
+static void kernel_outerloop_{{ilh.id}}_dataflow_region_cascaded(const unsigned short slr_region, const ops::hls::{{"StencilConfigCoreSingleTile" if isTiling else "StencilConfigCore"}} stencilConfig,
     {% if prog.is_interleave() %}
         const unsigned int num_pkts,
     {% endif %}
@@ -209,7 +209,7 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& sl
     {% for swap_pair in ilh.getUniqueDatSwapsIds() -%}
         {% if prog.is_interleave() %}
     ::hls::stream<ap_uint<{{axis_data_width_datid(swap_pair[0])}}>> arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams[{{iter_par_factor()}} + 1][{{config["tile_banks"]}}];
-    #pragma HLS ARRAY_PARTITION variable = arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams dim = 0 complete
+    #pragma HLS ARRAY_PARTITION variable = arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams dim = 2 complete
         {% else %}
     ::hls::stream<ap_uint<{{axis_data_width_datid(swap_pair[0])}}>> arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams[{{iter_par_factor()}} + 1];
         {% endif %}
