@@ -86,10 +86,10 @@ public:
         ops::hls::SizeType2d tile_size = {m_fpga->getOPSTileSizeX(), {% if ndim == 3 %} m_fpga->getOPSTileSizeY(){% else %}1{% endif %}};
         {% if is_slr_iter_par %}
         ops::hls::SizeType2d overlap_size = {get_overlap_size<{{get_total_PEs(config["SLR_count"],config["iter_par_factor"])}}, {{half_span_x}}, mem_vector_factor>(), 
-                {% if ndim == 3 %}get_overlap_size<{{get_total_PEs(config["SLR_count"],config["iter_par_factor"])}}, {{half_span_x}}, vector_factor>(){%else %}0{% endif %}};
+                {% if ndim == 3 %}get_overlap_size<{{get_total_PEs(config["SLR_count"],config["iter_par_factor"])}}, {{half_span_x}}, 1>(){%else %}0{% endif %}};
         {% else %}
         ops::hls::SizeType2d overlap_size = {get_overlap_size<{{config["SLR_count"]}}, {{config["iter_par_factor"]}}, {{half_span_x}}, mem_vector_factor>(), 
-                {% if ndim == 3 %}get_overlap_size<{{config["SLR_count"]}}, {{config["iter_par_factor"]}}, {{half_span_x}}, vector_factor>(){%else %}0{% endif %}};
+                {% if ndim == 3 %}get_overlap_size<{{config["SLR_count"]}}, {{config["iter_par_factor"]}}, {{half_span_x}}, 1>(){%else %}0{% endif %}};
         {% endif %}
         ops::hls::SizeType2d tile_count;
         ops::hls::SizeType2d effective_tile_size;
