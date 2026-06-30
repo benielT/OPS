@@ -1222,9 +1222,9 @@ class IterLoop:
                     search_list = filter(lambda x: x.access_type in [AccessType.OPS_READ, AccessType.OPS_RW] and self.dats[x.dat_id][0].ptr == attr["dat_str"], self.joint_args)
                     arg_id = next(search_list).id
                     if attr['sink_arg_id'] in arg_map.keys():
-                        arg_map[attr['sink_arg_id']].append(f"arg{arg_id}_hls_stream_in")
+                        arg_map[attr['sink_arg_id']].append(f"arg{arg_id}_arg{self.getSwapArg(self.getArg(arg_id)).id}_streams")
                     else:
-                        arg_map[attr['sink_arg_id']] = [f"arg{arg_id}_hls_stream_in"]
+                        arg_map[attr['sink_arg_id']] = [f"arg{arg_id}_arg{self.getSwapArg(self.getArg(arg_id)).id}_streams"]
                         
                 else:
                     connector_name = f"node{source_id}_{attr['src_arg_id']}_to_node{sink_id}_{attr['sink_arg_id']}"
@@ -1250,9 +1250,9 @@ class IterLoop:
                     if idx is None:
                         OpsError(f"{function_name()} Error finding joint_arg writing {attr['dat_str']}")
                     if attr['src_arg_id'] in arg_map.keys():
-                        arg_map[attr['src_arg_id']].append(f"arg{self.joint_args[idx].id}_hls_stream_out")
+                        arg_map[attr['src_arg_id']].append(f"arg{self.getSwapArg(self.joint_args[idx]).id}_arg{self.joint_args[idx].id}_streams")
                     else:
-                        arg_map[attr['src_arg_id']] = [f"arg{self.joint_args[idx].id}_hls_stream_out"]
+                        arg_map[attr['src_arg_id']] = [f"arg{self.getSwapArg(self.joint_args[idx]).id}_arg{self.joint_args[idx].id}_streams"]
                 else:
                     connector_name = f"node{source_id}_{attr['src_arg_id']}_to_node{sink_id}_{attr['sink_arg_id']}"
                     idx = findIdx(self.interconnectors, lambda interconector_disc: interconector_disc[0] == connector_name)

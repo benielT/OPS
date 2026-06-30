@@ -150,23 +150,34 @@ public:
         return alt_buffer_row_counts;
     }
 
-    std::vector<size_t> getAltBufferSizes() {
+    std::vector<size_t> getAltBufferSizes(bool with_batch_size = false) {
         std::vector<size_t> alt_buffer_sizes(alt_banks);
-    #if defined(OPS_HLS_TILE_INTERLEAVE)
-        size_t total_vect_elements = (originalProperty.grid_size[0] + mem_vector_factor - 1) / mem_vector_factor;
-        total_vect_elements *= originalProperty.grid_size[1] * originalProperty.grid_size[2];
+    // #if defined(OPS_HLS_TILE_INTERLEAVE)
+    //     size_t total_vect_elements = (originalProperty.grid_size[0] + mem_vector_factor - 1) / mem_vector_factor;
+    //     total_vect_elements *= originalProperty.grid_size[1] * originalProperty.grid_size[2];
         
+    //     for (int bank = 0; bank < alt_banks; bank++) {
+    //         size_t bank_vect_elements = (total_vect_elements / alt_banks) + (bank < (total_vect_elements % alt_banks) ? 1 : 0);
+    //         alt_buffer_sizes[bank] = bank_vect_elements * mem_vector_factor;
+    //         alt_buffer_sizes[bank] *= originalProperty.batch_size;
+    #if defined(OPS_HLS_TILE_INTERLEAVE)
+        size_t total_vect_element_x = (originalProperty.grid_size[0] + mem_vector_factor - 1) / mem_vector_factor;
+        auto size_y_mult_size_z = originalProperty.grid_size[1] * originalProperty.grid_size[2];
+
         for (int bank = 0; bank < alt_banks; bank++) {
-            size_t bank_vect_elements = (total_vect_elements / alt_banks) + (bank < (total_vect_elements % alt_banks) ? 1 : 0);
+            size_t bank_vect_elements = (total_vect_element_x / alt_banks) + (bank < (total_vect_element_x % alt_banks) ? 1 : 0);
+            bank_vect_elements *= size_y_mult_size_z;
             alt_buffer_sizes[bank] = bank_vect_elements * mem_vector_factor;
-            alt_buffer_sizes[bank] *= originalProperty.batch_size;
-    #else
+            if (with_batch_size)
+                alt_buffer_sizes[bank] *= originalProperty.batch_size;
+    #else 
         auto alt_buffer_row_counts = getAltBufferRowsCounts();
         
         for (int bank = 0; bank < alt_banks; bank++) {
             size_t row_size = originalProperty.grid_size[0];
             alt_buffer_sizes[bank] = row_size * alt_buffer_row_counts[bank];
-            alt_buffer_sizes[bank] *= originalProperty.batch_size;
+            if (with_batch_size)
+                alt_buffer_sizes[bank] *= originalProperty.batch_size;
     #endif
     // #ifdef DEBUG_LOG
     //         printf("[DEBUG]| %s | Bank %d: %zu bank_buffer_size\n", __func__, bank, alt_buffer_sizes[bank]);
@@ -191,26 +202,48 @@ public:
     void splitGrid()
     {
         if (alt_banks > 1 && originalProperty.dim >=2) {
+        #if defined(OPS_HLS_TILE_INTERLEAVE)
+            size_t total_vect_element_x = (originalProperty.grid_size[0] + mem_vector_factor - 1) / mem_vector_factor;
+            auto size_y_mult_size_z = originalProperty.grid_size[1] * originalProperty.grid_size[2];
+        #endif
             for (unsigned int b = 0; b < originalProperty.batch_size; b++) {
                 for (unsigned int k = 0; k < originalProperty.grid_size[2]; k++) {
                     for (unsigned int j = 0; j < originalProperty.grid_size[1]; j++) {
         #if defined(OPS_HLS_TILE_INTERLEAVE)
                         for (unsigned int i = 0; i < originalProperty.grid_size[0]; i+=mem_vector_factor) {
-                            unsigned long abs_index = i + j * originalProperty.grid_size[0] 
-                                                        + k * originalProperty.grid_size[0] * originalProperty.grid_size[1];
-                            
-                            unsigned long vectored_index = abs_index / mem_vector_factor;
-                            unsigned int bank = vectored_index % alt_banks;
-                            unsigned long bank_index = vectored_index / alt_banks;
+                            size_t src_offset = i + j * originalProperty.grid_size[0] 
+                                    + k * originalProperty.grid_size[0] * originalProperty.grid_size[1] 
+                                    + b * originalProperty.grid_size[0] * originalProperty.grid_size[1] * originalProperty.grid_size[2];
+                            size_t vect_i = i / mem_vector_factor;
+                            // unsigned long vectored_index = abs_index / mem_vector_factor;
+                            unsigned int bank = vect_i % alt_banks;
+                            unsigned int bank_size_x = (total_vect_element_x / alt_banks) + (bank < (total_vect_element_x % alt_banks) ? 1 : 0);
+                            size_t bank_index = vect_i / alt_banks 
+                                    + j * bank_size_x 
+                                    + k * bank_size_x * originalProperty.grid_size[1];
                             bank_index *= mem_vector_factor;
-                            size_t src_offset = b * originalProperty.grid_size[0] * originalProperty.grid_size[1] * originalProperty.grid_size[2]
-                                        + k * originalProperty.grid_size[0] * originalProperty.grid_size[1]
-                                        + j * originalProperty.grid_size[0] + i;
                             size_t dst_offset = b * getAltBufferSizes()[bank] + bank_index;
                             std::memcpy(&altHostBuffers[bank][dst_offset],
                                     &hostBuffer[src_offset],
                                     mem_vector_factor * sizeof(T));
                         }
+        // #if defined(OPS_HLS_TILE_INTERLEAVE)
+        //                 for (unsigned int i = 0; i < originalProperty.grid_size[0]; i+=mem_vector_factor) {
+        //                     unsigned long abs_index = i + j * originalProperty.grid_size[0] 
+        //                                                 + k * originalProperty.grid_size[0] * originalProperty.grid_size[1];
+                            
+        //                     unsigned long vectored_index = abs_index / mem_vector_factor;
+        //                     unsigned int bank = vectored_index % alt_banks;
+        //                     unsigned long bank_index = vectored_index / alt_banks;
+        //                     bank_index *= mem_vector_factor;
+        //                     size_t src_offset = b * originalProperty.grid_size[0] * originalProperty.grid_size[1] * originalProperty.grid_size[2]
+        //                                 + k * originalProperty.grid_size[0] * originalProperty.grid_size[1]
+        //                                 + j * originalProperty.grid_size[0] + i;
+        //                     size_t dst_offset = b * getAltBufferSizes()[bank] + bank_index;
+        //                     std::memcpy(&altHostBuffers[bank][dst_offset],
+        //                             &hostBuffer[src_offset],
+        //                             mem_vector_factor * sizeof(T));
+        //                 }
         #else
 
                         unsigned int abs_row_id = j + k * originalProperty.grid_size[1];
@@ -242,25 +275,47 @@ public:
     void mergeGrid() 
     {
         if (alt_banks > 1 && originalProperty.dim >=2) {
+        #if defined(OPS_HLS_TILE_INTERLEAVE)
+            size_t total_vect_element_x = (originalProperty.grid_size[0] + mem_vector_factor - 1) / mem_vector_factor;
+            auto size_y_mult_size_z = originalProperty.grid_size[1] * originalProperty.grid_size[2];
+        #endif
             for (unsigned int b = 0; b < originalProperty.batch_size; b++) {
                 for (unsigned int k = 0; k < originalProperty.grid_size[2]; k++) {
                     for (unsigned int j = 0; j < originalProperty.grid_size[1]; j++) {
         #if defined(OPS_HLS_TILE_INTERLEAVE)
                         for (unsigned int i = 0; i < originalProperty.grid_size[0]; i+=mem_vector_factor) {
-                            unsigned long abs_index = i + j * originalProperty.grid_size[0] 
-                                                        + k * originalProperty.grid_size[0] * originalProperty.grid_size[1];
-                            unsigned long vectored_index = abs_index / mem_vector_factor;
-                            unsigned int bank = vectored_index % alt_banks;
-                            unsigned long bank_index = vectored_index / alt_banks;
+                            size_t src_offset = i + j * originalProperty.grid_size[0] 
+                                    + k * originalProperty.grid_size[0] * originalProperty.grid_size[1] 
+                                    + b * originalProperty.grid_size[0] * originalProperty.grid_size[1] * originalProperty.grid_size[2];
+                            size_t vect_i = i / mem_vector_factor;
+                            // unsigned long vectored_index = abs_index / mem_vector_factor;
+                            unsigned int bank = vect_i % alt_banks;
+                            unsigned int bank_size_x = (total_vect_element_x / alt_banks) + (bank < (total_vect_element_x % alt_banks) ? 1 : 0);
+                            size_t bank_index = vect_i / alt_banks 
+                                    + j * bank_size_x 
+                                    + k * bank_size_x * originalProperty.grid_size[1];
                             bank_index *= mem_vector_factor;
-                            size_t src_offset = b * originalProperty.grid_size[0] * originalProperty.grid_size[1] * originalProperty.grid_size[2]
-                                        + k * originalProperty.grid_size[0] * originalProperty.grid_size[1]
-                                        + j * originalProperty.grid_size[0] + i;
                             size_t dst_offset = b * getAltBufferSizes()[bank] + bank_index;
                             std::memcpy(&hostBuffer[src_offset],
                                     &altHostBuffers[bank][dst_offset],
                                     mem_vector_factor * sizeof(T));
                         }
+        // #if defined(OPS_HLS_TILE_INTERLEAVE)
+        //                 for (unsigned int i = 0; i < originalProperty.grid_size[0]; i+=mem_vector_factor) {
+        //                     unsigned long abs_index = i + j * originalProperty.grid_size[0] 
+        //                                                 + k * originalProperty.grid_size[0] * originalProperty.grid_size[1];
+        //                     unsigned long vectored_index = abs_index / mem_vector_factor;
+        //                     unsigned int bank = vectored_index % alt_banks;
+        //                     unsigned long bank_index = vectored_index / alt_banks;
+        //                     bank_index *= mem_vector_factor;
+        //                     size_t src_offset = b * originalProperty.grid_size[0] * originalProperty.grid_size[1] * originalProperty.grid_size[2]
+        //                                 + k * originalProperty.grid_size[0] * originalProperty.grid_size[1]
+        //                                 + j * originalProperty.grid_size[0] + i;
+        //                     size_t dst_offset = b * getAltBufferSizes()[bank] + bank_index;
+        //                     std::memcpy(&hostBuffer[src_offset],
+        //                             &altHostBuffers[bank][dst_offset],
+        //                             mem_vector_factor * sizeof(T));
+        //                 }
         #else
                         unsigned int abs_row_id = j + k * originalProperty.grid_size[1];
                         unsigned int bank = abs_row_id % alt_banks;

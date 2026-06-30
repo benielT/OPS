@@ -336,20 +336,30 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
     {% if isTiling %}
         const unsigned int num_beats,
         {% if prog.is_interleave() %}
+        const size_t offset, 
+        const unsigned int size_x,
         const unsigned int size_y,
             {% if ndim == 3 %}
         const unsigned int size_z,
             {% endif %}
+        const unsigned int avoid_x,
+            {% if ndim == 3 %}
+        const unsigned int avoid_y,
+            {% endif %}
+        const unsigned int stride_y,
+            {% if ndim == 3 %}
+        const unsigned int stride_z,
+            {% endif %}
         const bool is_small_tile,
         const unsigned int small_tile_pkts,
         {% endif %}
-        {% if ndim == 3 %}
-        ap_uint<192>& command,
-        ap_uint<160>& short_command,
+        {#% if ndim == 3 %}
+        const ap_uint<192>& command,
+        const ap_uint<160>& short_command,
         {% else %}
-        ap_uint<144>& command,
-        ap_uint<128>& short_command,
-        {% endif %}
+        const ap_uint<144>& command,
+        const ap_uint<128>& short_command,
+        {% endif %#}
         {% if config["tile_banks"] > 1 %}
             {% if ndim == 3 %}
         unsigned short abs_row_offset,
@@ -384,9 +394,9 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         {% if arg is ops_read_or_rw%}
             {% if prog.is_interleave() %}
     ::hls::stream<ap_uint<48>> arg{{arg.id}}_read_command_strm[{{config["tile_banks"]}}];
-    #pragma HLS STREAM variable = arg{{arg.id}}_read_command_strm depth = 2
+    #pragma HLS STREAM variable = arg{{arg.id}}_read_command_strm depth = 32
     ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_redirect_strm[{{config["tile_banks"]}}];
-    #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_redirect_strm depth = 10    
+    #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_redirect_strm depth = {{(config["maxi_read_burst_length"] * config["num_read_outstanding"])|int}}   
             {% endif %}
     ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_strm{%if prog.is_interleave()%}[{{config["tile_banks"]}}]{%endif%};
     #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm depth = {{(config["maxi_read_burst_length"] * config["num_read_outstanding"])|int}}
@@ -405,12 +415,11 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         {% endif %}
         {% if prog.is_interleave() %}
     ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_redirect_strm[{{config["tile_banks"]}}];
-    #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_redirect_strm depth = 10
+    #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_redirect_strm depth = {{(config["maxi_write_burst_length"] * config["num_write_outstanding"])|int}}
     ::hls::stream<ap_uint<64>> arg{{arg.id}}_write_command_strm[{{config["tile_banks"]}}];
-    #pragma HLS STREAM variable = arg{{arg.id}}_write_command_strm depth = 2    
+    #pragma HLS STREAM variable = arg{{arg.id}}_write_command_strm depth = 32    
         {% endif %}
     {% endfor %}
-
 
     {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw %}
         {% if isTiling %}
@@ -420,16 +429,16 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         //ops::hls::combineSteams<mem_data_width, {{II(arg)}}>(arg{{arg.id}}_read_mem_strm_b1, arg{{arg.id}}_read_mem_strm_b2, arg{{arg.id}}_read_mem_strm, memconfig);
             {% if config["datamover_lib"] == 1 %}
                 {% if prog.is_interleave() %}
-        ops::hls::readConfigStreamGenerator<{{config["tile_banks"]}}, {{II(arg)}}>(short_command, arg{{arg.id}}_read_command_strm);
+        ops::hls::readConfigStreamGenerator<{{config["tile_banks"]}}, {{II(arg)}}>(offset, size_x, stride_y, size_y, stride_z, size_z, arg{{arg.id}}_read_command_strm);
                     {% for i in range(config["tile_banks"]) %}
-        ops::hls::stridedTileMem2streamV2<mem_data_width, {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b{{i}}, arg{{arg.id}}_read_command_strm[{{i}}], arg{{arg.id}}_read_mem_strm[{{i}}], size_y{%if ndim == 3%}, size_z{% endif %} 
+        ops::hls::stridedTileMem2streamV3<mem_data_width, {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b{{i}}, arg{{arg.id}}_read_command_strm[{{i}}], arg{{arg.id}}_read_mem_strm[{{i}}], size_y{%if ndim == 3%}, size_z{% endif %} 
 
 #ifdef DEBUG_LOG 
         , "bank_{{i}}"
 #endif
         );
                     {% endfor %}
-        ops::hls::redirect<mem_data_width, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_read_mem_strm, arg{{arg.id}}_read_mem_redirect_strm, short_command);          
+        ops::hls::redirect<mem_data_width, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_read_mem_strm, arg{{arg.id}}_read_mem_redirect_strm, offset, size_x, stride_y, size_y, stride_z, size_z);          
                 {% else %}
                     {% if config["tile_banks"] > 1 %}
         stridedTileMem2stream<mem_data_width, {{config["tile_banks"]}}, {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(
@@ -528,10 +537,10 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
             {% if isTiling %}
                 {% if config["datamover_lib"] == 1 %}
                     {% if prog.is_interleave() %}
-        ops::hls::reverseRedirect<mem_data_width, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_redirect_strm, arg{{arg.id}}_write_mem_strm, short_command);
-        ops::hls::writeConfigStreamGenerator<{{config["tile_banks"]}}, {{II(arg)}}>(command, arg{{arg.id}}_write_command_strm);
+        ops::hls::reverseRedirect<mem_data_width, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_redirect_strm, arg{{arg.id}}_write_mem_strm, offset, size_x, stride_y, size_y, stride_z, size_z);
+        ops::hls::writeConfigStreamGenerator<{{config["tile_banks"]}}, {{II(arg)}}>(offset, size_x, stride_y, size_y, stride_z, size_z, avoid_x, avoid_y, arg{{arg.id}}_write_command_strm);
                         {% for i in range(config["tile_banks"]) %}
-        ops::hls::stridedTileStream2memWithAvoidV2<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm[{{i}}], arg{{arg.id}}_b{{i}}, arg{{arg.id}}_write_command_strm[{{i}}], size_y{% if ndim == 3 %}, size_z{% endif %}
+        ops::hls::stridedTileStream2memWithAvoidV3<mem_data_width, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm[{{i}}], arg{{arg.id}}_b{{i}}, arg{{arg.id}}_write_command_strm[{{i}}], size_y{% if ndim == 3 %}, size_z{% endif %}
         
 #ifdef DEBUG_LOG 
         , "bank_{{i}}"
@@ -569,44 +578,44 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
 
 {% if isTiling %}
 static void datamover_outerloop_{{ilh.id}}_tile_config_wrapper(const ops::hls::MemConfigTile& memconfig,
-    const unsigned short& tile_x,
+    const unsigned short& tile_x_id,
     {% if ndim == 3 %}
-    const unsigned short& tile_y,
-    {% endif %}
-    const unsigned short& stride_y,
-    {% if ndim == 3 %}
-    const unsigned short& stride_z,
+    const unsigned short& tile_y_id,
     const unsigned short& z_diff,
     {% else %}
     const unsigned short& y_diff,
     {% endif %}
     unsigned int& num_pkts,
-    unsigned int& num_beats,
+    unsigned int& num_beats{{"," if prog.is_interleave()}}
     {% if prog.is_interleave() %}
+    size_t& offset,
+    unsigned short& size_x,
+    unsigned short& avoid_x,
         {% if ndim == 3 %}
     unsigned short& size_y,
+    unsigned short& avoid_y,
     unsigned short& abs_row_offset,
         {% endif %}
-    bool& is_small_tile,
+    bool& is_small_tile
     {% endif %}
-    {% if ndim == 3 %}
+    {#% if ndim == 3 %}
     ap_uint<192>& command
     {% else %}
     ap_uint<144>& command
-    {% endif %})
+    {% endif %#})
 {
-#pragma HLS INLINE
-    const unsigned short tile_size_x = tile_x == (memconfig.tile_count_x -1) ? memconfig.last_tile_size_x : memconfig.tile_size_x;
-    const ap_uint<64> tile_x_offset = tile_x * memconfig.effective_tile_size_x;
+#pragma HLS INLINE off
+    const unsigned short tile_size_x = tile_x_id == (memconfig.tile_count_x -1) ? memconfig.last_tile_size_x : memconfig.tile_size_x;
+    const ap_uint<64> tile_x_offset = tile_x_id * memconfig.effective_tile_size_x;
     {% if ndim == 3 %}
-    abs_row_offset = tile_y * memconfig.effective_tile_size_y;
+    abs_row_offset = tile_y_id * memconfig.effective_tile_size_y;
     const ap_uint<64> tile_y_offset = abs_row_offset * memconfig.grid_xblocks;
-    const unsigned short tile_size_y = tile_y == (memconfig.tile_count_y -1) ? memconfig.last_tile_size_y : memconfig.tile_size_y;
-    const ap_uint<64> offset = memconfig.start_offset + tile_x_offset + tile_y_offset;
+    const unsigned short tile_size_y = tile_y_id == (memconfig.tile_count_y -1) ? memconfig.last_tile_size_y : memconfig.tile_size_y;
+    offset = memconfig.start_offset + tile_x_offset + tile_y_offset;
     const unsigned int tile_size_y_mul_z_diff = tile_size_y * z_diff;
     const unsigned int total_beats = tile_size_x * tile_size_y_mul_z_diff;
     {% else %}
-    const ap_uint<64> offset = memconfig.start_offset + tile_x_offset;
+    offset = memconfig.start_offset + tile_x_offset;
     const unsigned int total_beats = tile_size_x * y_diff;
     {% endif %}
     {% if prog.is_interleave() %}
@@ -621,13 +630,13 @@ static void datamover_outerloop_{{ilh.id}}_tile_config_wrapper(const ops::hls::M
     {% endif %}
 
     {% if ndim == 3 %}
-    const unsigned int avoid_x = tile_x == 0 ? 0 : memconfig.tile_overlap_size_x >> 1;
-    const unsigned int avoid_y = tile_y == 0 ? 0 : memconfig.tile_overlap_size_y >> 1;
-    command = ops::hls::commandGen3D(offset, 1, (ap_uint<16>)tile_size_x, (ap_uint<16>)stride_y, (ap_int<16>)tile_size_y, 
-            (ap_int<16>)stride_z, (ap_uint<16>)z_diff, (ap_uint<16>)avoid_x, (ap_uint<16>)avoid_y);
+    avoid_x = tile_x_id == 0 ? 0 : memconfig.tile_overlap_size_x >> 1;
+    avoid_y = tile_y_id == 0 ? 0 : memconfig.tile_overlap_size_y >> 1;
+    //command = ops::hls::commandGen3D(offset, 1, (ap_uint<16>)tile_size_x, (ap_uint<16>)stride_y, (ap_int<16>)tile_size_y, 
+    //        (ap_int<16>)stride_z, (ap_uint<16>)z_diff, (ap_uint<16>)avoid_x, (ap_uint<16>)avoid_y);
     {% else %}
-    const unsigned int avoid_x = tile_x == 0 ? 0 : memconfig.tile_overlap_size_x >> 1;
-    command = ops::hls::commandGen2D(offset, 1, (ap_uint<16>)tile_size_x, (ap_uint<16>)stride_y, (ap_int<16>)y_diff, (ap_uint<16>)avoid_x);
+    avoid_x = tile_x_id == 0 ? 0 : memconfig.tile_overlap_size_x >> 1;
+    //command = ops::hls::commandGen2D(offset, 1, (ap_uint<16>)tile_size_x, (ap_uint<16>)stride_y, (ap_int<16>)y_diff, (ap_uint<16>)avoid_x);
     {% endif %}
 
     num_pkts = total_pkts;
@@ -636,41 +645,37 @@ static void datamover_outerloop_{{ilh.id}}_tile_config_wrapper(const ops::hls::M
         {% if ndim == 3 %}
     size_y = tile_size_y;
         {% endif %}
+    size_x = tile_size_x;
     {#TODO: small tile case - need to be fixed
     is_small_tile = tile_size_x <= {{(config["tile_banks"]/2)|int}};#}
     is_small_tile = false;
     {% endif %} 
 
 #ifdef DEBUG_LOG
-    printf("[KERNEL_DEBUG]|datamover_%s| \n===============================\n","{{ilh.unique_name}}");
-    printf("[KERNEL_DEBUG]|datamover_%s| total_beats: %d\n", "{{ilh.unique_name}}", total_beats);
-    printf("[KERNEL_DEBUG]|datamover_%s| total_pkts: %d\n","{{ilh.unique_name}}", total_pkts);
-    printf("[KERNEL_DEBUG]|datamover_%s| ===============================\n","{{ilh.unique_name}}");
-    printf("[KERNEL_DEBUG]|datamover_%s| command:   \n","{{ilh.unique_name}}");
-    printf("[KERNEL_DEBUG]|datamover_%s|    offset: %d  \n", "{{ilh.unique_name}}", offset);
-    printf("[KERNEL_DEBUG]|datamover_%s|    tile_x: %d  \n","{{ilh.unique_name}}" , tile_size_x);
-    printf("[KERNEL_DEBUG]|datamover_%s|    stride_x: %d  \n","{{ilh.unique_name}}" ,1);
+    printf("[KERNEL_DEBUG]|datamover_%s| \n===============================\n","__func__");
+    printf("[KERNEL_DEBUG]|datamover_%s| total_beats: %d\n", "__func__", total_beats);
+    printf("[KERNEL_DEBUG]|datamover_%s| total_pkts: %d\n","__func__", total_pkts);
+    printf("[KERNEL_DEBUG]|datamover_%s| ===============================\n","__func__");
+    printf("[KERNEL_DEBUG]|datamover_%s| command:   \n","__func__");
+    printf("[KERNEL_DEBUG]|datamover_%s|    offset: %d  \n", "__func__", offset);
+    printf("[KERNEL_DEBUG]|datamover_%s|    tile_x: %d  \n","__func__" , tile_size_x);
     {% if ndim == 3 %}
-    printf("[KERNEL_DEBUG]|datamover_%s|    tile_y: %d  \n","{{ilh.unique_name}}", tile_size_y);
+    printf("[KERNEL_DEBUG]|datamover_%s|    tile_y: %d  \n","__func__", tile_size_y);
     {% else %}
-    printf("[KERNEL_DEBUG]|datamover_%s|    tile_y: %d  \n","{{ilh.unique_name}}", y_diff);
+    printf("[KERNEL_DEBUG]|datamover_%s|    tile_y: %d  \n","__func__", y_diff);
     {% endif %}
-    printf("[KERNEL_DEBUG]|datamover_%s|    stride_y: %d  \n","{{ilh.unique_name}}", stride_y);
     {% if ndim == 3 %}
-    printf("[KERNEL_DEBUG]|datamover_%s|    tile_z: %d  \n","{{ilh.unique_name}}" , z_diff);
-    printf("[KERNEL_DEBUG]|datamover_%s|    stride_z: %d  \n","{{ilh.unique_name}}" , stride_z);
+    printf("[KERNEL_DEBUG]|datamover_%s|    tile_z: %d  \n","__func__" , z_diff);
     {% endif %}
-    printf("[KERNEL_DEBUG]|datamover_%s|    avoid_x: %d  \n","{{ilh.unique_name}}" , avoid_x);
+    printf("[KERNEL_DEBUG]|datamover_%s|    avoid_x: %d  \n","__func__" , avoid_x);
     {% if ndim == 3 %}
-    printf("[KERNEL_DEBUG]|datamover_%s|    avoid_y: %d  \n","{{ilh.unique_name}}", avoid_y);
+    printf("[KERNEL_DEBUG]|datamover_%s|    avoid_y: %d  \n","__func__", avoid_y);
     {% endif %}
-    printf("[KERNEL_DEBUG]|datamover_%s| total_pkts: %d  \n","{{ilh.unique_name}}", total_pkts);
-    printf("[KERNEL_DEBUG]|datamover_%s| total_beats: %d  \n","{{ilh.unique_name}}", total_beats);
     {% if prog.is_interleave() %}
-    printf("[KERNEL_DEBUG]|datamover_%s|    x_pkts: %d  \n","{{ilh.unique_name}}", x_pkts);
-    printf("[KERNEL_DEBUG]|datamover_%s|    is_small_tile: %d  \n","{{ilh.unique_name}}", is_small_tile);
+    printf("[KERNEL_DEBUG]|datamover_%s|    x_pkts: %d  \n","__func__", x_pkts);
+    printf("[KERNEL_DEBUG]|datamover_%s|    is_small_tile: %d  \n","__func__", is_small_tile);
     {% endif %}
-    printf("[KERNEL_DEBUG]|datamover_%s| ===============================\n","{{ilh.unique_name}}");
+    printf("[KERNEL_DEBUG]|datamover_%s| ===============================\n","__func__");
 #endif
 }
 {% endif %}
@@ -712,6 +717,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
     {{axis_parameter_set()}})    
 {
     //TODO: memconfig.start_offset need to be handled for multibank tiling if start_offset != 0. In all our cased start_offset == 0 for now
+    const unsigned int iter_by_2 = iter >> 1;
     {% if isTiling %}
         {%if ndim == 3 %}
     const unsigned short total_tiles = memconfig.tile_count_x * memconfig.tile_count_y;
@@ -726,9 +732,8 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
 	const unsigned short stride_y = memconfig.grid_xblocks;
     {% endif %}
 
-    for (unsigned int i = 0; i < (iter >> 1); i++)
+    for (unsigned int i = 0; i < iter_by_2; i++)
     {
-    //#pragma HLS PIPELINE REWIND
     #ifdef DEBUG_LOG
         printf("[KERNEL_DEBUG]|%s| Calling datamover. i:%d\n", __func__, i);
     #endif
@@ -749,37 +754,77 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
             unsigned int total_pkts = 0;
 
         {% if prog.is_interleave() %}
+            size_t offset = 0;
+            unsigned short size_x = 0;
+            unsigned short avoid_x = 0;
             {% if ndim == 3 %}
-            unsigned short size_y;
-            unsigned short abs_row_offset;
+            unsigned short size_y = 0;
+            unsigned short avoid_y = 0;
+            unsigned short abs_row_offset = 0;
             {% endif %}
-            bool is_small_tile;
-        {% endif %}
-        {% if ndim == 3 %}
-            ap_uint<192> command;
-        {% else %}
-            ap_uint<144> command;
+            bool is_small_tile = false;
         {% endif %}
 
-            datamover_outerloop_{{ilh.id}}_tile_config_wrapper(memconfig, tile_x, {% if ndim == 3 %}tile_y, {% endif %}stride_y, {% if ndim == 3 %}stride_z, z_diff, {% else %}y_diff, {% endif %}total_pkts, total_beats, {% if prog.is_interleave() %} {%if ndim == 3 %}size_y, abs_row_offset, {%endif%} is_small_tile, {% endif %}command);
+            datamover_outerloop_{{ilh.id}}_tile_config_wrapper(memconfig, tile_x, {% if ndim == 3 %}tile_y, z_diff, {% else %}y_diff, {% endif %}total_pkts, total_beats{{"," if prog.is_interleave()}}{% if prog.is_interleave() %} offset, size_x, avoid_x, {%if ndim == 3 %}size_y, avoid_y, abs_row_offset, {%endif%} is_small_tile {% endif %});
     
-            ap_uint<{%if ndim == 3 %}160{%else%}128{%endif%}> short_command = command.range({%if ndim == 3 %}159{%else%}127{%endif%},0);
         {% if prog.is_interleave() %}
             {#TODO: small tile case - need to be fixed
             unsigned int small_tile_pkts = is_small_tile ? total_pkts : total_pkts << {{log2(config["mem_vector_factor"]/config["vector_factor"])|int}};#}
             unsigned int small_tile_pkts = total_pkts << {{log2(config["mem_vector_factor"]/config["vector_factor"])|int}};
         {% endif %}
 
+#ifdef DEBUG_LOG
+            printf("[KERNEL_DEBUG]|datamover_%s| \n=============== part 1 ================\n","{{ilh.unique_name}}");
+            printf("[KERNEL_DEBUG]|datamover_%s| total_beats: %d\n", "{{ilh.unique_name}}", total_beats);
+            printf("[KERNEL_DEBUG]|datamover_%s| total_pkts: %d\n","{{ilh.unique_name}}", total_pkts);
+            printf("[KERNEL_DEBUG]|datamover_%s| small_tile_pkts: %d\n","{{ilh.unique_name}}", small_tile_pkts);
+            printf("[KERNEL_DEBUG]|datamover_%s| ===============================\n","{{ilh.unique_name}}");
+            printf("[KERNEL_DEBUG]|datamover_%s| command:   \n","{{ilh.unique_name}}");
+            printf("[KERNEL_DEBUG]|datamover_%s|    offset: %d  \n", "{{ilh.unique_name}}", offset);
+            printf("[KERNEL_DEBUG]|datamover_%s|    tile_x: %d  \n","{{ilh.unique_name}}" , tile_size_x);
+            printf("[KERNEL_DEBUG]|datamover_%s|    stride_x: %d  \n","{{ilh.unique_name}}" ,1);
+            {% if ndim == 3 %}
+            printf("[KERNEL_DEBUG]|datamover_%s|    tile_y: %d  \n","{{ilh.unique_name}}", tile_size_y);
+            {% else %}
+            printf("[KERNEL_DEBUG]|datamover_%s|    tile_y: %d  \n","{{ilh.unique_name}}", y_diff);
+            {% endif %}
+            printf("[KERNEL_DEBUG]|datamover_%s|    stride_y: %d  \n","{{ilh.unique_name}}", stride_y);
+            {% if ndim == 3 %}
+            printf("[KERNEL_DEBUG]|datamover_%s|    tile_z: %d  \n","{{ilh.unique_name}}" , z_diff);
+            printf("[KERNEL_DEBUG]|datamover_%s|    stride_z: %d  \n","{{ilh.unique_name}}" , stride_z);
+            {% endif %}
+            printf("[KERNEL_DEBUG]|datamover_%s|    avoid_x: %d  \n","{{ilh.unique_name}}" , avoid_x);
+            {% if ndim == 3 %}
+            printf("[KERNEL_DEBUG]|datamover_%s|    avoid_y: %d  \n","{{ilh.unique_name}}", avoid_y);
+            {% endif %}
+            {% if prog.is_interleave() %}
+            printf("[KERNEL_DEBUG]|datamover_%s|    is_small_tile: %d  \n","{{ilh.unique_name}}", is_small_tile);
+            {% endif %}
+            printf("[KERNEL_DEBUG]|datamover_%s| ===============================\n","{{ilh.unique_name}}");
+#endif
+
     {% endif %}
+
+
             datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
     {% if isTiling %}
                     total_pkts,
                     total_beats,
         {% if prog.is_interleave() %}
+                    offset,
+                    size_x,
                     (ap_int<16>){% if ndim == 3 %}size_y{% else %}y_diff{%endif%},
             {% if ndim == 3 %}
                     (ap_int<16>)z_diff,
             {%endif%}
+                    avoid_x,
+            {% if ndim == 3 %}
+                    avoid_y,
+            {% endif %}
+                    stride_y,
+            {% if ndim == 3 %}
+                    stride_z,
+            {% endif %}
                     is_small_tile,
                     small_tile_pkts,
         {% endif %}
@@ -792,8 +837,6 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
                 {% endfor %}
             {% endif %}#}
     {% if isTiling %}
-                    command,
-                    short_command,
         {% if config["tile_banks"] > 1 %}
             {% if ndim == 3 %}
                     abs_row_offset,
@@ -844,51 +887,89 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
             unsigned int total_pkts = 0;
 
         {% if prog.is_interleave() %}
+            size_t offset = 0;
+            unsigned short size_x = 0;
+            unsigned short avoid_x = 0;
             {% if ndim == 3 %}
-            unsigned short size_y;
-            unsigned short abs_row_offset;
+            unsigned short size_y = 0;
+            unsigned short avoid_y = 0;
+            unsigned short abs_row_offset = 0;
             {% endif %}
-            bool is_small_tile;
-        {% endif %}
-        {% if ndim == 3 %}
-            ap_uint<192> command;
-        {% else %}
-            ap_uint<144> command;
+            bool is_small_tile = false;
         {% endif %}
 
-            datamover_outerloop_{{ilh.id}}_tile_config_wrapper(memconfig, tile_x, {% if ndim == 3 %}tile_y, {% endif %}stride_y, {% if ndim == 3 %}stride_z, z_diff, {% else %}y_diff, {% endif %}total_pkts, total_beats, {% if prog.is_interleave() %} {%if ndim == 3 %}size_y, abs_row_offset, {%endif%} is_small_tile, {% endif %}command);
+            datamover_outerloop_{{ilh.id}}_tile_config_wrapper(memconfig, tile_x, {% if ndim == 3 %}tile_y, z_diff, {% else %}y_diff, {% endif %}total_pkts, total_beats{{"," if prog.is_interleave()}}{% if prog.is_interleave() %} offset, size_x, avoid_x, {%if ndim == 3 %}size_y, avoid_y, abs_row_offset, {%endif%} is_small_tile {% endif %});
     
-            ap_uint<{%if ndim == 3 %}160{%else%}128{%endif%}> short_command = command.range({%if ndim == 3 %}159{%else%}127{%endif%},0);
         {% if prog.is_interleave() %}
             {#TODO: small tile case - need to be fixed
             unsigned int small_tile_pkts = is_small_tile ? total_pkts : total_pkts << {{log2(config["mem_vector_factor"]/config["vector_factor"])|int}};#}
             unsigned int small_tile_pkts = total_pkts << {{log2(config["mem_vector_factor"]/config["vector_factor"])|int}};
         {% endif %}
 
+#ifdef DEBUG_LOG
+            printf("[KERNEL_DEBUG]|datamover_%s| \n=============== part 1 ================\n","{{ilh.unique_name}}");
+            printf("[KERNEL_DEBUG]|datamover_%s| total_beats: %d\n", "{{ilh.unique_name}}", total_beats);
+            printf("[KERNEL_DEBUG]|datamover_%s| total_pkts: %d\n","{{ilh.unique_name}}", total_pkts);
+            printf("[KERNEL_DEBUG]|datamover_%s| small_tile_pkts: %d\n","{{ilh.unique_name}}", small_tile_pkts);
+            printf("[KERNEL_DEBUG]|datamover_%s| ===============================\n","{{ilh.unique_name}}");
+            printf("[KERNEL_DEBUG]|datamover_%s| command:   \n","{{ilh.unique_name}}");
+            printf("[KERNEL_DEBUG]|datamover_%s|    offset: %d  \n", "{{ilh.unique_name}}", offset);
+            printf("[KERNEL_DEBUG]|datamover_%s|    tile_x: %d  \n","{{ilh.unique_name}}" , tile_size_x);
+            printf("[KERNEL_DEBUG]|datamover_%s|    stride_x: %d  \n","{{ilh.unique_name}}" ,1);
+            {% if ndim == 3 %}
+            printf("[KERNEL_DEBUG]|datamover_%s|    tile_y: %d  \n","{{ilh.unique_name}}", tile_size_y);
+            {% else %}
+            printf("[KERNEL_DEBUG]|datamover_%s|    tile_y: %d  \n","{{ilh.unique_name}}", y_diff);
+            {% endif %}
+            printf("[KERNEL_DEBUG]|datamover_%s|    stride_y: %d  \n","{{ilh.unique_name}}", stride_y);
+            {% if ndim == 3 %}
+            printf("[KERNEL_DEBUG]|datamover_%s|    tile_z: %d  \n","{{ilh.unique_name}}" , z_diff);
+            printf("[KERNEL_DEBUG]|datamover_%s|    stride_z: %d  \n","{{ilh.unique_name}}" , stride_z);
+            {% endif %}
+            printf("[KERNEL_DEBUG]|datamover_%s|    avoid_x: %d  \n","{{ilh.unique_name}}" , avoid_x);
+            {% if ndim == 3 %}
+            printf("[KERNEL_DEBUG]|datamover_%s|    avoid_y: %d  \n","{{ilh.unique_name}}", avoid_y);
+            {% endif %}
+            {% if prog.is_interleave() %}
+            printf("[KERNEL_DEBUG]|datamover_%s|    is_small_tile: %d  \n","{{ilh.unique_name}}", is_small_tile);
+            {% endif %}
+            printf("[KERNEL_DEBUG]|datamover_%s| ===============================\n","{{ilh.unique_name}}");
+#endif
+
     {% endif %}
+
+
             datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
     {% if isTiling %}
                     total_pkts,
                     total_beats,
         {% if prog.is_interleave() %}
+                    offset,
+                    size_x,
                     (ap_int<16>){% if ndim == 3 %}size_y{% else %}y_diff{%endif%},
             {% if ndim == 3 %}
                     (ap_int<16>)z_diff,
-            {%endif%}
+            {% endif %}
+                    avoid_x,
+            {% if ndim == 3 %}
+                    avoid_y,
+            {% endif %}
+                    stride_y,
+            {% if ndim == 3 %}
+                    stride_z,
+            {% endif %}
                     is_small_tile,
                     small_tile_pkts,
         {% endif %}
     {% else %}
                     num_pkts,
     {% endif %}
-                {#{% if ilh.isMultiDim() %}
-                    {% for m_dim in ilh.getMultidimList() %}
+            {#{% if ilh.isMultiDim() %}
+                {% for m_dim in ilh.getMultidimList() %}
                 num_pkts_d{{m_dim}},
-                    {% endfor %}
-                {% endif %}#}
+                {% endfor %}
+            {% endif %}#}
     {% if isTiling %}
-                    command,
-                    short_command,
         {% if config["tile_banks"] > 1 %}
             {% if ndim == 3 %}
                     abs_row_offset,
