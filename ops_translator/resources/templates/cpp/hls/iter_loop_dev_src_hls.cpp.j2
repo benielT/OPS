@@ -64,6 +64,7 @@ iter_par_factor
             {% endfor %}
         {% else %}
     kernel_{{lh.kernel}}_PE(PEId_offset_i, stencilConfig,
+            {% set prev_arg_str = [""] %}
             {% for arg_str in ilh.PE_args[loop_idx]%}
                 {% if loop.last %}
                     {% if consts_map[loop_idx] or lh.args|ops_gbl %}
@@ -74,7 +75,9 @@ iter_par_factor
                 {% else %}
                     {% set last_check = False %}
                 {% endif %}
-            {{arg_str}}[i]{{"," if not last_check}}
+            {{arg_str}}{% if arg_str != prev_arg_str[0] %}[i]{% else %}[i+1]{% endif %}{{"," if not last_check}}
+            {% set _ = prev_arg_str.pop() %}
+            {% set _ = prev_arg_str.append(arg_str) %}
             {% endfor %}
             {% for const_arg in lh.args|ops_gbl %}
             {{get_arg_gbl_name(const_arg)}}{{"," if (not loop.last or consts_map[loop_idx])}}
