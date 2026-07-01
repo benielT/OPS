@@ -107,7 +107,7 @@ class FPGA {
     static FPGA* getInstance();
 
 //    const uint32_t next() const {
-//        if (m_id == m_Devices.size() - 1) {
+//        if (m_id == m_devices.size() - 1) {
 //            return 0;
 //        }
 //
@@ -117,11 +117,11 @@ class FPGA {
 
     void setID(uint32_t id) {
         m_id = id;
-        if (m_id >= m_Devices.size()) {
+        if (m_id >= m_devices.size()) {
             std::cout << "Device specified by id = " << m_id << " is not found." << std::endl;
             throw;
         }
-        m_device = m_Devices[m_id];
+        m_device = m_devices[m_id];
     }
 
     bool xclbin(std::string binaryFile) {
@@ -324,9 +324,9 @@ class FPGA {
             std::string cl_device_name;
             OCL_CHECK(err, err = device.getInfo(CL_DEVICE_NAME, &cl_device_name));
             std::cout << "Found device: " << cl_device_name << std::endl;
-            if (regex_match(cl_device_name, regexStr)) m_Devices.push_back(device);
+            if (regex_match(cl_device_name, regexStr)) m_devices.push_back(device);
         }
-        if (0 == m_Devices.size()) {
+        if (0 == m_devices.size()) {
             std::cout << "Device specified by name == " << deviceName << " is not found." << std::endl;
             throw;
         }
@@ -334,7 +334,7 @@ class FPGA {
 
     FPGA(std::string deviceName) {
         getDevices(deviceName);
-        m_device = m_Devices[m_id];
+        m_device = m_devices[m_id];
         m_id = -1;
         OPS_tiling = false;
         OPS_tiling_size_x = 0;
@@ -350,8 +350,8 @@ class FPGA {
 
     FPGA(unsigned int p_id, const std::vector<cl::Device>& devices) {
         m_id = p_id;
-        m_Devices = devices;
-        m_device = m_Devices[m_id];
+        m_devices = devices;
+        m_device = m_devices[m_id];
         OPS_tiling = false;
         OPS_tiling_size_x = 0;
         OPS_tiling_size_y = 0;
@@ -362,7 +362,7 @@ class FPGA {
 
     unsigned int m_id;
     cl::Device m_device;
-    std::vector<cl::Device> m_Devices;
+    std::vector<cl::Device> m_devices;
     cl::Context m_context;
     cl::CommandQueue m_queue;
     cl::Program m_program;
