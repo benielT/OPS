@@ -1,0 +1,565 @@
+#include "top.hpp"
+#include <random>
+#include <iomanip>
+
+#define getName(var) #var
+
+template <typename T>
+struct aligned_allocator {
+    using value_type = T;
+    T* allocate(std::size_t num) {
+        void* ptr = nullptr;
+        if (posix_memalign(&ptr, 4096, num * sizeof(T))) throw std::bad_alloc();
+        return reinterpret_cast<T*>(ptr);
+    }
+    void deallocate(T* p, std::size_t num) { free(p); }
+};
+
+template <typename T>
+using host_buffer_t = std::vector<T, aligned_allocator<T> >;
+
+#ifndef NUM_TESTS
+    #define NUM_TESTS 1
+#endif
+
+#ifndef TEST_SEED
+    #define TEST_SEED -1
+#endif
+
+#ifdef TEST_VALUES
+    constexpr bool IS_TEST_VALUES = true;
+#else
+    constexpr bool IS_TEST_VALUES = false;
+#endif 
+
+template <typename T>
+struct TestGrid{
+    host_buffer_t<T> buffer;
+    std::vector<host_buffer_t<T>> altbuffers = std::vector<host_buffer_t<T>>(TILE_BANKS);
+    unsigned short grid_size_x;
+    unsigned short grid_size_y;
+    unsigned short grid_size_z;
+};
+
+template <typename T>
+void print_grid(TestGrid<T>& grid, std::string prompt = "grid") {
+    std::cout << "*****************************************************************************" << std::endl;
+    std::cout << "    Grid : " << prompt << ", Size: (" << grid.grid_size_x << ", " << grid.grid_size_y << ", " << grid.grid_size_z << ")" << std::endl;
+    std::cout << "*****************************************************************************" << std::endl << std::endl;
+
+    for (unsigned short z = 0; z < grid.grid_size_z; z++) {
+        std::cout << "=============================== [PLANE " << (int)z << "] ===============================" << std::endl;
+        for (unsigned short y = 0; y < grid.grid_size_y; y++) {
+            std::cout << "|p:" << (int)z << "|r:" << (int)y << "| ";
+            for (unsigned short x = 0; x < grid.grid_size_x; x++) {
+                size_t idx = z * grid.grid_size_y * grid.grid_size_x + y * grid.grid_size_x + x;
+                std::cout << std::setw(10) << grid.buffer[idx] << " ";
+            }
+            std::cout << std::endl;
+        }
+        std::cout << "=============================== [END PLANE " << (int)z << "] ===============================" << std::endl;
+        std::cout << std::endl;
+    }
+}
+
+template <typename T>
+void print_altbuffers(TestGrid<T>& grid) {
+    std::cout << "*****************************************************************************" << std::endl;
+    std::cout << "  Grid : " << getName(grid) << "alternative bank buffers print " << std::endl;
+    std::cout << "*****************************************************************************" << std::endl << std::endl;
+
+    size_t total_vect_elements = grid.grid_size_x / MEM_VECTOR_FACTOR * grid.grid_size_y * grid.grid_size_z;
+
+    for (int bank = 0; bank < TILE_BANKS; bank++) {
+
+        size_t banks_vect_elements = (total_vect_elements / TILE_BANKS) + (bank < (total_vect_elements % TILE_BANKS) ? 1 : 0);
+        size_t altbuffers_size = banks_vect_elements * MEM_VECTOR_FACTOR;
+        std::cout << std::endl;
+        std::cout << "*****************************************************************************" << std::endl;
+        std::cout << "bank: " << bank << " -- size :" << altbuffers_size << std::endl;
+        std::cout << "*****************************************************************************" << std::endl << std::endl;
+
+        int prev_x=0, prev_y=0, prev_z=0;
+
+        for (int vect_i = 0; vect_i < banks_vect_elements; vect_i++) {
+            int abs_i_begin = (vect_i * TILE_BANKS + bank) * MEM_VECTOR_FACTOR;
+            int altbuff_idx_begin = vect_i * MEM_VECTOR_FACTOR;
+            for (int j = 0; j < MEM_VECTOR_FACTOR; j++)
+            {
+                int altbuff_idx = altbuff_idx_begin + j;
+                int abs_index_in_orig = abs_i_begin + j;
+                int x = abs_index_in_orig % grid.grid_size_x;
+                int y = (abs_index_in_orig / grid.grid_size_x) % grid.grid_size_y;
+                int z = abs_index_in_orig / (grid.grid_size_x * grid.grid_size_y);
+
+                if (prev_y != y)
+                    std::cout << std::endl;
+                if (prev_z != z)
+                    std::cout << "=============================== [PLANE " << (int)z << "] ===============================" << std::endl;
+
+                std::cout << std::setw(14) << "[" << x << "," << y << "]:" << grid.altbuffers[bank][altbuff_idx] << " ";
+                prev_x = x;
+                prev_y = y;
+                prev_z = z;
+            }
+        }
+        std::cout << std::endl;
+    }
+}
+
+template <typename T>
+void split_grid(TestGrid<T>& grid) {
+    for (unsigned int k = 0; k < grid.grid_size_z; k++) {
+        for (unsigned int j = 0; j < grid.grid_size_y; j++) {
+            for (unsigned int i = 0; i < grid.grid_size_x; i+=MEM_VECTOR_FACTOR) {
+                unsigned long abs_index = i + j * grid.grid_size_x 
+                                            + k * grid.grid_size_x * grid.grid_size_y;
+                
+                unsigned long vectored_index = abs_index / MEM_VECTOR_FACTOR;
+                unsigned int bank = vectored_index % TILE_BANKS;
+                unsigned long bank_index = vectored_index / TILE_BANKS;
+                bank_index *= MEM_VECTOR_FACTOR;
+                size_t src_offset = k * grid.grid_size_x * grid.grid_size_y
+                            + j * grid.grid_size_x + i;
+                size_t dst_offset = bank_index;
+                std::memcpy(&(grid.altbuffers[bank][dst_offset]),
+                        &(grid.buffer[src_offset]),
+                        MEM_VECTOR_FACTOR * sizeof(T));
+            }
+        }
+    }
+}
+
+template <typename T>
+void join_grid(TestGrid<T>& grid) {
+    for (unsigned int k = 0; k < grid.grid_size_z; k++) {
+        for (unsigned int j = 0; j < grid.grid_size_y; j++) {
+            for (unsigned int i = 0; i < grid.grid_size_x; i+=MEM_VECTOR_FACTOR) {
+                unsigned long abs_index = i + j * grid.grid_size_x 
+                                            + k * grid.grid_size_x * grid.grid_size_y;
+                
+                unsigned long vectored_index = abs_index / MEM_VECTOR_FACTOR;
+                unsigned int bank = vectored_index % TILE_BANKS;
+                unsigned long bank_index = vectored_index / TILE_BANKS;
+                bank_index *= MEM_VECTOR_FACTOR;
+                size_t src_offset = k * grid.grid_size_x * grid.grid_size_y
+                            + j * grid.grid_size_x + i;
+                size_t dst_offset = bank_index;
+                std::memcpy( &(grid.buffer[src_offset]),&(grid.altbuffers[bank][dst_offset]),
+                        MEM_VECTOR_FACTOR * sizeof(T));
+            }
+        }
+    }
+}
+
+void random_stimulus(TestParameters& test_parameters)
+{
+    std::random_device rd;
+    unsigned int seed = TEST_SEED < 0 ? rd() : TEST_SEED;
+    test_parameters.test_seed = seed;
+
+    // random_generator
+    std::mt19937 mtrand(seed);
+
+
+    // Tile size selection
+    std::vector<unsigned short> valid_tile_sizes = std::vector<unsigned short>({ {%- for i in valid_tile_sizes -%}{{i}}{{", " if not loop.last}}{% endfor -%} });
+    std::uniform_int_distribution<unsigned short> valid_tile_size_idx_dist(0,valid_tile_sizes.size()-1); 
+
+    test_parameters.tile_x = valid_tile_sizes[valid_tile_size_idx_dist(mtrand)];
+    test_parameters.tile_y = valid_tile_sizes[valid_tile_size_idx_dist(mtrand)];
+
+    //stencil_d generation
+    std::uniform_int_distribution<unsigned short> stencil_d_dist(1, STENCIL_D_MAX);
+    test_parameters.stencil_d = stencil_d_dist(mtrand);
+
+    //grid_size selection
+    std::uniform_int_distribution<unsigned short> grid_x_dist(MIN_GRID_SIZE_X, MAX_GRID_SIZE_X);
+    test_parameters.logic_size_x = grid_x_dist(mtrand);
+    std::uniform_int_distribution<unsigned short> grid_y_dist(MIN_GRID_SIZE_Y, MAX_GRID_SIZE_Y);
+    test_parameters.logic_size_y = grid_y_dist(mtrand);
+    std::uniform_int_distribution<unsigned short> grid_z_dist(MIN_GRID_SIZE_Z, MAX_GRID_SIZE_Z);
+    test_parameters.logic_size_z = grid_z_dist(mtrand);
+    unsigned short actual_grid_x = test_parameters.logic_size_x + test_parameters.stencil_d;
+    unsigned short actual_grid_y = test_parameters.logic_size_y + test_parameters.stencil_d;
+    unsigned short actual_grid_z = test_parameters.logic_size_z + test_parameters.stencil_d;
+    unsigned short final_grid_x = ((actual_grid_x + MEM_VECTOR_FACTOR - 1) / MEM_VECTOR_FACTOR) * MEM_VECTOR_FACTOR; 
+    test_parameters.grid_size_x = final_grid_x;
+    test_parameters.grid_size_y = actual_grid_y;
+    test_parameters.grid_size_z = actual_grid_z;
+
+    //generating random offset
+    std::uniform_int_distribution<unsigned short> tile_read_offset_dist(0,TILE_READ_OFFSET_MAX);
+    test_parameters.read_offset = tile_read_offset_dist(mtrand);
+
+
+    // test_parameters.tile_x = 128;
+    // test_parameters.tile_y = 128;
+    // test_parameters.stencil_d = 2;
+    // test_parameters.logic_size_x = 20;
+    // test_parameters.logic_size_y = 1;
+    // test_parameters.logic_size_z = 1;
+    // unsigned short actual_grid_x = test_parameters.logic_size_x + test_parameters.stencil_d;
+    // unsigned short actual_grid_y = test_parameters.logic_size_y + test_parameters.stencil_d;
+    // unsigned short actual_grid_z = test_parameters.logic_size_z + test_parameters.stencil_d;
+    // unsigned short final_grid_x = ((actual_grid_x + MEM_VECTOR_FACTOR - 1) / MEM_VECTOR_FACTOR) * MEM_VECTOR_FACTOR; 
+    // test_parameters.grid_size_x = final_grid_x;
+    // test_parameters.grid_size_y = actual_grid_y;
+    // test_parameters.grid_size_z = actual_grid_z;
+    // test_parameters.read_offset = 1;
+}
+
+template <typename T>
+void generate_grid(TestGrid<T>& grid, const TestParameters& test_params, bool init_zero=false)
+{
+    std::cout << "Allocating Grid " << std::endl;
+
+    size_t total_grid_size = test_params.grid_size_x * test_params.grid_size_y * test_params.grid_size_y;
+    std::cout << "Adjusted grid sizes: (" << test_params.grid_size_x << ", " << test_params.grid_size_y << ", " << test_params.grid_size_z << "), total_grid_size: " << total_grid_size << std::endl;
+    grid.grid_size_x = test_params.grid_size_x;
+    grid.grid_size_y = test_params.grid_size_y;
+    grid.grid_size_z = test_params.grid_size_z;
+    
+    grid.buffer.resize(total_grid_size);
+
+    std::cout << "Succesfully buffer resized" << std::endl;
+
+    if (IS_TEST_VALUES) {
+        for (size_t i = 0; i < total_grid_size; i++) {
+            if (not init_zero) {
+                grid.buffer[i] = i;
+            } else {
+                grid.buffer[i] = 0;
+            }
+        }
+    } else {
+        unsigned int seed = TEST_SEED < 0 ? test_params.test_seed : TEST_SEED;
+        std::mt19937 mtrand(seed);
+        std::normal_distribution<T> value_dist(1,1000);
+        
+        for (size_t i = 0; i < total_grid_size; i++) {
+            if (not init_zero) {
+                grid.buffer[i] = value_dist(mtrand);
+            } else {
+                grid.buffer[i] = 0;
+            }
+        }
+    }
+
+//ifdef DEBUG_LOG
+//    print_grid(grid);
+//#endif
+
+    // alt_buffer allocate
+    size_t total_vect_elements = grid.grid_size_x / MEM_VECTOR_FACTOR * grid.grid_size_y * grid.grid_size_z;
+
+    for (int bank = 0; bank < TILE_BANKS; bank++) {
+        size_t banks_vect_elements = (total_vect_elements / TILE_BANKS) + (bank < (total_vect_elements % TILE_BANKS) ? 1 : 0);
+        size_t altbuffers_size = banks_vect_elements * MEM_VECTOR_FACTOR;
+        std::cout << "Allocationg altbank: " << bank << " -- size :" << altbuffers_size << std::endl;
+        grid.altbuffers[bank].resize(altbuffers_size);
+    }
+}
+
+template <typename T>
+ap_uint<192> commandGen3Dwrapper(const TestGrid<T>& grid, const TestParameters& params, unsigned int& total_beats, unsigned int& total_pkts, bool& is_small_tile)
+{
+    unsigned int test_tile_size_x = (params.tile_x + params.read_offset * MEM_VECTOR_FACTOR) <= grid.grid_size_x ? params.tile_x : grid.grid_size_x - params.read_offset * MEM_VECTOR_FACTOR;
+    unsigned int test_tile_size_y = params.tile_y <= grid.grid_size_y ? params.tile_y : grid.grid_size_y;
+    unsigned int offset_x = params.read_offset;
+    unsigned int widen_test_tile_size_x = test_tile_size_x >> LOG2(MEM_VECTOR_FACTOR);
+
+    ap_uint<64> widen_offset = offset_x;
+    ap_uint<16> strid_y = grid.grid_size_x >> LOG2(MEM_VECTOR_FACTOR);
+    ap_uint<16> strid_z = strid_y * grid.grid_size_y;
+
+    const unsigned int tile_size_y_mul_z_diff = test_tile_size_y * grid.grid_size_z;
+    const unsigned int bank_widened_pkts = (test_tile_size_x + LOG2(MEM_VECTOR_FACTOR) - 1) >> LOG2(MEM_VECTOR_FACTOR);
+    
+    auto command = ops::hls::commandGen3D(widen_offset, 1, (ap_uint<16>)widen_test_tile_size_x, strid_y, (ap_uint<16>)test_tile_size_y, strid_z, (ap_uint<16>)grid.grid_size_z, 0,  0); //Avoids are not needed as read and writing 1 tile
+
+    unsigned int x_pkts = (widen_test_tile_size_x + TILE_BANKS - 1) >> LOG2(TILE_BANKS);
+    total_pkts = x_pkts * tile_size_y_mul_z_diff;
+    total_beats = widen_test_tile_size_x * tile_size_y_mul_z_diff;
+    is_small_tile = widen_test_tile_size_x  <= LOG2(TILE_BANKS/2);
+
+
+    std::cout <<"[DEBUG][TEST] command gen values" << std::endl;
+    std::cout <<"================================" << std::endl;
+    std::cout <<" total_pkts_per_lane: " << total_pkts << std::endl;
+    std::cout <<" total_beats: " << total_beats << std::endl;
+    std::cout <<" is_small_tile: " << is_small_tile << std::endl;
+    std::cout <<"================================" << std::endl;
+
+    return command;
+}
+
+template <typename T>
+bool evaluate(TestGrid<T>& grid_a, TestGrid<T>& grid_b, TestParameters& params)
+{
+    unsigned int total_beats = 0;
+    unsigned int total_pkts = 0;
+    bool is_small_tile = false;
+    
+    // Use grid_a to generate the expected command
+    auto command = commandGen3Dwrapper(grid_a, params, total_beats, total_pkts, is_small_tile);
+
+    // Parse parameters from the command
+    size_t offset_x_vect = command.range(63,0);
+    ap_uint<16> size_x_vect = command.range(95,80);
+    ap_uint<16> stride_y = command.range(111,96);
+    ap_uint<16> size_y = command.range(127,112);
+    ap_uint<16> stride_z = command.range(143,128);
+    ap_uint<16> size_z = command.range(159,144);
+
+    // Convert vector bounds to element bounds based on MEM_VECTOR_FACTOR
+    size_t start_x = offset_x_vect * MEM_VECTOR_FACTOR;
+    size_t dim_x = size_x_vect * MEM_VECTOR_FACTOR;
+    size_t dim_y = size_y;
+    size_t dim_z = size_z;
+
+    std::cout << "\n==== VALIDATING GRID TILE ====" << std::endl;
+    std::cout << "Tile Offset X: " << start_x << std::endl;
+    std::cout << "Tile Size (X,Y,Z): (" << dim_x << ", " << dim_y << ", " << dim_z << ")" << std::endl;
+
+    unsigned int mismatches = 0;
+
+    // Evaluate the expected tile against the received tile buffer
+    for (size_t z = 0; z < dim_z; z++) {
+        for (size_t y = 0; y < dim_y; y++) {
+            for (size_t x = 0; x < dim_x; x++) {
+                // Calculate absolute coordinates
+                size_t abs_x = start_x + x;
+                size_t abs_y = y; // Assuming 0-based Y and Z offsets per commandGen3D call
+                size_t abs_z = z;
+                
+                // Calculate flattened 1D buffer index
+                size_t idx = abs_x + 
+                             abs_y * grid_a.grid_size_x + 
+                             abs_z * grid_a.grid_size_x * grid_a.grid_size_y;
+
+                T expected_val = grid_a.buffer[idx];
+                T actual_val = grid_b.buffer[idx];
+
+                if (expected_val != actual_val) {
+                    if (mismatches < 10) {
+                        std::cout << "MISMATCH at tile[" << x << "," << y << "," << z << "] "
+                                  << "(grid[" << abs_x << "," << abs_y << "," << abs_z << "]): "
+                                  << "expected=" << expected_val << ", got=" << actual_val << std::endl;
+                    }
+                    mismatches++;
+                }
+            }
+        }
+    }
+
+    if (mismatches == 0) {
+        std::cout << "✓ VALIDATION PASSED: All output data matches expected tile values\n" << std::endl;
+        return true;
+    } else {
+        std::cout << "✗ VALIDATION FAILED: " << mismatches << " mismatches found\n" << std::endl;
+        return false;
+    }
+}
+
+template <typename T>
+void test_read_write(TestGrid<T>& grid, TestGrid<T>& grid_receive, TestParameters& params)
+{
+    std::cout << std::endl;
+    std::cout << "*****************************************************************************" << std::endl;
+    std::cout << "Runing Test" << std::endl;
+    std::cout << "*****************************************************************************" << std::endl << std::endl;
+
+    /*::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>> output_strms[TILE_BANKS];
+
+    unsigned int test_tile_size_x = (params.tile_x + params.read_offset * MEM_VECTOR_FACTOR) <= grid.grid_size_x ? params.tile_x : grid.grid_size_x - params.read_offset * MEM_VECTOR_FACTOR;
+    unsigned int test_tile_size_y = params.tile_y <= grid.grid_size_y ? params.tile_y : grid.grid_size_y;
+    unsigned int offset_x = params.read_offset;
+    unsigned int widen_test_tile_size_x = test_tile_size_x >> LOG2(MEM_VECTOR_FACTOR);
+
+    ap_uint<64> widen_offset = offset_x;
+    ap_uint<16> strid_y = grid.grid_size_x >> LOG2(MEM_VECTOR_FACTOR);
+    ap_uint<16> strid_z = strid_y * grid.grid_size_y;
+
+    const unsigned int tile_size_y_mul_z_diff = test_tile_size_y * grid.grid_size_z;
+    const unsigned int bank_widened_pkts = (test_tile_size_x + LOG2(MEM_VECTOR_FACTOR) - 1) >> LOG2(MEM_VECTOR_FACTOR);*/
+    
+    unsigned int total_beats = 0;
+    unsigned int total_pkts = 0;
+    bool is_small_tile = false;
+    
+    auto command = commandGen3Dwrapper(grid, params, total_beats, total_pkts, is_small_tile);
+
+    ap_uint<160> short_command = command.range(159,0);
+
+    /*const unsigned int total_beats = test_tile_size_x * tile_size_y_mul_z_diff;
+    const unsigned int total_beats_div_4 = widen_test_tile_size_x * tile_size_y_mul_z_diff;
+    bool small_tile = test_tile_size_x  <= LOG2(TILE_BANKS/2);
+    const unsigned int total_pkts_div_4 = small_tile ? total_beats_div_4 << 1 : total_beats_div_4;*/
+
+    // grid tile buffers to ap_uint<MEM_DATA_WIDTH> buffers.
+    {% for i in range(tile_banks) -%}
+    std::vector<ap_uint<DATA_WIDTH>> alt_buffer_{{i}};
+    std::vector<ap_uint<DATA_WIDTH>> alt_buffer_read_{{i}};
+    {% endfor %}
+
+    ops::hls::DataConv converter;
+    {% for i in range(tile_banks) -%}
+    for (unsigned short i = 0; i < grid.altbuffers[{{i}}].size(); i++)
+    {
+        converter.f = grid.altbuffers[{{i}}][i];
+        alt_buffer_{{i}}.push_back(converter.i);
+        alt_buffer_read_{{i}}.push_back(0);
+    }
+    {% endfor %}
+
+    dut(total_beats, total_pkts, is_small_tile, command.range(127,112) /* size_y*/, grid.grid_size_z, short_command, command,
+    {%- for i in range(tile_banks) -%}
+            (ap_uint<MEM_DATA_WIDTH>*)alt_buffer_{{i}}.data(),
+    {% endfor %}
+    {%- for i in range(tile_banks) -%}
+            (ap_uint<MEM_DATA_WIDTH>*)alt_buffer_read_{{i}}.data(){{"," if not loop.last }}
+    {% endfor %});
+
+    //receiving 
+    {% for i in range(tile_banks) -%}
+    for (unsigned short i = 0; i < grid_receive.altbuffers[{{i}}].size(); i++)
+    {
+        converter.i = alt_buffer_read_{{i}}[i];
+        grid_receive.altbuffers[{{i}}][i] = converter.f;       
+    }
+    {% endfor %}
+
+    //// Read and validate output streams in round-robin manner
+    //std::cout << "\n==== VALIDATING OUTPUT STREAMS ====" << std::endl;
+    //std::cout << "Expected tile: offset_x=" << offset_x << ", size=(" << test_tile_size_x 
+    //          << ", " << test_tile_size_y << ", " << grid.grid_size_z << ")" << std::endl;
+    //
+    //std::vector<stencil_type> output_data;
+    //unsigned int stream_idx = 0;
+    //bool all_streams_empty = false;
+    //unsigned int read_count = 0;
+    //
+    //// Read from streams in round-robin manner
+    //while (!all_streams_empty && read_count < (test_tile_size_x * test_tile_size_y * grid.grid_size_z)) {
+    //    all_streams_empty = true;
+    //    for (int bank = 0; bank < TILE_BANKS; bank++) {
+    //        if (!output_strms[bank].empty()) {
+    //            all_streams_empty = false;
+    //            ap_axiu<AXIS_DATA_WIDTH,0,0,0> data_beat = output_strms[bank].read();
+    //            output_data.push_back(data_beat.data);
+    //            read_count++;
+    //            
+    //            if (read_count % 100 == 0) {
+    //                std::cout << "Read " << read_count << " elements from streams" << std::endl;
+    //            }
+    //        }
+    //    }
+    //}
+    //
+    //std::cout << "Total data elements read from output streams: " << output_data.size() << std::endl;
+    //std::cout << "Expected elements: " << (test_tile_size_x * test_tile_size_y * grid.grid_size_z) << std::endl;
+    //
+    //// Validate output data against expected tile from grid.buffer
+    //std::cout << "\nValidating tile data..." << std::endl;
+    //unsigned int mismatches = 0;
+    //size_t data_idx = 0;
+    //
+    //for (unsigned int z = 0; z < grid.grid_size_z && data_idx < output_data.size(); z++) {
+    //    for (unsigned int y = 0; y < test_tile_size_y && data_idx < output_data.size(); y++) {
+    //        for (unsigned int x = 0; x < test_tile_size_x && data_idx < output_data.size(); x++) {
+    //            // Calculate expected value from grid.buffer
+    //            size_t src_idx = (offset_x + x) + (y * grid.grid_size_x) + (z * grid.grid_size_x * grid.grid_size_y);
+    //            stencil_type expected_val = grid.buffer[src_idx];
+    //            stencil_type actual_val = output_data[data_idx];
+    //            
+    //            if (expected_val != actual_val) {
+    //                if (mismatches < 10) {  // Print first 10 mismatches
+    //                    std::cout << "MISMATCH at tile[" << x << "," << y << "," << z << "] "
+    //                              << "(grid[" << (offset_x + x) << "," << y << "," << z << "]): "
+    //                              << "expected=" << expected_val << ", got=" << actual_val << std::endl;
+    //                }
+    //                mismatches++;
+    //            }
+    //            data_idx++;
+    //        }
+    //    }
+    //}
+    
+    //if (mismatches == 0) {
+    //    std::cout << "✓ VALIDATION PASSED: All output data matches expected tile values" << std::endl;
+    //} else {
+    //    std::cout << "✗ VALIDATION FAILED: " << mismatches << " mismatches found" << std::endl;
+    //}
+    //std::cout << "===================================\n" << std::endl;
+}
+
+int main()
+{
+    std::cout << std::endl;
+    std::cout << "*****************************************************************************" << std::endl;
+    std::cout << "TESTING: Interleave tiling multi-bank read component" << std::endl;
+    std::cout << "*****************************************************************************" << std::endl << std::endl;
+
+    constexpr unsigned int num_tests = NUM_TESTS;
+    host_buffer_t<bool> scoreboard;
+    
+    for (unsigned int test = 0; test < num_tests; test++)
+    {
+        std::cout << "*****************************************************************************" << std::endl;
+        std::cout << "      TEST:" << test << std::endl;
+        std::cout << "*****************************************************************************" << std::endl << std::endl;
+        
+        TestParameters params;
+        
+        random_stimulus(params);
+        
+        std::cout << "===================================================" << std::endl;
+        std::cout << "Test Parameters " << std::endl;
+        std::cout << "---------------------------------------------------" << std::endl;
+        
+        std::cout << "      logica_grid_size    : (" << params.logic_size_x <<", " << params.logic_size_y << ", " << params.logic_size_z << ")" << std::endl;
+        std::cout << "      grid_size           : (" << params.grid_size_x <<", " << params.grid_size_y << ", " << params.grid_size_z <<  ")" << std::endl;
+        std::cout << "      tile_size           : (" << params.tile_x << ", " << params.tile_y << ")" << std::endl;
+        std::cout << "      stencil_d           : " << params.stencil_d << std::endl;
+        std::cout << "      test_seed           : " << params.test_seed << std::endl;
+        std::cout << "      tile_read_offset    : " << params.read_offset << std::endl;
+        std::cout << "===================================================" << std::endl;
+
+        TestGrid<stencil_type> grid, grid_receive;
+        generate_grid(grid, params);
+        generate_grid(grid_receive, params, true); // Initialize zero grid
+        std::cout << "split_grid" << std::endl;
+
+        split_grid(grid);
+        split_grid(grid_receive);
+
+#ifdef DEBUG_LOG 
+        print_grid(grid, "grid");
+        print_grid(grid_receive, "grid_receive");
+        print_altbuffers(grid);
+#endif 
+
+        test_read_write(grid, grid_receive, params);
+
+        join_grid(grid_receive);
+
+#ifdef DEBUG_LOG 
+        print_grid(grid_receive, "grid_receive");
+        print_altbuffers(grid_receive);
+#endif 
+        auto score = evaluate(grid, grid_receive, params);
+        scoreboard.push_back(score);
+    }
+
+    // Final scoreboard
+    std::cout << "==========================" << std::endl;
+    std::cout << "       TEST SUMMARY" << std::endl;
+    std::cout << "==========================" << std::endl;
+    for (unsigned int test = 0; test < num_tests; test++) {
+        std::cout << "Test " << test + 1 <<": " << (scoreboard[test] ? "PASSED" : "FAILED") << std::endl;
+    }
+    std::cout << "==========================" << std::endl;
+
+    return 0;
+}

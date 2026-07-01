@@ -121,12 +121,14 @@ def getReadArgsFromStencil(stencil_ptr: str, loop: ops.Loop) :
             read_args.append(arg)
     return read_args
 
-def getAdjustedLineBufferSize(buf_size: int, half_span: int, vec_fac: int) -> int :
-    return ((int)((buf_size + 2*half_span + vec_fac - 1)/vec_fac))
+def getAdjustedLineBufferSize(buf_size: int, half_span: int, vec_fac: int, div: int = 1) -> int :
+    adjusted_buf_size = int(ceil(buf_size / div))
+    return ((int)((adjusted_buf_size + 2*half_span + vec_fac - 1)/vec_fac))
 
-def getAdjustedPlaneBufferSize(x_size: int, y_size: int, half_span: int, vec_fac: int) -> int:
+def getAdjustedPlaneBufferSize(x_size: int, y_size: int, half_span: int, vec_fac: int, div: int = 1) -> int:
     # print(f"x_size: {x_size}, y_size: {y_size}, half_span: {half_span}, vec_fac: {vec_fac}\n")
-    adj_x_size = (int)((x_size + 2*half_span + vec_fac - 1)/vec_fac)
+    adjusted_x_size = int(ceil(x_size/div))
+    adj_x_size = (int)((adjusted_x_size + 2*half_span + vec_fac - 1)/vec_fac)
     adj_y_size = y_size + 2*half_span
     return (adj_x_size * adj_y_size)
 
@@ -134,7 +136,7 @@ def getOverlapTileSize(n_slr: int, p_slr: int, half_span: int, mem_vec_fac: int)
     # print(f"n_slr: {n_slr}, p_slr: {p_slr}, half_span: {half_span}, mem_vec_fac: {mem_vec_fac}")
     if isinstance(p_slr, list):
         return (floor(((sum(p_slr)) * half_span + mem_vec_fac - 1) / mem_vec_fac) * mem_vec_fac * 2)
-    return(((n_slr * p_slr) * half_span + mem_vec_fac - 1) / mem_vec_fac) * mem_vec_fac * 2
+    return (floor(((n_slr * p_slr) * half_span + mem_vec_fac - 1) / mem_vec_fac) * mem_vec_fac * 2)
 
 
 def getTotalPEs(n_slr: int, p_slr: Union[int, List]) -> int:
@@ -146,10 +148,11 @@ env.globals.update(get_read_arg_from_dat = lambda dat, loop: getReadArgFromDat(d
 env.globals.update(get_write_arg_from_dat = lambda dat, loop: getWriteArgFromDat(dat, loop))
 env.globals.update(get_arg_gbl_name = lambda gbl: getArgGblName(gbl))
 env.globals.update(get_read_args_from_stencil = lambda stencil_ptr, loop: getReadArgsFromStencil(stencil_ptr, loop))
-env.globals.update(get_line_buff_size = lambda x_size, half_span, vec_fac: getAdjustedLineBufferSize(x_size, half_span, vec_fac))
-env.globals.update(get_plane_buff_size = lambda x_size, y_size, half_span, vec_fac: getAdjustedPlaneBufferSize(x_size, y_size, half_span, vec_fac))
+env.globals.update(get_line_buff_size = lambda x_size, half_span, vec_fac, div = 1: getAdjustedLineBufferSize(x_size, half_span, vec_fac, div))
+env.globals.update(get_plane_buff_size = lambda x_size, y_size, half_span, vec_fac, div = 1: getAdjustedPlaneBufferSize(x_size, y_size, half_span, vec_fac, div))
 env.globals.update(get_overlap_tile_size = lambda n_slr, p_slr, half_span, mem_vec_fac: getOverlapTileSize(n_slr, p_slr, half_span, mem_vec_fac))
 env.globals.update(get_total_PEs = lambda n_slr, p_slr: getTotalPEs(n_slr, p_slr))
+env.globals.update(log2 = lambda arg: log2(arg))
 
 def unpack(tup):
     if not isinstance(tup, tuple):

@@ -164,6 +164,7 @@ class FPGABankPlacementPolicy(Enum):
     DATAMOVER_TILE_HBM_ROUND_ROBIN = 1
     DATAMOVER_TILE_HBM_RACK_LB = 2 #RACK BASED LOAD BALLANCING
     DATAMOVER_TILE_HBM_RACK_LB_ARG_BASED = 3 #RACK BASED LOAD BALLANCING WITH MAKING AN ARG RECIDE IN SAME RACK
+    DATAMOVER_TILE_NO_HBM = 4
     
 class FPGABankPlacer:
     __policy: int
@@ -184,7 +185,7 @@ class FPGABankPlacer:
                  raise ValueError(f"FPGABankPlacer: num_banks cannot be zero")
             if num_bank_racks == 0:
                  raise ValueError(f"FPGABankPlacer: num_bank_racks cannot be zero")
-            assert (num_banks % num_bank_racks == 0, "FPGABankPlacer: num_bank_racks should be a divisor of num_banks")
+            assert num_banks % num_bank_racks == 0, "FPGABankPlacer: num_bank_racks should be a divisor of num_banks"
         else:
             raise ValueError(f"Invalid policy: {policy}")
     
@@ -271,6 +272,7 @@ class HLS(Target):
         "tile_banks" : 1,
         "tile_bank_placement_policy" : FPGABankPlacementPolicy.DATAMOVER_TILE_HBM_ROUND_ROBIN.value,
         "global_clock" : -1,
+        "datamover_clock" : -1,
         "max_global_clock" : 300000000,
         "HBM_tile_racks" : 2,
         "HBM_banks" : 32,
@@ -326,7 +328,8 @@ class HLS(Target):
         "datamover_lib" : ("select", {1,2}),
         "profile" : ("bool", (True, False)),
         "tile_banks" : ("select", {1,2,4,8}),
-        "global_clock" : ("numeric", (-1, config["max_global_clock"]))
+        "global_clock" : ("numeric", (-1, config["max_global_clock"])),
+        "datamover_clock" : ("numeric", (-1, config["max_global_clock"]))
     }
     
     __non_definables__ = [

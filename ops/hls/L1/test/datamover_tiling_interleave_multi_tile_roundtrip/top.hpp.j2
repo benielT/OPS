@@ -1,0 +1,52 @@
+typedef {{type}} stencil_type;
+
+#include "{{ops_install_path}}/hls/include/device/ops_hls_kernel_support.h"
+
+constexpr unsigned short MEM_DATA_WIDTH = {{mem_data_width}};
+constexpr unsigned short AXIS_DATA_WIDTH = {{axis_data_width}};
+constexpr unsigned short DATA_WIDTH = {{data_width}};
+constexpr unsigned short TILE_BANKS = {{tile_banks}};
+constexpr unsigned short BURST_SIZE = {{burst_size}};
+constexpr unsigned short MAX_AXI_DEPTH = {{max_axi_depth}};
+constexpr unsigned short MAX_AXI_DEPTH_DIV_BY_BANKS = {{((max_axi_depth + tile_banks - 1)/tile_banks)|int}};
+constexpr unsigned short II = {{ii}};
+constexpr unsigned short MAX_GRID_SIZE_X = {{max_grid_size_x}};
+constexpr unsigned short MAX_GRID_SIZE_Y = {{max_grid_size_y}};
+constexpr unsigned short MAX_GRID_SIZE_Z = {{max_grid_size_z}};
+constexpr unsigned short MIN_GRID_SIZE_X = {{min_grid_size_x}};
+constexpr unsigned short MIN_GRID_SIZE_Y = {{min_grid_size_y}};
+constexpr unsigned short MIN_GRID_SIZE_Z = {{min_grid_size_z}};
+constexpr unsigned short MEM_VECTOR_FACTOR = {{mem_vector_factor}};
+constexpr unsigned short STENCIL_D_MAX = {{stencil_d_max}};
+constexpr unsigned short TILE_READ_OFFSET_MAX = {{tile_read_offset_max}};
+
+struct TestParameters{
+    unsigned int logic_size_x;
+    unsigned int logic_size_y;
+    unsigned int logic_size_z;
+    unsigned int grid_size_x;
+    unsigned int grid_size_y;
+    unsigned int grid_size_z;
+    unsigned int tile_x;
+    unsigned int tile_y;
+    unsigned int stencil_d;
+    unsigned int test_seed;
+    unsigned int read_offset;
+};
+
+{% block dut_prototype %}
+void dut(
+    const unsigned int num_beats,
+    const unsigned int num_pkts,
+    const bool is_small_tile,
+    const unsigned short size_y,
+    const unsigned short size_z,
+    const ap_uint<160>& short_command,
+    const ap_uint<192>& command,
+    {%- for i in range(tile_banks) %}
+    ap_uint<MEM_DATA_WIDTH>* arg0_b{{loop.index0}},
+    {%- endfor %}
+    {%- for i in range(tile_banks) %}
+    ap_uint<MEM_DATA_WIDTH>* arg1_b{{loop.index0}}{{"," if not loop.last}}
+    {%- endfor %}
+){% endblock %}{% block dut_body %};{% endblock %}

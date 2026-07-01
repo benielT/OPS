@@ -1,0 +1,9 @@
+
+dut.prj
+main.cpp
+top.cpp
+top.hpp
+settings.tcl
+vitis_hls.log
+.generated
+*.txt

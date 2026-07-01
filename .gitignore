@@ -30,4 +30,7 @@ ops/fortran/mod
 *.lst
 tea*.in
 .clang-format
-
+ops_translator/ops_venv/
+__pycache__
+*.a
+IP_CACHE

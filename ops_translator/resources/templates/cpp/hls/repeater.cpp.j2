@@ -1,0 +1,100 @@
+
+{% macro axis_name(arg) -%}
+    {%- if arg is not ops_rw -%}
+arg{{arg.id}}_axis_{{"in" if (arg is ops_read) else ("out" if (arg is ops_write))}}
+    {%- endif -%}
+{%- endmacro -%}
+{% macro axis_name_t2(arg, suffix) -%}
+arg{{arg.id}}_axis_{{suffix}}
+{%- endmacro -%}
+{% macro axis_name_t3(arg, infix, suffix=none) -%}
+    {%- if arg is not ops_rw and suffix==none -%}
+arg{{arg.id}}_{{infix}}_axis_{{"in" if (arg is ops_read) else ("out" if (arg is ops_write))}}
+    {%- else -%}
+arg{{arg.id}}_{{infix}}_axis_{{suffix}}
+    {%- endif -%}
+{%- endmacro -%}
+{% macro axis_data_width(arg) -%}
+    {%- if ilh.dats[arg.dat_id][0].isMultiDim() -%}
+multidim_axis_data_width_{{ilh.id}}_{{ilh.dats[arg.dat_id][0].ptr}}
+    {%- else -%}
+axis_data_width
+    {%- endif -%}
+{%- endmacro -%}
+#pragma once
+#include <ops_hls_kernel_support.h>
+#include "../../common/include/common_config.hpp"
+
+extern "C" void repeater_outerloop_{{ilh.id}}(
+{% for arg in ilh.joint_args|ops_dat %}
+    //{{ilh.dats[arg.dat_id][0].ptr}}
+    {% set first_loop_last = loop.last %}
+    {% if arg is not ops_rw %}
+        {% if prog.is_interleave() %}
+            {% for tile in range(config["tile_banks"]) %}
+        hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name_t3(arg,tile)-}}{{"," if not (loop.last and first_loop_last)}}
+            {% endfor %}
+        {% else %}
+        hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name(arg)-}}{{"," if not loop.last}}
+        {% endif %}
+    {% else %}
+        {% if prog.is_interleave() %}
+            {% for tile in range(config["tile_banks"]) %}
+       hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name_t3(arg, tile, "in")-}},
+            {% endfor %}
+            {% for tile in range(config["tile_banks"]) %}
+       hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name_t3(arg, tile, "out")-}}{{"," if not (loop.last and first_loop_last)}}
+            {% endfor %}
+        {% else %}
+        hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name_t2(arg, "in")-}},
+        hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name_t2(arg, "out")-}}{{"," if not loop.last}}
+        {% endif %}
+    {% endif %}
+{% endfor %}
+)
+{
+    {% for arg in ilh.joint_args|ops_dat %}
+        {% if arg is not ops_rw %}
+            {% if prog.is_interleave() %}
+                {% for tile in range(config["tile_banks"]) %}
+    #pragma HLS INTERFACE axis port = {{axis_name_t3(arg, tile)}} register register_mode=both
+                {% endfor %}
+            {% else %}
+    #pragma HLS INTERFACE axis port = {{axis_name(arg)}} register register_mode=both
+            {% endif %}
+        {% else %}
+            {% if prog.is_interleave() %}
+                {% for tile in range["tile_banks"] %}
+    #pragma HLS INTERFACE axis port = {{axis_name_t3(arg, tile, "in")}} register register_mode=both
+                {% endfor %}
+                {% for tile in range["tile_banks"] %}
+    #pragma HLS INTERFACE axis port = {{axis_name_t3(arg, tile, "out")}} register register_mode=both
+                {% endfor %}
+            {% else %}
+    #pragma HLS INTERFACE axis port = {{axis_name_t2(arg, "in")}} register register_mode=both
+    #pragma HLS INTERFACE axis port = {{axis_name_t2(arg, "out")}} register register_mode=both
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+
+    #pragma HLS INTERFACE ap_ctrl_none port=return
+    
+    #pragma HLS pipline II=1 style=flp
+    {% for arg in ilh.joint_args|ops_dat %}
+        {% if arg is ops_read_or_rw %}    
+            {% if prog.is_interleave() %}
+                {% for tile in range(config["tile_banks"]) %}
+    if (!{{axis_name_t3(arg, tile)}}.empty()) {
+        auto data = {{axis_name_t3(arg, tile)}}.read();
+        {{axis_name_t3(ilh.getSwapArg(arg), tile)}}.write(data);
+    }
+                {% endfor %}
+            {% else %}
+    if (!{{axis_name(arg)}}.empty()) {
+        auto data = {{axis_name(arg)}}.read();
+        {{axis_name(ilh.getSwapArg(arg))}}.write(data);
+    }
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+}

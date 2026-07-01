@@ -103,8 +103,9 @@ struct genTileMetadataExecHelper
         const unsigned short last_tile_size_y = tile_count_y > 1 ? diff_y - (tile_count_y - 1) * effective_tile_size_y : realized_tile_size_y;
         // const unsigned short last_tile_upper_limit_y = TILE_DIM == 2 ? range.end[1] - (tile_count_y - 1) * effective_tile_size_y : range.end[1];
 
+#ifndef __SYNTHESIS__
     #if defined(OPS_FPGA) && defined(OPS_TILING)
-        if (tile_size[0] != POW2(LOG2(tile_size[0]))) {
+        if (tile_size[0] != POW2(LOG2_NON_CONSTEXPR(tile_size[0]))) {
             OPSException ex(OPS_RUNTIME_ERROR);
             ex << "ERROR: x tile_size (" << tile_size[0] << ") has to be power of 2" 
                     << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set";
@@ -140,25 +141,26 @@ struct genTileMetadataExecHelper
                         << "Please make sure appropriate OPS_TILESIZE_Y runtime flag is properly set";
                 throw ex;
             }
-#ifdef OPS_MAXTILESIZE_Y
+        #ifdef OPS_MAXTILESIZE_Y
             if (tile_size[1] > OPS_MAXTILESIZE_Y) {
                 OPSException ex(OPS_RUNTIME_ERROR);
                 ex << "ERROR: y tile_size (" << tile_size[1] << ") is greater than the minimum tile supported by the generated hardware (" << OPS_MAXTILESIZE_Y << ") in y direction. " 
                         << "Please make sure appropriate OPS_TILESIZE_Y runtime flag is properly set. If bigger tile size need, rebuild with bigger OPS_MAXTILESIZE_Y";
                 throw ex;
             }
-#endif
+        #endif
             if (tile_size[1] > realized_tile_size_y) {
                 std::cout << "[OPS_WARNING]: Grid is smaller than tile_size in y direction. Running without tiling in y direction" << std::endl;
             }
-#ifdef OPS_MAXTILESIZE_Y
+        #ifdef OPS_MAXTILESIZE_Y
             if (float(effective_tile_size_y) / float(tile_size[1] ) < 0.75) {
                 std::cout << "[OPS_WARNING]: Effective tile size is: " << float(effective_tile_size_y) / float(tile_size[1] ) << ", which is less than 75%" 
                         << " Please increase the tile size ( max: " << OPS_MAXTILESIZE_Y << ") to utilize more performance"<< std::endl;
             }
-#endif
+        #endif
         }
     #endif
+#endif
         // Total xblocks calculations
         const unsigned short diff_z = range.end[2] - range.start[2];
         const unsigned short tile_count_min_1_x = tile_count_x - 1;
@@ -238,7 +240,7 @@ struct genTileMetadataExecHelper<MEM_DATA_WIDTH, DATA_WIDTH, 1>
         // const unsigned short last_tile_upper_limit_y = TILE_DIM == 2 ? range.end[1] - (tile_count_y - 1) * effective_tile_size_y : range.end[1];
 
     #if defined(OPS_FPGA) && defined(OPS_TILING)
-        if (tile_size[0] != POW2(LOG2(tile_size[0]))) {
+        if (tile_size[0] != POW2(LOG2_NON_CONSTEXPR(tile_size[0]))) {
             OPSException ex(OPS_RUNTIME_ERROR);
             ex << "ERROR: x tile_size (" << tile_size[0] << ") has to be power of 2" 
                     << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set";
@@ -489,8 +491,8 @@ void genTileMetadata(
                 "MEM_DATA_WIDTH failed limit check");
 #endif
         constexpr unsigned short data_vector_factor = MEM_DATA_WIDTH / DATA_WIDTH;
-        const unsigned short ShiftBits = (unsigned short)LOG2(data_vector_factor);
-        const unsigned short DataShiftBits = (unsigned short)LOG2(DATA_WIDTH/8);
+        constexpr unsigned short ShiftBits = (unsigned short)LOG2(data_vector_factor);
+        constexpr unsigned short DataShiftBits = (unsigned short)LOG2(DATA_WIDTH/8);
         const unsigned short start_x = range.start[0] >> ShiftBits;
         const unsigned short end_x = (range.end[0] + data_vector_factor - 1) >> ShiftBits;
         const unsigned short grid_xblocks = gridSize[0] >> ShiftBits; //GridSize[0] has to be MEM_DATA_WIDTH aligned
@@ -579,8 +581,8 @@ void genTileMetadata(
     template <unsigned short MEM_DATA_WIDTH, unsigned short AXIS_DATA_WIDTH, unsigned short DATA_WIDTH=32>
     void genMemConfig(SizeType& gridSize, AccessRange& range, MemConfig& config, const unsigned short& batch_size = 1){
         constexpr unsigned short data_vector_factor = MEM_DATA_WIDTH / DATA_WIDTH;
-        unsigned short ShiftBits = (unsigned short)LOG2(data_vector_factor);
-        unsigned short DataShiftBits = (unsigned short)LOG2(DATA_WIDTH/8);
+        constexpr unsigned short ShiftBits = (unsigned short)LOG2(data_vector_factor);
+        constexpr unsigned short DataShiftBits = (unsigned short)LOG2(DATA_WIDTH/8);
         unsigned short start_x = range.start[0] >> ShiftBits;
         unsigned short end_x = (range.end[0] + data_vector_factor - 1) >> ShiftBits;
         unsigned short grid_xblocks = gridSize[0] >> ShiftBits; //GridSize[0] has to be MEM_DATA_WIDTH aligned

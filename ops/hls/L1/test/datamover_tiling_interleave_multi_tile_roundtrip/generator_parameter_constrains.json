@@ -1,0 +1,19 @@
+{
+    "MEM_DATA_WIDTH" : [128,256,512],
+    "AXIS_DATA_WIDTH" : [64,128,256],
+    "TILE_BANKS" : [2,4,8],
+    "VALID_TILE_SIZES" : [128,256,512],
+    "TILE_READ_OFFSET_MAX" : 2, 
+    "BURST_SIZE_MIN" : 8,
+    "BURST_SIZE_MAX" : 32,
+    "MAX_AXI_DEPTH" : 8192,
+    "MAX_GRID_SIZE_X": 30,
+    "MAX_GRID_SIZE_Y": 10,
+    "MAX_GRID_SIZE_Z": 3,
+    "MIN_GRID_SIZE_X" : 20,
+    "MIN_GRID_SIZE_Y" : 1,
+    "MIN_GRID_SIZE_Z" : 1,
+    "DATA_WIDTH" : 32,
+    "TYPE" : "float",
+    "STENCIL_D_MAX" : 4
+}

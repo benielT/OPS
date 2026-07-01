@@ -9,6 +9,12 @@ from util import flatten, uniqueBy
 import logging
 import ops
 from ops import OpsError, OpsWarning
+from enum import Enum
+
+class TilingType(Enum):
+    TILE_TYPE_ROW = 1
+    TILE_TYPE_INTERLEAVE = 2
+    
 
 if TYPE_CHECKING:
     from language import Lang
@@ -140,6 +146,7 @@ class Program:
     init_flag: Optional[bool] = False
     tiling: Optional[bool] = False
     tile_sizes: List[int] = field(default_factory=lambda: [-1, -1, -1])  # x,y,z
+    tiling_type: Optional[TilingType] = TilingType.TILE_TYPE_ROW
 
     def isTiling(self) -> bool:
         return self.tiling
@@ -178,11 +185,16 @@ class Program:
         logging.warning(f"couldn't find stencil name: {name_ptr}\n")
         return None
     
+    def is_interleave(self) -> bool:
+        if self.tiling and self.tiling_type == TilingType.TILE_TYPE_INTERLEAVE:
+            return True
+        return False
+    
     def __str__(self) -> str:
         outString = "\nprogram path=" + str(self.path)  + ",\n"
         outString += "ndim=" + str(self.ndim) + ",\n"
         outString += "soa=" + str(self.soa_val) + ",\n"
-        outString += "tiling=" + str(self.tiling) + ", tile_sizes=" + str(self.tile_sizes) + "\n"
+        outString += "tiling=" + str(self.tiling) + ", tile_sizes=" + str(self.tile_sizes) + ", tile_type=" + str(self.tiling_type) + "\n"
         outString += "\n---------------------\n"
         outString += "       consts        \n"
         outString += "---------------------\n"

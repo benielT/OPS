@@ -1,3 +1,4 @@
+import config
 import dataclasses
 import os
 import json
@@ -25,7 +26,6 @@ from util import getVersion, safeFind, isFilePath, isDirPath, jsonReadFile
 from util import create_cpp_main, replace_fortran_program_with_subroutine
 
 def main(argv=None) -> None:
-
     #Build arg parser
     parser = ArgumentParser(prog="ops-translator")
 
@@ -51,10 +51,11 @@ def main(argv=None) -> None:
     parser.add_argument("-t", "--target", help="Code-gereration target", type=str, action="append", nargs=1, choices=target_names, default=[])
 
     parser.add_argument("-fpga", "--fpga", help="Generate program for FPGA vitis HLS", action="store_true")
+    parser.add_argument("-dff","--df_img_format", help="Dataflow IR Image Dump Format", type=str, default="png")
     
     #invoking arg parser
     args = parser.parse_args(argv)
-
+    config.global_args = parser.parse_args(argv)
     #setting logger
     if (args.debug):
         print("Log level DEBUG set")
@@ -209,6 +210,9 @@ def main(argv=None) -> None:
         #Target config update based on defines
         captureDefines(args, target)
         
+        # Check config and apply contrains and overides if any conflicts
+        target.verify_config(app)
+        
         #Calling Optimizer for FPGA
         if target.name == "hls": 
             logging.info("Code-gen : Starting optimization phase for target: " + target.name)
@@ -216,8 +220,6 @@ def main(argv=None) -> None:
                 logging.info("Optimizing program: %s", str(program.path))
                 scheme.optimize(program, app)
 
-        # Check config and apply contrains and overides if any conflicts
-        target.verify_config(app)
         
         logging.info("Code-gen : Generating target specific template, scheme - " + scheme.target.name)
         codegen(args, scheme, app, target.config, args.force_soa)
@@ -274,18 +276,32 @@ def main(argv=None) -> None:
 
 def captureDefines(args: Namespace, target: Target) -> None:
     defines = [define for [define] in args.D]
-    ops_hls_row_tiles_pat = re.compile("OPS_HLS_ROW_TILES=*")
+    ops_hls_tile_bank_pat = re.compile("OPS_HLS_TILE_BANKS=*")
+    ops_tiling_interleave = re.compile("OPS_HLS_TILE_INTERLEAVE")
     
-    #Search for OPS_HLS_ROW_TILES
+    #Search for OPS_HLS_TILE_BANKS
     for d in defines:
-        if (ops_hls_row_tiles_pat.search(d)):
+        if (ops_hls_tile_bank_pat.search(d)):
             tile_banks = d.split("=")[1]
             if not tile_banks.isnumeric():
+                logging.error(f"OPS_HLS_TILE_BANKS flag produce non numeric value:{tile_banks}")
                 break
             if "tile_banks" in target.config:
+                logging.info(f"overiding tile_banks={tile_banks} in config based on OPS_HLS_TILE_BANKS flag")
                 target.config["tile_banks"] = int(tile_banks)
-            break
+                break
     
+    #Searching for OPS_HLS_TILE_INTERLEAVE
+    # for d in defines:
+    #     if (ops_tiling_interleave.search(d)):
+    #         if "tile_banks" not in target.config:
+    #             break
+    #         if target.config["vector_factor"] != target.config["mem_vector_factor"] * target.config["tile_banks"]:
+    #             print(f"Overiding vector factor: {target.config['ector_factor']} with mem_vector_factor x tile_banks as OPS_HLS_INTERLEAVE mode is enabled")
+    #             logging.warning(f"Overiding vector factor: {target.config['vector_factor']} with mem_vector_factor x tile_banks as OPS_HLS_INTERLEAVE mode is enabled")
+    #             target.config["vector_factor"] = target.config["mem_vector_factor"] * target.config["tile_banks"]
+            
+
     
 def parse(args: Namespace, lang: Lang) -> Application:
     app = Application()
@@ -482,7 +498,7 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
             print(f"Generated Device common_config.hpp")
 
     #Generate host linking config cfg file
-    source, extension = scheme.genConfigHost(env, target_config, app)
+    source, extension = scheme.genConfigHost(env, target_config, app, app.programs[0])
     new_source = re.sub(r'\n\s*\n', '\n\n', source)
     
     # From output files path
@@ -571,7 +587,7 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
             file.write(iter_datamov_inc_source)
 
             if args.verbose:
-                print(f"Generated loop device datamover include {j} of {len(app.uniqueOuterLoops())}: {path}")
+                print(f"Generated iter loop device datamover include {j} of {len(app.uniqueOuterLoops())}: {path}")
  
         ## iterloop datamover src
         path = None
@@ -589,7 +605,7 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
             file.write(iter_datemov_src_source)
 
             if args.verbose:
-                print(f"Generated loop device datamover src {i} of {len(app.uniqueOuterLoops())}: {path}")
+                print(f"Generated iter loop device datamover src {i} of {len(app.uniqueOuterLoops())}: {path}")
 
         if len(out) > 4:
             for k_ in range(len(iter_kernel_inc_tups)):
@@ -609,7 +625,7 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
                     file.write(iter_kernel_inc_tups[k_][0])
 
                     if args.verbose:
-                        print(f"Generated loop device kernel include {j} of {len(app.uniqueLoops())}: {path}")
+                        print(f"Generated iter loop device kernel include {j} of {len(app.uniqueLoops())}: {path}")
 
                 ## iterloop kernel src
                 path = None
@@ -627,7 +643,7 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
                     file.write(iter_kernel_src_tups[k_][0])
 
                     if args.verbose:
-                        print(f"Generated loop device kernel src {j} of {len(app.uniqueLoops())}: {path}")
+                        print(f"Generated iter loop device kernel src {j} of {len(app.uniqueLoops())}: {path}")
         else:
             ## iterloop kernel inc
             path = None
@@ -645,7 +661,7 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
                 file.write(iter_kernel_inc_tups[0][0])
 
                 if args.verbose:
-                    print(f"Generated loop device kernel include {j} of {len(app.uniqueLoops())}: {path}")
+                    print(f"Generated iter loop device kernel include {j} of {len(app.uniqueLoops())}: {path}")
 
             ## iterloop kernel src
             path = None
@@ -663,8 +679,37 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
                 file.write(iter_kernel_src_tups[0][0])
 
                 if args.verbose:
-                    print(f"Generated loop device kernel src {j} of {len(app.uniqueLoops())}: {path}")
+                    print(f"Generated iter loop device kernel src {j} of {len(app.uniqueLoops())}: {path}")
     
+        if target_config["max_SLR_count"] == 3 and target_config["SLR_count"] >= 2:
+            # Generate reapeater if data-path from SLR2 to SLR0
+            # def genIterLoopRepeater(
+            #     self,
+            #     env: Environment,
+            #     iterLoop: ops.IterLoop,
+            #     program: Program,
+            #     app: Application,
+            #     config: dict
+            # ) -> List[Tuple[str, str]]:
+            repeater_src, repeater_extension = scheme.genIterLoopRepeater(env, iterloop, program, app, target_config)
+            
+            path = None
+            
+            if scheme.lang.kernel_dir:
+                Path(args.out, scheme.target.name, "device", "src").mkdir(parents=True, exist_ok=True)
+                path = Path(args.out, scheme.target.name, "device", "src", f"repeater_outerloop_{j}.{repeater_extension}")                
+            else:
+                path = Path(args.out,f"outerloop_{j}_{scheme.target.name}_repeater.{repeater_extension}")
 
+            logging.debug(f"writing repeater src for: outerloop_{j} to {path}")
+            
+            # Write the gernerated repeater src file
+            with open(path, "w") as file:
+                file.write(f"{scheme.lang.com_delim} Auto-generated at {datetime.now()} by ops-translator\n")
+                file.write(repeater_src)
+
+                if args.verbose:
+                    print(f"Generated iterloop repeater src {i} of {len(app.uniqueOuterLoops())}: {path}")
+            
 if __name__ == "__main__":
     main()

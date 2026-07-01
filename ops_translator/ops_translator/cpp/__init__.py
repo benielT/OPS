@@ -12,7 +12,7 @@ import cpp.translator.program
 import cpp.preprocessor
 import ops
 from language import Lang
-from store import Program
+from store import Program, TilingType
 
 libclang_path = os.getenv("LIBCLANG_PATH")
 if libclang_path is not None:
@@ -80,13 +80,13 @@ class Cpp(Lang):
             )
 
         if isl_directives is not None:
-            return translation_unit, source, isl_directives, preprocessor.is_ops_tiled(), preprocessor.get_ops_tile_sizes()
+            return translation_unit, source, isl_directives, preprocessor.is_ops_tiled(), preprocessor.get_ops_tile_sizes(), preprocessor.is_ops_tiling_interleaved()
         else:
             return translation_unit, source,  
 
     def parseProgram(self, path: Path, include_dirs: Set[Path], defines: List[str]) -> Program:
         ast, source = self.parseFile(path, frozenset(include_dirs), frozenset(defines))
-        ast_pp, source_pp, isl_directives, is_tiled, tile_sizes =  self.parseFile(path, frozenset(include_dirs), frozenset(defines), preprocess = True)
+        ast_pp, source_pp, isl_directives, is_tiled, tile_sizes, is_interleave =  self.parseFile(path, frozenset(include_dirs), frozenset(defines), preprocess = True)
 
         with open("./source_pp.txt", "w") as f:        
             f.write("=================================================================================")
@@ -97,7 +97,8 @@ class Cpp(Lang):
             f.write("=================================================================================")
                 
         # TODO: Find the global ndim programatically
-        program = Program(path, ast, ast_pp, source_pp, isl_directives, tiling=is_tiled, tile_sizes=tile_sizes)
+        tilingType = TilingType.TILE_TYPE_INTERLEAVE if is_interleave else TilingType.TILE_TYPE_ROW
+        program = Program(path, ast, ast_pp, source_pp, isl_directives, tiling=is_tiled, tile_sizes=tile_sizes, tiling_type = tilingType)
 
         cpp.parser.parseLoops(ast, program)
         cpp.parser.parseMeta(ast_pp.cursor, program)

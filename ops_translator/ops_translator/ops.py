@@ -9,7 +9,7 @@ from functools import cmp_to_key
 import logging
 import rustworkx as rx
 from rustworkx.visualization import graphviz_draw
-    
+import config
 # import pygraphviz
 if TYPE_CHECKING:
     from store import Location
@@ -1222,9 +1222,9 @@ class IterLoop:
                     search_list = filter(lambda x: x.access_type in [AccessType.OPS_READ, AccessType.OPS_RW] and self.dats[x.dat_id][0].ptr == attr["dat_str"], self.joint_args)
                     arg_id = next(search_list).id
                     if attr['sink_arg_id'] in arg_map.keys():
-                        arg_map[attr['sink_arg_id']].append(f"arg{arg_id}_hls_stream_in")
+                        arg_map[attr['sink_arg_id']].append(f"arg{arg_id}_arg{self.getSwapArg(self.getArg(arg_id)).id}_streams")
                     else:
-                        arg_map[attr['sink_arg_id']] = [f"arg{arg_id}_hls_stream_in"]
+                        arg_map[attr['sink_arg_id']] = [f"arg{arg_id}_arg{self.getSwapArg(self.getArg(arg_id)).id}_streams"]
                         
                 else:
                     connector_name = f"node{source_id}_{attr['src_arg_id']}_to_node{sink_id}_{attr['sink_arg_id']}"
@@ -1250,9 +1250,9 @@ class IterLoop:
                     if idx is None:
                         OpsError(f"{function_name()} Error finding joint_arg writing {attr['dat_str']}")
                     if attr['src_arg_id'] in arg_map.keys():
-                        arg_map[attr['src_arg_id']].append(f"arg{self.joint_args[idx].id}_hls_stream_out")
+                        arg_map[attr['src_arg_id']].append(f"arg{self.getSwapArg(self.joint_args[idx]).id}_arg{self.joint_args[idx].id}_streams")
                     else:
-                        arg_map[attr['src_arg_id']] = [f"arg{self.joint_args[idx].id}_hls_stream_out"]
+                        arg_map[attr['src_arg_id']] = [f"arg{self.getSwapArg(self.joint_args[idx]).id}_arg{self.joint_args[idx].id}_streams"]
                 else:
                     connector_name = f"node{source_id}_{attr['src_arg_id']}_to_node{sink_id}_{attr['sink_arg_id']}"
                     idx = findIdx(self.interconnectors, lambda interconector_disc: interconector_disc[0] == connector_name)
@@ -1469,7 +1469,7 @@ class IterLoop:
         
     def printDataflowGraph(self, filename: str) -> None: 
         logging.debug(self.get_active_df_graph())
-        self.get_active_df_graph().print(self.unique_name, make_dats_node = True)
+        self.get_active_df_graph().print(self.unique_name, format=config.global_args.df_img_format, make_dats_node = True)
         
     def isMultiDim(self) -> bool:
         for dat, ac_type in self.dats:

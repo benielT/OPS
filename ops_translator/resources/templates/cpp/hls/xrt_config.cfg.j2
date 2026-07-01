@@ -1,24 +1,52 @@
 [connectivity]
 {%set is_slr_iter_par = config["iter_par_factor"] is iterable and (config["iter_par_factor"] is not string and config["iter_par_factor"] is not mapping) %}
 {% for ilh, program in app.uniqueOuterLoops() %}
-    {% if config["SLR_count"] > 1 %}
+    {#% if config["SLR_count"] > 1 %#}
         {% for slr_id in range(config["SLR_count"]) %}
 nk=kernel_outerloop_{{ilh.id}}{% if is_slr_iter_par %}_{{slr_id}}{% endif %}:1:kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}
         {% endfor %}
-    {% endif %}
+    {#% endif %#}
 {% endfor %}
 
 {% for ilh, program in app.uniqueOuterLoops() %}
     {% for arg in ilh.joint_args|ops_dat %}
         {% if arg is ops_read or arg is ops_rw %}
+            {% if prog.is_interleave() %}
+                {% for i in range(config["tile_banks"]) %}
+stream_connect=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_out:kernel_outerloop_inst_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                {% endfor %}
+            {% else %}
 stream_connect=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_out:kernel_outerloop_inst_{{ilh.id}}_1.arg{{arg.id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+            {% endif %}
         {% endif %}
         {% if arg is ops_write or arg is ops_rw %}
             {% for slr_id in range(config["SLR_count"]) %}
                 {% if loop.last %}
+                    {% if prog.is_interleave() %}
+                        {% for i in range(config["tile_banks"]) %}
+                           {% if config["max_SLR_count"] == 3 and config["SLR_count"] >= 2 %}
+stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_{{i}}_axis_out:repeater_outerloop_{{ilh.id}}_1.arg{{ilh.getSwapArg(arg).id}}_{{i}}_axis_in
+stream_connect=repeater_outerloop_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                           {% else %}
+stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_{{i}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                           {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        {% if config["max_SLR_count"] == 3 and config["SLR_count"] >= 2 %}
+stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_out:repeater_outerloop_{{ilh.id}}_1.arg{{ilh.getSwapArg(arg).id}}_axis_in
+stream_connect=repeater_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                        {% else %}
 stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                        {% endif %}
+                    {% endif %}
                 {% else %}
+                    {% if prog.is_interleave() %}
+                        {% for i in range(config["tile_banks"]) %}
+stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_{{i}}_axis_out:kernel_outerloop_inst_{{ilh.id}}_{{slr_id+2}}.arg{{ilh.getSwapArg(arg).id}}_{{i}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                        {% endfor %}
+                    {% else %}
 stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_out:kernel_outerloop_inst_{{ilh.id}}_{{slr_id+2}}.arg{{ilh.getSwapArg(arg).id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                    {% endif %}
                 {% endif %}
             {% endfor %}
         {% endif %}
@@ -27,9 +55,18 @@ stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_
 
 {% if config["platform_is_multi_slr"] %}
     {% for ilh, program in app.uniqueOuterLoops() %}
-        {% for slr_id in range(config["max_SLR_count"] - config["SLR_count"], config["max_SLR_count"]) %}
+        {% if config["max_SLR_count"] - config["SLR_count"] > 1 %}
+            {% for slr_id in range(config["max_SLR_count"] - config["SLR_count"] - 1, config["max_SLR_count"] - 1) %}
 slr=kernel_outerloop_inst_{{ilh.id}}_{{loop.index0+1}}:SLR{{slr_id}}
-        {% endfor %}
+            {% endfor %}
+        {% else %}
+            {% for slr_id in range(config["max_SLR_count"] - config["SLR_count"], config["max_SLR_count"]) %}
+slr=kernel_outerloop_inst_{{ilh.id}}_{{loop.index0+1}}:SLR{{slr_id}}
+            {% endfor %}
+        {% endif %}
+        {% if config["max_SLR_count"] == 3 and config["SLR_count"] >= 2 %}
+slr=repeater_outerloop_{{ilh.id}}_1:SLR1
+        {% endif%}
     {% endfor %}
 {% endif %}
 
@@ -39,22 +76,41 @@ slr=kernel_outerloop_inst_{{ilh.id}}_{{loop.index0+1}}:SLR{{slr_id}}
             {% if program.tiling %}
                 {% if config["tile_banks"] > 1 %}
                     {% for i in range(config["tile_banks"]) %}
+                        {% if not config["tile_bank_placement_policy"] == 4 %}
 sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b{{i}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+                        {#{% else %}
+sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b{{i}}:DDR#}
+                        {% endif %}
                     {% endfor %}
-                {% else %}
+                {% else %} 
+                    {% if not config["tile_bank_placement_policy"] == 4 %}
 sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+                    {#% else %}
+sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:DDR#}
+                    {% endif %}
                 {% endif %}
 {#sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b2:HBM[{{arg.id * 2 + 1}}]#}
             {% else %}
+                {% if not config["tile_bank_placement_policy"] == 4 %}
 sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+                {#% else %}
+sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:DDR#}
+                {% endif %}
             {% endif %}
         {% endfor %}
     {% endfor %}
 {% endif %}
 
-{% if not config["global_clock"] == -1 %}
+{% if not config["global_clock"] == -1 or not config["datamover_clock"] == -1%}
 [clock]
-defaultFreqHz={{config["global_clock"]}}
+    {% if not config["global_clock"] == -1 %}
+kernel_frequency={{config["global_clock"]}}
+    {% endif %}
+    {% if not config["datamover_clock"] == -1 %}
+freqHz={{config["datamover_clock"]}}:{% for ilh, program in app.uniqueOuterLoops() %}datamover_outerloop_{{ilh.id}}_1{{", " if not loop.last}}{% endfor %}
+
+tolerance=0.12:{% for ilh, program in app.uniqueOuterLoops() %}datamover_outerloop_{{ilh.id}}_1{{", " if not loop.last}}{% endfor %}  
+    {% endif %}
 {% endif %}
 
 {% if config["profile"] %}

@@ -56,6 +56,7 @@ class CppHLS(Scheme):
     iterloop_datamover_src_template = Path("cpp/hls/iter_loop_datamover_dev_src_hls.cpp.j2")
     iterloop_device_inc_template = Path("cpp/hls/iter_loop_dev_inc_hls.hpp.j2")
     iterloop_device_src_template = Path("cpp/hls/iter_loop_dev_src_hls.cpp.j2")
+    iterloop_repeater_src_template = Path("cpp/hls/repeater.cpp.j2")
     iterloop_host_kernelwrap_template = Path("cpp/hls/iter_loop_host_kernelwrap.hpp.j2")
     
     stencil_device_template = Path("cpp/hls/stencil_dev_hls.hpp.j2")
@@ -71,6 +72,7 @@ class CppHLS(Scheme):
     iterloop_device_src_extension = "cpp"
     iterloop_datamover_inc_extension = "hpp"
     iterloop_datamover_src_extension = "cpp"
+    iterloop_repeater_src_extension = "cpp"
     iterloop_host_kernelwrap_extension = "hpp"
     loop_device_PE_extension = "hpp"
     stencil_device_extension = "hpp"
@@ -322,6 +324,24 @@ class CppHLS(Scheme):
             
             logging.debug(f"iterloop after optimization : {iterLoop}")
             
+    def genIterLoopRepeater(
+        self,
+        env: Environment,
+        iterLoop: ops.IterLoop,
+        program: Program,
+        app: Application,
+        config: dict
+    ) -> List[Tuple[str, str]]:
+        iterloop_repeater_src_template = env.get_template(str(self.iterloop_repeater_src_template))
+        
+        output = [iterloop_repeater_src_template.render(
+                ilh=iterLoop,
+                prog=program,
+                ndim=program.ndim,
+                config=config), self.iterloop_repeater_src_extension]
+        return output
+        
+
     def genIterLoopDevice(
         self,
         env: Environment,
@@ -350,16 +370,16 @@ class CppHLS(Scheme):
                 consts_map[kernel_idx] = kernel_consts
                 consts.extend(x for x in kernel_consts if x not in consts)
         
-        output = [(iterloop_datamover_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_datamover_inc_extension),
-                (iterLoop_datamover_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_datamover_src_extension)]
+        output = [(iterloop_datamover_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, isTiling = program.isTiling(), tiles=program.getTileSizes(), prog=program), self.iterloop_datamover_inc_extension),
+                (iterLoop_datamover_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, isTiling = program.isTiling(), tiles=program.getTileSizes(), prog=program), self.iterloop_datamover_src_extension)]
         
         if not isinstance(config["iter_par_factor"],list):
-                output.extend([(iterLoop_kernel_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_device_inc_extension),
-                (iterLoop_kernel_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, consts_map = consts_map, isTiling = program.isTiling(), tiles=program.getTileSizes()), self.iterloop_device_src_extension)])    
+                output.extend([(iterLoop_kernel_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, isTiling = program.isTiling(), tiles=program.getTileSizes(), prog=program), self.iterloop_device_inc_extension),
+                (iterLoop_kernel_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, consts_map = consts_map, isTiling = program.isTiling(), tiles=program.getTileSizes(), prog=program), self.iterloop_device_src_extension)])    
         else:
             for iter_par_fact_id in range(len(config["iter_par_factor"])):
-                output.extend([(iterLoop_kernel_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, isTiling = program.isTiling(), tiles=program.getTileSizes(), slr_iter_par_fact = iter_par_fact_id), self.iterloop_device_inc_extension),
-                (iterLoop_kernel_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, consts_map = consts_map, isTiling = program.isTiling(), tiles=program.getTileSizes(), slr_iter_par_fact = iter_par_fact_id), self.iterloop_device_src_extension)])    
+                output.extend([(iterLoop_kernel_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, isTiling = program.isTiling(), tiles=program.getTileSizes(), slr_iter_par_fact = iter_par_fact_id, prog=program), self.iterloop_device_inc_extension),
+                (iterLoop_kernel_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, consts_map = consts_map, isTiling = program.isTiling(), tiles=program.getTileSizes(), slr_iter_par_fact = iter_par_fact_id, prog=program), self.iterloop_device_src_extension)])    
             
         return output
     
@@ -461,17 +481,23 @@ class CppHLS(Scheme):
         self,
         env: Environment,
         config: dict,
-        app: Application
+        app: Application,
+        prog: Program
     ) -> Tuple[str, str]:
         template = env.get_template(str(self.host_config_template))     
-        return (
-            template.render(
+        
+        if (config["HBM_tile_racks"] > 0):
+            placer = FPGABankPlacer(config["tile_bank_placement_policy"], 
+                                                config["HBM_banks"], config["HBM_tile_racks"])
+        else:
+            placer = None
+            
+        return (template.render(
                 config=config,
                 app=app,
-                FPGABankPlacer = FPGABankPlacer(config["tile_bank_placement_policy"], 
-                                                config["HBM_banks"], config["HBM_tile_racks"]),
-            ), self.host_config_extension
-        ) 
+                FPGABankPlacer = placer,
+                prog = prog
+            ), self.host_config_extension) 
     
     def genStencilDecl(
         self,

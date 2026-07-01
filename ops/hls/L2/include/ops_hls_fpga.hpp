@@ -177,6 +177,19 @@ class FPGA {
             printf("Failed to allocate device buffer!\n");
             throw std::bad_alloc();
         }
+#ifdef DEBUG_LOG
+        else {
+            printf("[FPGA Buffer allocated] {\n");
+            printf("  host_ptr  : %p\n",        l_ptr);
+            printf("  size      : %zu bytes\n", l_bufferSize);
+            printf("  size_mb   : %.3f MB\n",   l_bufferSize / (1024.0 * 1024.0));
+            printf("  elements  : %zu\n",       p_buffer.size());
+            printf("  type_size : %zu bytes\n", sizeof(T));
+            printf("  cl_flags  : 0x%lx\n",    (unsigned long)p_flags);
+            printf("  cached    : false\n");
+            printf("}\n");
+        }
+#endif
         return m_bufferMaps[l_ptr];
     }
 
