@@ -60,7 +60,7 @@ void _FPGA_set_args(ops::hls::FPGA *instance, const char *argv)
     }
 }
 
-void ops_init_backend(int argc, const char** argv, unsigned int devId)
+void ops_init_backend(int argc, char** argv, unsigned int devId)
 {
     std::string xclbinFile = argv[1];
 

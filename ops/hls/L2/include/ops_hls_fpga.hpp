@@ -1,17 +1,23 @@
-/*
- * Copyright 2019 Xilinx, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+#ifndef __OPS_HLS_FPGA_H
+#define __OPS_HLS_FPGA_H
+
+/* 
+* Open source copyright declaration based on BSD open source template:
+* http://www.opensource.org/licenses/bsd-license.php
+*
+* This file is part of the OPS distribution.
+*
+* Copyright (c) 2013, Mike Giles and others. Please see the AUTHORS file in
+* the main source directory for a full list of copyright holders.
+* All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+* Redistributions of source code must retain the above copyright
+* notice, this list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright
+* notice, this list of conditions and the following disclaimer in the
+* documentation and/or other materials provided with the distribution.
 */
 
 /** @file 
@@ -20,7 +26,7 @@
   * @details This class manage FPGA platform interaction with XOCL API and wrapping related objects.
   */
 
-#pragma once
+
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
 
 #include <iostream>
@@ -310,8 +316,21 @@ class FPGA {
         else 
             return 0;
     }
+#ifdef OPS_MULTI_FPGA
+    int getLocalRank() {
+        return m_mpi_local_rank;
+    }
 
-   protected:
+    int getWorldSize() {
+        return m_mpi_world_size;
+    }
+
+    bool isRootRank() {
+        return is_root_mpi_rank;
+    }
+#endif
+
+protected:
     bool bufferExists(const void* p_ptr) const {
         auto it = m_bufferMaps.find(p_ptr);
         return it != m_bufferMaps.end();
@@ -334,23 +353,42 @@ class FPGA {
 
     FPGA(std::string deviceName) {
         getDevices(deviceName);
+    #ifndef OPS_MULTI_FPGA
+        m_device = m_devices[0];
+        m_id = 0;
+    #else
+        extern int ops_comm_global_size;
+        extern int ops_my_global_rank;
+        m_id = ops_my_global_rank % m_devices.size();
         m_device = m_devices[m_id];
-        m_id = -1;
+    #endif
+        setID(m_id);
         OPS_tiling = false;
         OPS_tiling_size_x = 0;
         OPS_tiling_size_y = 0;
     }
     FPGA(unsigned int p_id = 0, std::string deviceName = "") {
         getDevices(deviceName);
+    #ifndef OPS_MULTI_FPGA
         setID(p_id);
+    #else
+        extern int ops_my_global_rank;
+        setID(ops_my_global_rank % m_devices.size());
+    #endif   
+        m_device = m_devices[m_id];
         OPS_tiling = false;
         OPS_tiling_size_x = 0;
         OPS_tiling_size_y = 0;
     }
 
     FPGA(unsigned int p_id, const std::vector<cl::Device>& devices) {
-        m_id = p_id;
         m_devices = devices;
+    #ifndef OPS_MULTI_FPGA
+        setID(p_id);
+    #else
+        extern int ops_my_global_rank;
+        setID(ops_my_global_rank % m_devices.size());
+    #endif
         m_device = m_devices[m_id];
         OPS_tiling = false;
         OPS_tiling_size_x = 0;
@@ -371,6 +409,12 @@ class FPGA {
     bool OPS_tiling;
     unsigned short OPS_tiling_size_x;
     unsigned short OPS_tiling_size_y;
+
+#ifdef OPS_MULTI_FPGA
+    int m_mpi_local_rank;
+    int m_mpi_world_size;
+    bool is_root_mpi_rank;
+#endif
 };
 
 }
@@ -378,7 +422,7 @@ class FPGA {
 
 void _FPGA_set_args(ops::hls::FPGA *instance, const char *argv);
 
-void ops_init_backend(int argc, const char** argv, unsigned int devId = 0);
+void ops_init_backend(int argc, char** argv, unsigned int devId = 0);
 
 // template<typename _Period>
 // double ops_hls_get_execution_runtime(const std::string&);
@@ -394,3 +438,4 @@ double ops_hls_get_total_execution_runtime(const std::string& kernel_name);
 void ops_exit_backend();
 
 #endif /* DOXYGEN_SHOULD_SKIP_THIS */
+#endif /* __OPS_HLS_FPGA_H */

@@ -19,10 +19,11 @@
 #include "../../L1/include/ops_hls_datamover.hpp"
 #include "../../L1/include/ops_hls_stencil_core_v2.hpp"
 
+
+#include "../../L2/include/ops_hls_mpi.hpp"
 #include "../../L2/include/ops_hls_fpga.hpp"
 #include "../../L2/include/ops_hls_host_utils.hpp"
 #include "../../L2/include/ops_hls_kernel.hpp"
-
 // typedef struct ops_hls_core
 // {
 //     ops::hls::FPGA* fpga_handle;
