@@ -18,7 +18,7 @@ constexpr unsigned short mem_vector_factor = {{config["mem_vector_factor"]}};
     {% for slr_iter_par in config["iter_par_factor"]%}
 constexpr unsigned short iter_par_factor_{{loop.index0}} = {{slr_iter_par}};
         {% set _ = total_pe.pop() %}
-        {% set _ = total_pe.append(_ + 1) %}
+        {% set _ = total_pe.append(_ + slr_iter_par) %}
     {% endfor %}
 {% else %}
 constexpr unsigned short iter_par_factor = {{config["iter_par_factor"]}};

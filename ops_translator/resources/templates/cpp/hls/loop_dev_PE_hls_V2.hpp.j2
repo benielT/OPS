@@ -1248,7 +1248,10 @@ public:
     {% if prog.is_interleave() %}
 template <unsigned short NUM_SUB_TILE, unsigned short SUB_TILE_ID>
     {% endif %}
-static void kernel_{{lh.kernel}}_PE(const short& PEId, const ops::hls::{{"StencilConfigCoreSingleTile" if isTiling else "StencilConfigCore"}}& stencilConfig,
+static void kernel_{{lh.kernel}}_PE(
+    const unsigned short& PEId_offset,
+    const unsigned short& PEId_i,
+    const ops::hls::{{"StencilConfigCoreSingleTile" if isTiling else "StencilConfigCore"}}& stencilConfig,
     {% for arg in lh.args|ops_not_idx %}
         {% if loop.last %}
             {% if consts or lh.args|ops_gbl|length > 0 %}
@@ -1309,9 +1312,16 @@ static void kernel_{{lh.kernel}}_PE(const short& PEId, const ops::hls::{{"Stenci
 {
     Stencil_{{lh.kernel}}{% if prog.is_interleave() %}<NUM_SUB_TILE, SUB_TILE_ID>{% endif %} stencil;
 
+    {% if is_list_itr_par %}
+    short PEId = PEId_offset + PEId_i;
+    {% else %}
+    short PEId = PEId_offset * iter_par_factor + PEId_i;
+    {% endif %}
+
 #ifdef DEBUG_LOG
     printf("[KERNEL_DEBUG][%d{%if prog.is_interleave() %}:%d{% endif %}]|%s| stencil config gridSize: %d (xblocks), %d, %d\n", PEId, {%if prog.is_interleave() %}SUB_TILE_ID, {% endif%}__func__, {{"stencilConfig.tile_size[0]" if isTiling else "stencilConfig.grid_size[0]"}}, {{"stencilConfig.tile_size[1]" if isTiling else "stencilConfig.grid_size[1]"}}, {{"stencilConfig.tile_size[2]" if isTiling else "stencilConfig.grid_size[2]"}});
 #endif
+
     stencil.setConfig(PEId, stencilConfig);
 
 #ifdef DEBUG_LOG

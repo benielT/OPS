@@ -256,7 +256,7 @@ def translateProgramHLS(source: str, program: Program, app_consts: List[Const], 
                     index += 1
             after = after[after.find("("):after.rfind(")")]
             split_after = after.split(",")
-            split_after.append("vector_factor, mem_vector_factor")
+            split_after.append("vector_factor, mem_vector_factor, total_PEs")
             new_decl_dat = before + f"ops_hls_decl_dat"
             
             for i, arg in enumerate(split_after):

@@ -460,7 +460,8 @@ class CppHLS(Scheme):
                  widen_stencil_disc_map = widen_stencil_desc_map,
                  widen_read_stencil_desc = widen_read_stencil_desc,
                  isTiling = program.isTiling(),
-                 tiles=program.getTileSizes()
+                 tiles=program.getTileSizes(),
+                 is_list_itr_par = isinstance(config["iter_par_factor"],list)
                  ),self.loop_device_PE_extension)]
         )
     

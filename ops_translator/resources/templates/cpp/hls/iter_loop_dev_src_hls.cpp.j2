@@ -31,13 +31,15 @@ iter_par_factor
     {% for df_node in ilh.get_active_df_graph().getAllLoopNodes() %}
         {% set loop_idx = df_node.node_uid %}
         {% set lh = df_node.loop %}
-    const unsigned short PEId_offset_i = PEId_offset + i;
+    //const unsigned short PEId_offset_i = PEId_offset + i;
         {% if prog.is_interleave() %}
             {% for arg in lh.args| ops_dat | ops_read_or_rw %}
     ops::hls::stream2interleave<{{axis_data_width(arg)}}, {{config["data_width"]}}, {{config["tile_banks"]}}, {{((lh.read_stencil.stencil_size.x - 1)/2)|int}}>({{ilh.PE_args[loop_idx][arg.id]}}[i], arg{{arg.id}}_{{lh.kernel}}_subtile_stream[i], num_pkts);
             {% endfor %}
             {% for subtile in range((config["tile_banks"]/2)|int) %}
-    kernel_{{lh.kernel}}_PE<{{(config["tile_banks"]/2)|int}}, {{subtile}}>(PEId_offset_i, stencilConfig,
+    kernel_{{lh.kernel}}_PE<{{(config["tile_banks"]/2)|int}}, {{subtile}}>(
+                PEId_offset, i, 
+                stencilConfig,
                 {% for arg_str in ilh.PE_args[loop_idx]%}
                     {% if loop.last %}
                         {% if consts_map[loop_idx] or lh.args|ops_gbl %}
@@ -63,7 +65,9 @@ iter_par_factor
     ops::hls::interleave2stream<{{axis_data_width(arg)}}, {{config["data_width"]}}, {{config["tile_banks"]}}, {{((lh.read_stencil.stencil_size.x - 1)/2)|int}}>(arg{{arg.id}}_{{lh.kernel}}_subtile_stream[i], {{ilh.PE_args[loop_idx][arg.id]}}[i+1], num_pkts);
             {% endfor %}
         {% else %}
-    kernel_{{lh.kernel}}_PE(PEId_offset_i, stencilConfig,
+    kernel_{{lh.kernel}}_PE(
+            PEId_offset, i, 
+            stencilConfig,
             {% set prev_arg_str = [""] %}
             {% for arg_str in ilh.PE_args[loop_idx]%}
                 {% if loop.last %}
@@ -210,9 +214,9 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region_cascaded(const unsigned 
 #pragma HLS INLINE 
 
     {% if slr_iter_par_fact is defined %}
-    const unsigned short PEId_offset = {{config["iter_par_factor"][:slr_iter_par_fact]|sum}};
+    constexpr unsigned short PEId_offset = {{config["iter_par_factor"][:slr_iter_par_fact]|sum}};
     {% else %}
-    const unsigned short PEId_offset = slr_region * {{iter_par_factor()}};
+    const unsigned short PEId_offset = slr_region;
     {% endif %}
     {{joint_PE_body_p1()}}
 
@@ -401,7 +405,7 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short& slr_re
         {% endif %}
                 }
             } 
-        
+
             const unsigned short tile_size_x = tile_x == (stencilConfig.tile_count[0] -1) ? stencilConfig.last_tile_size[0] : stencilConfig.tile_size[0];
         {% if ndim == 3 %}
             const unsigned short tile_size_y = tile_y == (stencilConfig.tile_count[1] -1) ? stencilConfig.last_tile_size[1] : stencilConfig.tile_size[1];
