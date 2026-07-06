@@ -34,14 +34,14 @@ namespace ops {
 namespace hls {
 
 #ifdef __SYNTHESIS__
-
 #if defined(__has_include) && __has_include(<hls_print.h>)
     #define VITIS_HAS_SYNTH_PRINT 1
 #else
     #define VITIS_HAS_SYNTH_PRINT 0
 #endif
+#endif 
 
-#if VITIS_HAS_SYNTH_PRINT
+#if VITIS_HAS_SYNTH_PRINT && defined(__SYNTHESIS__)
 
 // Required because blackbox does not support double
 typedef union {
@@ -83,7 +83,7 @@ void print(const char* fmt, _TYPE v) {
     printf(fmt, v); 
 }
 #endif
-#endif
+
 /**
  * @brief 	convMemBeat2axisPkt reads a memory location with index and generate into AXI4-stream. This works
  * with MEM_DATA_WIDTH >= AXIS_DATA_WIDTH.
