@@ -1452,8 +1452,8 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
         {% endif %}
     {% endfor %}
 
-    #pragma HLS INTERFACE mode=s_axilite port=return bundle = control
-    #pragma HLS INTERFACE mode=ap_ctrl_chain port=return
+    #pragma HLS INTERFACE s_axilite port=return bundle = control
+    #pragma HLS INTERFACE ap_ctrl_chain port=return
 
     ops::hls::AccessRange range;
     {#{% if ilh.isMultiDim() %}
