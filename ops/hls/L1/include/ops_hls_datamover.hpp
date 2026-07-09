@@ -34,6 +34,15 @@ namespace ops {
 namespace hls {
 
 #ifdef __SYNTHESIS__
+#if defined(__has_include) && __has_include(<hls_print.h>)
+    #define VITIS_HAS_SYNTH_PRINT 1
+#else
+    #define VITIS_HAS_SYNTH_PRINT 0
+#endif
+#endif 
+
+#if VITIS_HAS_SYNTH_PRINT && defined(__SYNTHESIS__)
+
 // Required because blackbox does not support double
 typedef union {
     double d;
@@ -1968,6 +1977,155 @@ static void readConfigStreamGenerator(const size_t offset_x, const unsigned shor
     }
 }
 
+
+// /**
+//  * @brief readConfigStreamGeneratorV2: Generates and distributes bank-specific configuration commands 
+//  * across multiple output streams.
+//  *
+//  * @details This function decodes a single 160-bit configuration command containing 3D memory 
+//  * access parameters (strides, sizes, and offsets). It iterates through the Z and Y dimensions 
+//  * to compute absolute memory offsets. Utilizing power-of-two bitwise optimizations, it 
+//  * calculates the base bank offset and starting bank, handles modulo wrap-around logic, and 
+//  * pushes appropriate 48-bit sub-commands to an array of hardware streams. The 
+//  * distribution logic is fully unrolled for optimal HLS synthesis.
+//  *
+//  * @tparam NUM_BANKS The number of target memory banks. Must be a power of two to enable 
+//  * bitwise masking optimizations.
+//  * @tparam IN_ITR Initiation interval for the inner HLS pipeline (default: 2).
+//  *
+//  * @param[in] command A 160-bit packed configuration word containing:
+//  * - [63:0]   offset_x: Base offset in the X dimension
+//  * - [95:80]  size_x:   Size in the X dimension
+//  * - [111:96] stride_y: Stride in the Y dimension
+//  * - [127:112] size_y:   Size in the Y dimension
+//  * - [143:128] stride_z: Stride in the Z dimension
+//  * - [159:144] size_z:   Size in the Z dimension
+//  * @param[out] strms Array of output HLS streams (hls::stream<ap_uint<48>>). 
+//  * Each 48-bit command contains:
+//  * - [31:0]   bank_offset: The starting offset for that specific bank
+//  * - [47:32]  b_size_x:    The calculated X dimension size for that specific bank
+//  *
+//  * @note Enforces a compile-time static assertion that `NUM_BANKS` is a power of two, 
+//  * replacing expensive hardware modulo operations with bitwise AND masking.
+//  */
+// template <unsigned short NUM_BANKS, unsigned short IN_ITR = 2, typename... Flags>
+// static void readConfigStreamGeneratorV2(
+//     const unsigned short bank_offset_x_floor, 
+//     const unsigned short bank_tile_size_x_floor, 
+// 	const unsigned short bank_grid_size_x_floor,
+//     ap_uint<LOG2(NUM_BANKS)> bank_offset_x_upper_bank, //This is the starting bank
+//     const unsigned short size_y, 
+// 	const unsigned short bank_offest_y_floor,
+// 	const unsigned short abs_row_offset,
+//     const unsigned short size_z, 
+// 	const unsigned short bank_stride_z_floor,
+//     ::hls::stream<ap_uint<48>> strms[NUM_BANKS], 
+//     Flags... flags)
+// {
+// #ifndef __SYNTHESIS__
+// 	static_assert((NUM_BANKS != 0) && ((NUM_BANKS & (NUM_BANKS - 1)) == 0), "NUM_BANKS must be a power of two");
+// 	static_assert(sizeof...(Flags) == NUM_BANKS, "Error: The number of flag arguments must match NUM_BANKS.");
+// #endif 
+
+// 	constexpr unsigned short NUM_BANKS_SHIFT = LOG2(NUM_BANKS);
+// 	constexpr unsigned short BANK_MASK = NUM_BANKS - 1;
+
+// 	ap_uint<2> flag_array[NUM_BANKS] = { static_cast<ap_uint<2>>(flags)... };
+// 	#pragma HLS ARRAY_PARTITION variable=flag_array complete
+
+// 	unsigned int initial_bank_offsets[NUM_BANKS];
+//     #pragma HLS ARRAY_PARTITION variable=initial_bank_offsets complete dim=1
+    
+//     unsigned short banks_grid_size_x[NUM_BANKS];
+//     #pragma HLS ARRAY_PARTITION variable=banks_grid_size_x complete dim=1
+
+//     unsigned short bank_stride_z[NUM_BANKS];
+//     #pragma HLS ARRAY_PARTITION variable=bank_stride_z complete dim=1
+
+// 	for (ap_uint<NUM_BANKS_SHIFT+1> b_id = 0; b_id < NUM_BANKS; b_id++) {
+//         #pragma HLS UNROLL
+// 		const unsigned short bank_offset_y = bank_offest_y_floor + (flag_array[b_id].range(0,0) ? abs_row_offset : 0);
+// 		initial_bank_offsets[b_id] = bank_offset_x_floor + (b_id < bank_offset_x_upper_bank ? 1 : 0) + bank_offset_y;
+// 		banks_grid_size_x[b_id] = bank_grid_size_x_floor + flag_array[b_id].range(0,0);
+// 		bank_stride_z[b_id] = bank_stride_z_floor + (uint16_t)(is_big_grid_size_x ? grid_size_y : 0);
+
+// #ifdef DEBUG_LOG
+//         printf("|HLS DEBUG_LOG|%s| bank_id: %u, init_offset: %u, banks_grid_size_x: %u, bank_stride_z: %u\n", 
+//                __func__, (unsigned int)b_id, initial_bank_offsets[b_id], banks_grid_size_x[b_id], bank_stride_z[b_id]);
+// #endif
+//     }
+// 	// size_t offset_x = command.range(63,0);
+// 	// ap_uint<16> size_x = command.range(95,80);
+//     // ap_uint<16> stride_y = command.range(111,96);
+//     // ap_uint<16> size_y = command.range(127,112);
+//     // ap_uint<16> stride_z = command.range(143,128);
+//     // ap_uint<16> size_z = command.range(159,144);
+
+// #ifdef DEBUG_LOG_PRINT
+// 	printf("|HLS DEBUG_LOG|%s| command parsed. offset_x:%llu, size_x:%u, stride_y:%u, size_y:%u, stride_z:%u, size_z:%u\n", 
+// 			__func__, (unsigned long long)offset_x, (unsigned int)size_x, (unsigned int)stride_y, 
+// 			(unsigned int)size_y, (unsigned int)stride_z, (unsigned int)size_z);
+// #endif
+
+// 	// const unsigned short size_x_div_by_banks_floor = size_x >> NUM_BANKS_SHIFT;
+// 	// const unsigned int size_x_mod_num_banks = size_x & BANK_MASK;
+
+// 	for (unsigned short z = 0; z < size_z; z++)
+//     {
+//         for (unsigned short y = 0; y < size_y; y++)
+//         {
+//          #pragma HLS LOOP_FLATTEN
+
+//             size_t z_offset = offset_x + z * stride_z;
+//             size_t abs_offset = z_offset + y * stride_y;
+            
+//             const unsigned int bank_offset = abs_offset >> NUM_BANKS_SHIFT;
+//             const unsigned int starting_bank = abs_offset & BANK_MASK; //Equivalent to abs_offset % NUM_BANKS
+            
+//             // Optimized wrap-around calculation
+//             const unsigned int banks_upper_limit = (starting_bank + size_x_mod_num_banks) & BANK_MASK;  //Equivalent to (...) % NUM_BANKS
+//             const bool is_t1_or_t2 = banks_upper_limit < starting_bank;
+
+// #ifdef DEBUG_LOG_PRINT
+// 			printf("|HLS DEBUG_LOG|%s| z:%u, y:%u, abs_offset:%llu, bank_offset:%u, starting_bank:%u\n", 
+// 					__func__, (unsigned int)z, (unsigned int)y, (unsigned long long)abs_offset, 
+// 					(unsigned int)bank_offset, (unsigned int)starting_bank);
+// #endif
+
+//             for (unsigned int i = 0; i < NUM_BANKS; i++)
+//             {
+//                 #pragma HLS UNROLL
+
+//                 const unsigned int current_bank_offset = (i < starting_bank) ? bank_offset + 1 : bank_offset;
+
+//                 const bool is_gt_sb = (i >= starting_bank);
+//                 const bool is_lt_uplim = (i < banks_upper_limit);
+
+//                 bool cond;
+//                 if (is_t1_or_t2) {
+//                     cond = is_gt_sb || is_lt_uplim;
+//                 } else {
+//                     cond = is_gt_sb && is_lt_uplim;
+//                 }
+
+//                 const unsigned char add_arg = cond ? 1 : 0;
+//                 unsigned short b_size_x = size_x_div_by_banks_floor + add_arg;
+
+//                 ap_uint<48> b_command;
+//                 b_command.range(31,0) = current_bank_offset;
+//                 b_command.range(47,32) = b_size_x;
+
+// #ifdef DEBUG_LOG_PRINT
+// 				printf("|HLS DEBUG_LOG|%s| bank_idx:%u, current_bank_offset:%u, b_size_x:%u\n", 
+// 						__func__, (unsigned int)i, (unsigned int)current_bank_offset, (unsigned int)b_size_x);
+// #endif
+
+//                 strms[i] << b_command;
+//             }
+//         }
+//     }
+// }
+
 /**
  * @brief offsetGenerator: Generates and distributes bank-specific configuration commands 
  * across multiple output streams.
@@ -2001,7 +2159,7 @@ static void readConfigStreamGenerator(const size_t offset_x, const unsigned shor
 template <unsigned short NUM_BANKS, unsigned short IN_ITR=2>
 static void offsetGenerator(const unsigned short tile_size_y, const unsigned short tile_size_z, 
 		const unsigned short bank_grid_size_x_floor, const ap_uint<LOG2(NUM_BANKS)> big_grid_size_x_banks_upper, const unsigned short grid_size_y, 
-		const unsigned short tile_offset_x_floor, const ap_uint<LOG2(NUM_BANKS)> big_offset_x_banks_upper,  const unsigned short tile_offset_y, 
+		const unsigned short tile_offset_x_floor, const ap_uint<LOG2(NUM_BANKS)> big_offset_x_banks_upper,  const unsigned short tile_offset_y, const unsigned short bank_tile_size_x_floor, const ap_uint<NUM_BANKS> big_bank_tile_size_x_mask,
 		::hls::stream<ap_uint<32>> offset_strm[NUM_BANKS])
 {
 #ifndef __SYNTHESIS__
@@ -2029,13 +2187,16 @@ static void offsetGenerator(const unsigned short tile_size_y, const unsigned sho
 	// const unsigned short size_x_div_by_banks_floor = size_x >> NUM_BANKS_SHIFT;
 	// const unsigned int size_x_mod_num_banks = size_x & BANK_MASK;
 	unsigned int initial_bank_offsets[NUM_BANKS];
-	#pragma HLS ARRAY_PARTITION variable=initial_bank_offsets complate;
+	#pragma HLS ARRAY_PARTITION variable=initial_bank_offsets complate
 
 	unsigned short grid_size_x_banks[NUM_BANKS]; //equivalent to stride_y
-	#pragma HLS ARRAY_PARTITION variable=grid_size_x_banks complate;
+	#pragma HLS ARRAY_PARTITION variable=grid_size_x_banks complate
 
 	unsigned short bank_stride_z[NUM_BANKS]; 
-	#pragma HLS ARRAY_PARTITION variable=bank_stride_z complate;
+	#pragma HLS ARRAY_PARTITION variable=bank_stride_z complate
+
+	unsigned short bank_tile_size_x[NUM_BANKS];
+	#pragma HLS ARRAY_PARTITION variable=bank_tile_size_x complate
 
 	for (ap_uint<NUM_BANKS_SHIFT+1> b_id = 0; b_id < NUM_BANKS; b_id++)
 	{
@@ -2044,6 +2205,7 @@ static void offsetGenerator(const unsigned short tile_size_y, const unsigned sho
 		initial_bank_offsets[b_id] = tile_offset_x_floor + (b_id < big_offset_x_banks_upper ? 1 : 0);
 		initial_bank_offsets[b_id] += tile_offset_y * grid_size_x_banks[b_id];
 		bank_stride_z[b_id] = grid_size_x_banks[b_id] * grid_size_y;
+		bank_tile_size_x[b_id] = bank_tile_size_x_floor + big_bank_tile_size_x_mask[b_id];
 
 #ifdef DEBUG_LOG_PRINT
                 printf("|HLS DEBUG_LOG|%s| bank_id: %u, grid_size_x_banks: %u, initial_bank_offsets: %u: bank_stride_z: %u\n", 
@@ -2067,8 +2229,8 @@ static void offsetGenerator(const unsigned short tile_size_y, const unsigned sho
                 printf("|HLS DEBUG_LOG|%s| Inner Loop. z:%u, y:%u, b_id:%u, abs_bank_offset:%u\n", 
                         __func__, (unsigned int)z, (unsigned int)y, (unsigned int)b_id, abs_bank_offset);
 #endif
-
-				offset_strm[b_id].write(abs_bank_offset);
+				if (bank_tile_size_x[b_id] != 0)
+					offset_strm[b_id].write(abs_bank_offset);
 			}
         }
     }
@@ -2353,39 +2515,44 @@ static void stridedTileMem2streamV3(ap_uint<MEM_DATA_WIDTH>* mem_in,
  * @param[in] size_y Number of rows
  * @param[in] size_z Depth (default: 1)
  */
-template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
+template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short BANK_ID, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
 static void stridedTileMem2streamV4(ap_uint<MEM_DATA_WIDTH>* mem_in, 
                                     ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, 
 									::hls::stream<ap_uint<32>>& offset_command,
-                                    const unsigned short bank_size_x_floor,
-									const ap_uint<1> is_big_size_x,
-									const unsigned short size_y,
-                                    const unsigned short size_z=1
+                                    const unsigned short bank_tile_size_x_floor,
+									const ap_uint<NUM_BANKS> big_bank_tile_size_x_mask,
+									const unsigned int total_rows
+									// const unsigned short tile_size_y,
+                                    // const unsigned short tile_size_z=1
 #ifdef DEBUG_LOG_PRINT
                                     , const char* print_prompt = ""
 #endif  
     )
 {
-    const unsigned int total_iters = size_z * size_y;
-	const unsigned short bank_size_x =  bank_size_x_floor + is_big_size_x;
-
+	constexpr unsigned short BURST_SIZE_SHIFT = LOG2(BURST_SIZE);
+	constexpr unsigned short BURST_SIZE_MASK = BURST_SIZE - 1;
+    // const unsigned int total_iters = size_z * size_y;
+	const unsigned short bank_size_x =  bank_tile_size_x_floor + big_bank_tile_size_x_mask.range(BANK_ID, BANK_ID);
+	// const unsigned short burst_beats = bank_size_x >> BURST_SIZE_SHIFT;
+	// const unsigned short non_burst_beats = bank_size_x & BURST_SIZE_MASK;
+	// const bool is_burst_beats_zero = burst_beats == 0;
 
 #ifdef DEBUG_LOG_PRINT
-				printf("|HLS DEBUG_LOG|%s|%s| reading tile from mem to stream, size_y:%d, size_z:%d, total_iters:%d, bank_size_x:%d \n", 
-						__func__, print_prompt, size_y, size_z, total_iters, bank_size_x);
+				printf("|HLS DEBUG_LOG|%s|%s| reading tile from mem to stream, total_rows:%d, bank_size_x:%d \n", 
+						__func__, print_prompt, total_rows, bank_size_x);
 #endif
 
 	unsigned int bank_offset = 0;
 
-    tile_loop: for (unsigned int i = 0; i < total_iters; i++) {
-		read_burst_loop: for (unsigned short j = 0; j < bank_size_x; j++) {
+    tile_loop: for (unsigned int j = 0; j < total_rows; j++) {
+		read_burst_loop: for (unsigned short i = 0; i < bank_size_x; i++) {
 			#pragma HLS LOOP_FLATTEN
 			#pragma HLS PIPELINE II=IN_ITR
 
-			if (j == 0) {
+			if (i == 0) {
 				bank_offset = offset_command.read();
 			}
-			ap_uint<MEM_DATA_WIDTH> tmp = mem_in[bank_offset + j];
+			ap_uint<MEM_DATA_WIDTH> tmp = mem_in[bank_offset + i];
 			strm_out << tmp;
 
 	#ifdef DEBUG_LOG_PRINT
@@ -2402,6 +2569,13 @@ static void stridedTileMem2streamV4(ap_uint<MEM_DATA_WIDTH>* mem_in,
 		printf("====================================================================================\n");
 	#endif
 		}
+		// read_non_burst_loop: for (unsigned int i = 0; i < non_burst_beats; i++) {
+		// 	if (i == 0 and is_burst_beats_zero) {
+		// 		bank_offset = offset_command.read();
+		// 	}
+		// 	ap_uint<MEM_DATA_WIDTH> tmp = mem_in[bank_offset + i];
+		// 	strm_out << tmp;
+		// }
     }
 }
 
@@ -2645,15 +2819,15 @@ static void stridedTileStream2memWithAvoidV3(
  * @param[in] size_y The total number of iterations in the Y dimension.
  * @param[in] size_z The total number of iterations in the Z dimension.
  */
-template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
+template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short BANK_ID, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
 static void stridedTileStream2memWithAvoidV4(
     	::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, 
 		ap_uint<MEM_DATA_WIDTH>* out, 
 		::hls::stream<ap_uint<32>>& offset_command, 
-		const unsigned short bank_size_x_floor,
-		const ap_uint<1> is_big_size_x,
+		const unsigned short bank_tile_size_x_floor,
+		const ap_uint<NUM_BANKS> big_bank_tile_size_x_mask,
 		const unsigned short bank_avoid_x_floor,
-		const ap_uint<1> is_big_avoid_x,
+		const ap_uint<NUM_BANKS> big_bank_avoid_x_mask,
 		const unsigned short avoid_y,
 		const unsigned short size_y,
 		const unsigned short size_z=1
@@ -2662,11 +2836,17 @@ static void stridedTileStream2memWithAvoidV4(
 #endif  
 )
 {
-    const unsigned int total_iters = size_z * size_y;
-	const unsigned short bank_size_x = bank_size_x_floor + is_big_size_x;
-	const unsigned short avoid_x = bank_avoid_x_floor + is_big_avoid_x;
-	const unsigned short avoid_iterations = bank_size_x * avoid_y;
-	const unsigned short size_y_mask = size_y - 1;
+	constexpr unsigned short BURST_SIZE_SHIFT = LOG2(BURST_SIZE);
+	constexpr unsigned short BURST_SIZE_MASK = BURST_SIZE - 1;
+
+    // const unsigned int total_iters = size_z * size_y;
+	const unsigned short bank_size_x = bank_tile_size_x_floor + big_bank_tile_size_x_mask.range(BANK_ID, BANK_ID);
+	const unsigned short avoid_x = bank_avoid_x_floor + big_bank_avoid_x_mask(BANK_ID, BANK_ID);
+	// const unsigned short avoid_iterations = bank_size_x * avoid_y;
+	// const unsigned short size_y_mask = size_y - 1;
+	// const unsigned short burst_beats = bank_size_x >> BURST_SIZE_SHIFT;
+	// const unsigned short non_burst_beats = bank_size_x & BURST_SIZE_MASK;
+	// const bool is_burst_beats_zero = burst_beats == 0;
 	unsigned int bank_offset = 0;
 
 #ifdef DEBUG_LOG_PRINT
@@ -2674,43 +2854,44 @@ static void stridedTileStream2memWithAvoidV4(
 			__func__, print_prompt, bank_size_x, avoid_x);
 #endif
 
-    tile_loop: for (unsigned int i = 0; i < total_iters; i++) {
-        write_burst_loop: for (unsigned short j = 0; j < bank_size_x; j++) {
-			#pragma HLS LOOP_FLATTEN
-            #pragma HLS PIPELINE II=IN_ITR
-			
-			unsigned short row_id = i & size_y_mask;
-			if (j == 0) {
-				bank_offset = offset_command.read();
+    tile_loop_1: for (unsigned short z = 0; z < size_z; z++) {
+		tile_loop_2: for (unsigned short y = 0; y < size_y; y++) {
+			write_burst_loop: for (unsigned short j = 0; j < bank_size_x; j++) {
+				#pragma HLS LOOP_FLATTEN
+				#pragma HLS PIPELINE II=IN_ITR
+				
+				if (j == 0) {
+					bank_offset = offset_command.read();
+				}
+				// Always read from the stream to drain it properly
+				ap_uint<MEM_DATA_WIDTH> tmp = strm_in.read();
+				
+				// Only write to memory if we have passed the avoid_x threshold.
+				if (j >= avoid_x and y >= avoid_y) {
+					out[bank_offset + j] = tmp;
+				}
+
+	#ifdef DEBUG_LOG_PRINT
+				printf("====================================================================================\n");
+				printf("|HLS DEBUG_LOG|%s|%s| writing burst  x: %d, y: %d, z:%d \n",__func__ , print_prompt, j, y, z);
+				// Identify if we are in the avoid zone or actively writing
+				if (j < avoid_x) {
+					printf("|HLS DEBUG_LOG|%s|%s| SKIPPING (Avoid Zone) stream beat: %d, val=(\n", __func__, print_prompt, j);
+				} else {
+					printf("|HLS DEBUG_LOG|%s|%s| WRITING stream beat: %d to mem offset: %d, val=(\n", __func__, print_prompt, j, bank_offset + j);
+				}
+
+				// Print the payload using the original DataConv logic
+				for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
+				{
+					DataConv conv;
+					conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+					printf("     %f,\n", conv.f);
+				}
+				printf(")\n\n");
+				printf("====================================================================================\n");
+	#endif
 			}
-            // Always read from the stream to drain it properly
-            ap_uint<MEM_DATA_WIDTH> tmp = strm_in.read();
-            
-            // Only write to memory if we have passed the avoid_x threshold.
-            if (j >= avoid_x and row_id >= avoid_y) {
-                out[bank_offset + j] = tmp;
-            }
-
-#ifdef DEBUG_LOG_PRINT
-            printf("====================================================================================\n");
-            printf("|HLS DEBUG_LOG|%s|%s| writing  i: %d, j: %d \n",__func__ , print_prompt, i, j);
-            // Identify if we are in the avoid zone or actively writing
-            if (j < avoid_x) {
-                printf("|HLS DEBUG_LOG|%s|%s| SKIPPING (Avoid Zone) stream beat: %d, val=(\n", __func__, print_prompt, j);
-            } else {
-                printf("|HLS DEBUG_LOG|%s|%s| WRITING stream beat: %d to mem offset: %d, val=(\n", __func__, print_prompt, j, bank_offset + j);
-            }
-
-            // Print the payload using the original DataConv logic
-            for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
-            {
-                DataConv conv;
-                conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
-                printf("     %f,\n", conv.f);
-            }
-            printf(")\n\n");
-            printf("====================================================================================\n");
-#endif
         }
     }
 }
@@ -3027,7 +3208,8 @@ template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned shor
 static void redirectV2(
         ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in[NUM_BANKS],
         ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out[NUM_BANKS],
-		const unsigned short bank_size_x_floor, const unsigned short size_x_div_by_banks_ceil, const ap_uint<1> is_big_bank_size_x[NUM_BANKS], const ap_uint<LOG2(NUM_BANKS)> big_offset_x_banks_upper, const unsigned short size_y, const unsigned short size_z)
+		const unsigned short bank_tile_size_x_floor, const unsigned short bank_tile_size_x_ceil, const ap_uint<NUM_BANKS> big_bank_tile_size_x_mask, const ap_uint<LOG2(NUM_BANKS)> big_offset_x_banks_upper, 
+		/*const unsigned short tile_size_y, const unsigned short tile_size_z*/ const unsigned int total_rows)
 {
     // Enforce the power-of-two constraint for bitwise optimizations
 #ifndef __SYNTHESIS__
@@ -3039,118 +3221,119 @@ static void redirectV2(
 
 #ifdef DEBUG_LOG_PRINT
     printf("==== DATAMOVER REDIRECT INITIAL PARAMETERS ====\n");
-    printf("bank_size_x_floor: %lu\n", bank_size_x_floor);
+	printf("bank_tile_size_x_ceil: %u\n", bank_tile_size_x_ceil);
+    printf("bank_tile_size_x_floor: %u\n", bank_tile_size_x_floor);
     printf("is_big_bank_size_x: {");
 	for (ap_uint<LOG2(NUM_BANKS)+1> b_id = 0; b_id < NUM_BANKS; b_id++) {
-		 printf("%d%s", is_big_bank_size_x[b_id], (b_id == NUM_BANKS - 1 ? "" : ", "));
+		 printf("%d%s", (unsigned short)big_bank_tile_size_x_mask.range(b_id, b_id), (b_id == NUM_BANKS - 1 ? "" : ", "));
 	}
 	printf("}\n");
-    printf("size_y: %u\n", (unsigned int)size_y);
-    printf("size_z: %u\n", (unsigned int)size_z);
-    printf("size_x_div_by_banks_ceil: %u\n", size_x_div_by_banks_ceil);
-    printf("size_x_div_by_banks_floor: %u\n", bank_size_x_floor);
+    // printf("tile_size_y: %u\n", (unsigned int)tile_size_y);
+    // printf("tile_size_z: %u\n", (unsigned int)tile_size_z);
+	printf("total_rows: %u\n", (unsigned int)total_rows);
     printf("NUM_BANKS: %u\n", NUM_BANKS);
     printf("========================================\n");
 #endif
 
-    for (unsigned short z = 0; z < size_z; z++)
-    {
-        for (unsigned short y = 0; y < size_y; y++)
-        {
-            #pragma HLS LOOP_FLATTEN
+    // for (unsigned short z = 0; z < size_z; z++)
+    // {
+    //     for (unsigned short y = 0; y < size_y; y++)
+    //     {
+	for (unsigned int row_id = 0; row_id < total_rows; row_id++) 
+	{
+		#pragma HLS LOOP_FLATTEN
 
-            // const size_t z_offset = offset_x + z * stride_z;
-            // const size_t abs_offset = z_offset + y * stride_y;
-            
-            // Replaced modulo with bitwise AND
-            const ap_uint<NUM_BANKS_SHIFT> starting_bank = big_offset_x_banks_upper;
-            // const unsigned int banks_upper_limit = (starting_bank + size_x_mod_banks) & BANK_MASK;
-            // const bool is_t1_or_t2 = banks_upper_limit < starting_bank;
+		// const size_t z_offset = offset_x + z * stride_z;
+		// const size_t abs_offset = z_offset + y * stride_y;
+		
+		// Replaced modulo with bitwise AND
+		const ap_uint<NUM_BANKS_SHIFT> starting_bank = big_offset_x_banks_upper;
+		// const unsigned int banks_upper_limit = (starting_bank + size_x_mod_banks) & BANK_MASK;
+		// const bool is_t1_or_t2 = banks_upper_limit < starting_bank;
 
-            // Pre-calculate bank conditions outside the inner pipeline loop
-            // bool bank_cond[NUM_BANKS];
-            // #pragma HLS ARRAY_PARTITION variable=bank_cond complete dim=1
+		// Pre-calculate bank conditions outside the inner pipeline loop
+		// bool bank_cond[NUM_BANKS];
+		// #pragma HLS ARRAY_PARTITION variable=bank_cond complete dim=1
 
-            // for (unsigned int i = 0; i < NUM_BANKS; i++)
-            // {
-            //     #pragma HLS UNROLL
-            //     const bool is_gt_sb = i >= starting_bank;
-            //     const bool is_lt_uplim = i < banks_upper_limit;
+		// for (unsigned int i = 0; i < NUM_BANKS; i++)
+		// {
+		//     #pragma HLS UNROLL
+		//     const bool is_gt_sb = i >= starting_bank;
+		//     const bool is_lt_uplim = i < banks_upper_limit;
 
-            //     if (is_t1_or_t2) {
-            //         bank_cond[i] = is_gt_sb || is_lt_uplim;
-            //     } else {
-            //         bank_cond[i] = is_gt_sb && is_lt_uplim;
-            //     }
-            // }
+		//     if (is_t1_or_t2) {
+		//         bank_cond[i] = is_gt_sb || is_lt_uplim;
+		//     } else {
+		//         bank_cond[i] = is_gt_sb && is_lt_uplim;
+		//     }
+		// }
 
-            for (unsigned short x = 0; x < size_x_div_by_banks_ceil; x++)
-            {
-                #pragma HLS PIPELINE II=IN_ITR
+		for (unsigned short x = 0; x < bank_tile_size_x_ceil; x++)
+		{
+			#pragma HLS PIPELINE II=IN_ITR
 
-                // Fully partition these to map to discrete registers
-                ap_uint<MEM_DATA_WIDTH> tmp[NUM_BANKS];
-                ap_uint<MEM_DATA_WIDTH> swap[NUM_BANKS];
-                #pragma HLS ARRAY_PARTITION variable=tmp complete dim=1
-                #pragma HLS ARRAY_PARTITION variable=swap complete dim=1
+			// Fully partition these to map to discrete registers
+			ap_uint<MEM_DATA_WIDTH> tmp[NUM_BANKS];
+			ap_uint<MEM_DATA_WIDTH> swap[NUM_BANKS];
+			#pragma HLS ARRAY_PARTITION variable=tmp complete dim=1
+			#pragma HLS ARRAY_PARTITION variable=swap complete dim=1
 
-                const bool is_x_lt_bank_x_size = x < bank_size_x_floor;
+			const bool is_x_lt_bank_x_size = x < bank_tile_size_x_floor;
 
-                // 1. Read from input streams based on conditions
-                for (unsigned int i = 0; i < NUM_BANKS; i++)
-                {
-                    #pragma HLS UNROLL
-                    const bool read_cond = is_x_lt_bank_x_size || is_big_bank_size_x[i];
-                    tmp[i] = read_cond ? register_it(strm_in[i].read()) : ap_uint<MEM_DATA_WIDTH>(0);
-
-#ifdef DEBUG_LOG_PRINT
-					auto read_val = tmp[i]; 
-					if (read_cond) {
-						printf("==== REDIRECT READ ====\n");
-						printf("Bank[%u], X[%u], Y[%u], Z[%u]\n", i, x, (unsigned int)y, (unsigned int)z);
-						printf("Values (float): (");
-						for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
-							DataConv conv;
-							conv.i = read_val.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
-							if (j > 0) printf(", ");
-							printf("%f", conv.f);
-						}
-						printf(")\n");
-						printf("=====================\n");
-					}
-#endif
-                }
-
-                // 2. The Barrel Shifter (Replaces the large switch statement)
-                for (unsigned int i = 0; i < NUM_BANKS; i++)
-                {
-                    #pragma HLS UNROLL
-                    unsigned int src_idx = (starting_bank + i) & BANK_MASK;
-                    swap[i] = tmp[src_idx];
-                }
-
-                // 3. Write to output streams
-                for (unsigned int i = 0; i < NUM_BANKS; i++)
-                {
-                    #pragma HLS UNROLL
-                    strm_out[i] << swap[i];
+			// 1. Read from input streams based on conditions
+			for (unsigned int i = 0; i < NUM_BANKS; i++)
+			{
+				#pragma HLS UNROLL
+				const bool read_cond = is_x_lt_bank_x_size || big_bank_tile_size_x_mask.range(i,i);
+				tmp[i] = read_cond ? register_it(strm_in[i].read()) : ap_uint<MEM_DATA_WIDTH>(0);
 
 #ifdef DEBUG_LOG_PRINT
-					auto write_val = swap[i];
-					printf("==== REDIRECT WRITE ====\n");
-					printf("Bank[%u],  X[%u], Y[%u], Z[%u]\n", i, x, (unsigned int)y, (unsigned int)z);
+				auto read_val = tmp[i]; 
+				if (read_cond) {
+					printf("==== REDIRECT READ ====\n");
+					printf("Bank[%u], X[%u], ROW_ID[%u]\n", i, x, (unsigned int)row_id);
 					printf("Values (float): (");
 					for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
 						DataConv conv;
-						conv.i = write_val.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+						conv.i = read_val.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
 						if (j > 0) printf(", ");
 						printf("%f", conv.f);
 					}
 					printf(")\n");
-					printf("======================\n");
+					printf("=====================\n");
+				}
 #endif
-                }
-            }
+			}
+
+			// 2. The Barrel Shifter (Replaces the large switch statement)
+			for (unsigned int i = 0; i < NUM_BANKS; i++)
+			{
+				#pragma HLS UNROLL
+				unsigned int src_idx = (starting_bank + i) & BANK_MASK;
+				swap[i] = tmp[src_idx];
+			}
+
+			// 3. Write to output streams
+			for (unsigned int i = 0; i < NUM_BANKS; i++)
+			{
+				#pragma HLS UNROLL
+				strm_out[i] << swap[i];
+
+#ifdef DEBUG_LOG_PRINT
+				auto write_val = swap[i];
+				printf("==== REDIRECT WRITE ====\n");
+				printf("Bank[%u],  X[%u], ROW_ID[%u]\n", i, x, (unsigned int)row_id);
+				printf("Values (float): (");
+				for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
+					DataConv conv;
+					conv.i = write_val.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+					if (j > 0) printf(", ");
+					printf("%f", conv.f);
+				}
+				printf(")\n");
+				printf("======================\n");
+#endif
+			}
         }
     }
 }
@@ -4065,7 +4248,8 @@ template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned shor
 static void reverseRedirectV2(
         ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in[NUM_BANKS],
         ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out[NUM_BANKS],
-        const unsigned short bank_size_x_floor, const unsigned short size_x_div_by_banks_ceil,  const ap_uint<1> is_big_bank_size_x[NUM_BANKS], const ap_uint<LOG2(NUM_BANKS)> big_offset_x_banks_upper, const unsigned short size_y, const unsigned short size_z)
+        const unsigned short bank_tile_size_x_floor, const unsigned short bank_tile_size_x_ceil,  const ap_uint<NUM_BANKS> big_bank_tile_size_x_mask, const ap_uint<LOG2(NUM_BANKS)> big_offset_x_banks_upper, 
+		/*const unsigned short size_y, const unsigned short size_z*/ const unsigned int total_rows)
 {
 #ifndef __SYNTHESIS__
 	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
@@ -4090,114 +4274,113 @@ static void reverseRedirectV2(
 
 #ifdef DEBUG_LOG_PRINT
     printf("==== DATAMOVER REDIRECT INITIAL PARAMETERS ====\n");
-    printf("bank_size_x_floor: %lu\n", bank_size_x_floor);
-    printf("is_big_bank_size_x: {");
+    printf("bank_tile_size_x_floor: %lu\n", bank_tile_size_x_floor);
+	printf("bank_tile_size_x_ceil: %lu\n", bank_tile_size_x_ceil);
+    printf("big_bank_tile_size_x_mask: {");
 	for (ap_uint<LOG2(NUM_BANKS)+1> b_id = 0; b_id < NUM_BANKS; b_id++) {
-		 printf("%d%s", is_big_bank_size_x[b_id], (b_id == NUM_BANKS - 1 ? "" : ", "));
+		printf("%d", (unsigned short)big_bank_tile_size_x_mask[b_id]);
+		if (b_id != NUM_BANKS - 1) 
+            printf(", ");
 	}
 	printf("}\n");
-    printf("size_y: %u\n", (unsigned int)size_y);
-    printf("size_z: %u\n", (unsigned int)size_z);
-    printf("size_x_div_by_banks_ceil: %u\n", size_x_div_by_banks_ceil);
-    printf("size_x_div_by_banks_floor: %u\n", bank_size_x_floor);
+    // printf("size_y: %u\n", (unsigned int)size_y);
+    // printf("size_z: %u\n", (unsigned int)size_z);
+	printf("total_rows: %d\n", (unsigned int)total_rows);
     printf("NUM_BANKS: %u\n", NUM_BANKS);
     printf("========================================\n");
 #endif
 
-    for (unsigned short z = 0; z < size_z; z++)
+    for (unsigned int row_id = 0; row_id < total_rows; row_id++)
     {
-        for (unsigned short y = 0; y < size_y; y++)
-        {
-            #pragma HLS LOOP_FLATTEN
-			const ap_uint<NUM_BANKS_SHIFT> starting_bank = big_offset_x_banks_upper;
-            // const size_t z_offset = offset_x + z * stride_z;
-            // const size_t abs_offset = z_offset + y * stride_y;
-            
-            // const unsigned int starting_bank = abs_offset & BANK_MASK;
-            // const unsigned int banks_upper_limit = (starting_bank + size_x_mod_banks) & BANK_MASK;
-            // const bool is_t1_or_t2 = banks_upper_limit < starting_bank;
+		#pragma HLS LOOP_FLATTEN
+		const ap_uint<NUM_BANKS_SHIFT> starting_bank = big_offset_x_banks_upper;
+		// const size_t z_offset = offset_x + z * stride_z;
+		// const size_t abs_offset = z_offset + y * stride_y;
+		
+		// const unsigned int starting_bank = abs_offset & BANK_MASK;
+		// const unsigned int banks_upper_limit = (starting_bank + size_x_mod_banks) & BANK_MASK;
+		// const bool is_t1_or_t2 = banks_upper_limit < starting_bank;
 
-            // Pre-calculate boundary write conditions
-            // bool bank_cond[NUM_BANKS];
-            // #pragma HLS ARRAY_PARTITION variable=bank_cond complete dim=1
+		// Pre-calculate boundary write conditions
+		// bool bank_cond[NUM_BANKS];
+		// #pragma HLS ARRAY_PARTITION variable=bank_cond complete dim=1
 
-            // for (unsigned int i = 0; i < NUM_BANKS; i++)
-            // {
-            //     #pragma HLS UNROLL
-            //     const bool is_gt_sb = i >= starting_bank;
-            //     const bool is_lt_uplim = i < banks_upper_limit;
+		// for (unsigned int i = 0; i < NUM_BANKS; i++)
+		// {
+		//     #pragma HLS UNROLL
+		//     const bool is_gt_sb = i >= starting_bank;
+		//     const bool is_lt_uplim = i < banks_upper_limit;
 
-            //     if (is_t1_or_t2) {
-            //         bank_cond[i] = is_gt_sb || is_lt_uplim;
-            //     } else {
-            //         bank_cond[i] = is_gt_sb && is_lt_uplim;
-            //     }
-            // }
+		//     if (is_t1_or_t2) {
+		//         bank_cond[i] = is_gt_sb || is_lt_uplim;
+		//     } else {
+		//         bank_cond[i] = is_gt_sb && is_lt_uplim;
+		//     }
+		// }
 
-            for (unsigned short x = 0; x < size_x_div_by_banks_ceil; x++)
-            {
-                #pragma HLS PIPELINE II=IN_ITR
+		for (unsigned short x = 0; x < bank_tile_size_x_ceil; x++)
+		{
+			#pragma HLS PIPELINE II=IN_ITR
 
-                ap_uint<MEM_DATA_WIDTH> tmp[NUM_BANKS];
-                ap_uint<MEM_DATA_WIDTH> swap[NUM_BANKS];
-                #pragma HLS ARRAY_PARTITION variable=tmp complete dim=1
-                #pragma HLS ARRAY_PARTITION variable=swap complete dim=1
+			ap_uint<MEM_DATA_WIDTH> tmp[NUM_BANKS];
+			ap_uint<MEM_DATA_WIDTH> swap[NUM_BANKS];
+			#pragma HLS ARRAY_PARTITION variable=tmp complete dim=1
+			#pragma HLS ARRAY_PARTITION variable=swap complete dim=1
 
-                const bool is_x_lt_bank_x_size = x < bank_size_x_floor;
+			const bool is_x_lt_bank_x_size = x < bank_tile_size_x_floor;
 
-                // 1. Unconditional Read
-                for (unsigned int i = 0; i < NUM_BANKS; i++)
-                {
-                    #pragma HLS UNROLL
-                    tmp[i] = register_it(strm_in[i].read());
+			// 1. Unconditional Read
+			for (unsigned int i = 0; i < NUM_BANKS; i++)
+			{
+				#pragma HLS UNROLL
+				tmp[i] = register_it(strm_in[i].read());
 #ifdef DEBUG_LOG_PRINT
-                    printf("==== REVERSE REDIRECT READ ====\n");
-                    printf("Bank[%u], X[%u], Y[%u], Z[%u]\n", i, x, (unsigned int)y, (unsigned int)z);
-                    printf("Values (float): (");
-                    for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
-                        DataConv conv;
-                        conv.i = tmp[i].range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
-                        if (j > 0) printf(", ");
-                        printf("%f", conv.f);
-                    }
-                    printf(")\n");
-                    printf("============================\n");
+				printf("==== REVERSE REDIRECT READ ====\n");
+				printf("Bank[%u], X[%u], ROW_ID[%u] \n", i, x, (unsigned int)row_id);
+				printf("Values (float): (");
+				for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
+					DataConv conv;
+					conv.i = tmp[i].range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+					if (j > 0) printf(", ");
+					printf("%f", conv.f);
+				}
+				printf(")\n");
+				printf("============================\n");
 #endif
-                }
+			}
 
-                // 2. Reverse Barrel Shifter
-                for (unsigned int i = 0; i < NUM_BANKS; i++)
-                {
-                    #pragma HLS UNROLL
-                    unsigned int src_idx = (i - starting_bank + NUM_BANKS) & BANK_MASK;
-                    swap[i] = tmp[src_idx];
-                }
+			// 2. Reverse Barrel Shifter
+			for (unsigned int i = 0; i < NUM_BANKS; i++)
+			{
+				#pragma HLS UNROLL
+				unsigned int src_idx = (i - starting_bank + NUM_BANKS) & BANK_MASK;
+				swap[i] = tmp[src_idx];
+			}
 
-                // 3. Conditional Write to Outputs
-                for (unsigned int i = 0; i < NUM_BANKS; i++)
-                {
-                    #pragma HLS UNROLL
-                    const bool write_cond = is_x_lt_bank_x_size || is_big_bank_size_x[i];
-                    
-                    if (write_cond) {
-                        strm_out[i] << swap[i];
+			// 3. Conditional Write to Outputs
+			for (unsigned int i = 0; i < NUM_BANKS; i++)
+			{
+				#pragma HLS UNROLL
+				const bool write_cond = is_x_lt_bank_x_size || big_bank_tile_size_x_mask.range(i,i);
+				
+				if (write_cond) {
+					strm_out[i] << swap[i];
 #ifdef DEBUG_LOG_PRINT
-                        printf("==== REVERSE REDIRECT WRITE ====\n");
-                        printf("Bank[%u], X[%u], Y[%u], Z[%u]\n", i, x, (unsigned int)y, (unsigned int)z);
-                        printf("Values (float): (");
-                        for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
-                            DataConv conv;
-                            conv.i = swap[i].range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
-                            if (j > 0) printf(", ");
-                            printf("%f", conv.f);
-                        }
-                        printf(")\n");
-                        printf("===============================\n");
+					printf("==== REVERSE REDIRECT WRITE ====\n");
+					printf("Bank[%u], X[%u], ROW_ID[%u]\n", i, x, (unsigned int)row_id);
+					printf("Values (float): (");
+					for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
+						DataConv conv;
+						conv.i = swap[i].range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+						if (j > 0) printf(", ");
+						printf("%f", conv.f);
+					}
+					printf(")\n");
+					printf("===============================\n");
 #endif
-                    }
-                }
-            }
-        }
+				}
+			}
+		}     
     }
 }
 
