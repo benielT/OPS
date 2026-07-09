@@ -169,6 +169,51 @@ struct StencilConfigCoreTiled // : public StencilConfigCore
     SizeType2d tile_count; //{xblocks, y}   
 };
 
+// TODO: move thes constructs from ops_hls_stencil_core_V2.hpp to here.
+// static StencilConfigCoreSingleTile stencilConfigCoreSingleTileGen2D(const StencilConfigCoreTiled& srcConfig, const unsigned short tile_x)
+// {
+//     StencilConfigCoreSingleTile tileConfig;
+
+//     tileConfig.dim = srcConfig.dim;
+//     const bool is_last_tile_x = (tile_x == srcConfig.tile_count[0] - 1);
+//     const bool is_last_tile_y = true;
+//     tileConfig.tile_size[0] = is_last_tile_x ? srcConfig.last_tile_size[0] : srcConfig.tile_size[0];
+//     tileConfig.tile_size[1] = srcConfig.grid_size[1];
+//     tileConfig.tile_size[2] = 1;
+//     tileConfig.outer_loop_limit = srcConfig.outer_loop_limit;
+//     //tileConfig.is_tiled[0] = srcConfig.tile_count[0] > 1;
+//     //tileConfig.is_tiled[1] = srcConfig.tile_count[1] > 1;
+//     tileConfig.is_first[0] = tile_x == 0;
+//     tileConfig.is_first[1] = true;
+//     tileConfig.is_last[0] = is_last_tile_x;
+//     tileConfig.is_last[1] = is_last_tile_y;
+//     tileConfig.last_tile_upper_limit_x = srcConfig.last_tile_upper_limit_x;
+
+//     return tileConfig;
+// }
+
+// static StencilConfigCoreSingleTile stencilConfigCoreSingleTileGen3D(const StencilConfigCoreTiled& srcConfig, const unsigned short tile_x, const unsigned short tile_y, bool is_small_tile = false)
+// {
+//     StencilConfigCoreSingleTile tileConfig;
+
+//     tileConfig.dim = srcConfig.dim;
+//     const bool is_last_tile_x = (tile_x == srcConfig.tile_count[0] - 1);
+//     const bool is_last_tile_y = (tile_y == srcConfig.tile_count[1] - 1);
+//     tileConfig.tile_size[0] = is_last_tile_x ? srcConfig.last_tile_size[0] : srcConfig.tile_size[0];
+//     tileConfig.tile_size[1] = is_last_tile_y ? srcConfig.last_tile_size[1] : srcConfig.tile_size[1];
+//     tileConfig.tile_size[2] = srcConfig.grid_size[2];
+//     tileConfig.outer_loop_limit = srcConfig.outer_loop_limit;
+//     //tileConfig.is_tiled[0] = srcConfig.tile_count[0] > 1;
+//     //tileConfig.is_tiled[1] = srcConfig.tile_count[1] > 1;
+//     tileConfig.is_first[0] = tile_x == 0;
+//     tileConfig.is_first[1] = tile_y == 0;
+//     tileConfig.is_last[0] = is_last_tile_x;
+//     tileConfig.is_last[1] = is_last_tile_y;
+//     tileConfig.last_tile_upper_limit_x = srcConfig.last_tile_upper_limit_x;
+
+//     return tileConfig;
+// }
+
 struct AccessRange
 {
 	SizeType start;
