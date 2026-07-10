@@ -93,6 +93,56 @@ void mem2stream(::tapa::async_mmap<::tapa::vec_t<T, MEM_VEC_FACTOR>>& mem_in,
 
 
 /**
+ * @brief   mem2stream_blocking reads from global memory to a TAPA ostream using async_mmap.
+ * This guarantees maximum AXI throughput without manual burst calculations.
+ * 
+ * @tparam T : standard C++ type 
+ * @tparam MEM_VEC_FACTOR : Number of elements mem_in and strm_out
+ * @tparam IN_ITR: II of the mem read
+ * * @param mem_in : Synchronous TAPA memory mapped interface
+ * @param strm_out : Output TAPA ostream
+ * @param num_beats : Number of beats (data words) to read
+ */
+template <typename T, unsigned int MEM_VEC_FACTOR, unsigned int IN_ITR=2>
+void mem2stream_blocking(::tapa::mmap<::tapa::vec_t<T, MEM_VEC_FACTOR>>& mem_in,
+                ::tapa::ostream<::tapa::vec_t<T, MEM_VEC_FACTOR>>& strm_out,
+                const unsigned int num_beats)
+{
+#ifndef __SYNTHESIS__
+    static_assert(MEM_VEC_FACTOR >= min_mem_data_width/sizeof(T) && MEM_VEC_FACTOR <= max_mem_data_width/sizeof(T),
+            "MEM_VEC_FACTOR failed limit check");
+#endif
+
+#ifdef DEBUG_LOG_PRINT
+    printf("|HLS DEBUG_LOG||%s| Starting reading memmap. num_beats: %d\n"
+                , __func__, num_beats);
+#endif
+
+    for (unsigned int i_req = 0; i_req < num_beats; i_req++)
+    {
+    #pragma HLS PIPELINE II=IN_ITR
+        ::tapa::vec_t<T, MEM_VEC_FACTOR> tmp = mem_in[i_req];
+        strm_out.write(tmp); 
+
+#ifdef DEBUG_LOG_PRINT
+        printf("|HLS DEBUG_LOG||%s| ===============================================================\n", __func__);
+        printf("|HLS DEBUG_LOG||%s| reading index: %d, val=(\n", __func__, i_req);
+
+        // for (unsigned k = 0; k < MEM_VEC_FACTOR/(DEBUG_LOG_SIZE_OF * 8); k++){
+        //     DataConv conv;
+        //     conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+        //     printf("     %f,\n", conv.f); 
+        // }
+        for (unsigned k = 0; k < MEM_VEC_FACTOR; k++){
+            printf("     %f,\n", tmp[k]); 
+        }
+        printf("|HLS DEBUG_LOG||%s| ===============================================================\n\n", __func__);
+#endif
+    }
+    // strm_out.close(); //EoT token this is not necessary as we know exact transactions
+}
+
+/**
  * @brief   stream2mem reads from a TAPA istream and writes to global memory using async_mmap.
  * This guarantees maximum AXI throughput without manual burst calculations.
  * 
@@ -169,6 +219,72 @@ void stream2mem(::tapa::async_mmap<::tapa::vec_t<T, MEM_VEC_FACTOR>>& mem_out,
             mem_out.write_resp.try_read(resp);
             i_resp++;
         }
+    }
+
+#ifdef DEBUG_LOG_PRINT
+#ifndef __SYNTHESIS__
+    printf("|HLS DEBUG_LOG|%s| exiting.\n", __func__);
+#endif
+#endif
+}
+
+/**
+ * @brief   stream2mem_blocking reads from a TAPA istream and writes to global memory using tapa mmap.
+ * This guarantees maximum AXI throughput without manual burst calculations.
+ * 
+ * @tparam T : C++ base element type of the vectorized interfaces
+ * @tparam MEM_VEC_FACTOR : Number of vectorized elements of AXI4 port and the TAPA stream port
+ * @tparam IN_ITR: II configuration of mem write
+ *
+ * @param mem_out : Synchronous TAPA memory mapped output interface
+ * @param strm_in : Input TAPA istream
+ * @param num_beats : Number of beats (data words) to write
+ */
+template <typename T, unsigned int MEM_VEC_FACTOR, unsigned int IN_ITR=2>
+void stream2mem_blocking(::tapa::mmap<::tapa::vec_t<T, MEM_VEC_FACTOR>>& mem_out,
+                ::tapa::istream<::tapa::vec_t<T, MEM_VEC_FACTOR>>& strm_in,
+                const unsigned int num_beats)
+{
+#ifndef __SYNTHESIS__
+    static_assert(MEM_VEC_FACTOR >= min_mem_data_width/sizeof(T) && MEM_VEC_FACTOR <= max_mem_data_width/sizeof(T),
+            "MEM_VEC_FACTOR failed limit check");
+#endif
+
+#ifdef DEBUG_LOG_PRINT
+#ifndef __SYNTHESIS__
+    printf("|HLS DEBUG_LOG| %s | Starting writing memmap. num_beats: %d\n", 
+            __func__, num_beats);
+    printf("====================================================================================\n");
+#endif
+#endif
+
+    // i_req tracks addresses issued
+    // i_data tracks data payload sent
+    // i_resp tracks write acknowledgments received
+    for (unsigned int i_req = 0; i_req < num_beats; i_req++)
+    {
+        #pragma HLS PIPELINE II=IN_ITR
+
+        auto tmp = strm_in.read();
+        mem_out[i_req] = tmp;
+
+#ifdef DEBUG_LOG_PRINT
+#ifndef __SYNTHESIS__
+            printf("|HLS DEBUG_LOG| %s | writing index: %d, val=(\n", __func__, i_req);
+
+            // for (unsigned k = 0; k < MEM_VEC_FACTOR/(DEBUG_LOG_SIZE_OF * 8); k++)
+            // {
+            //     DataConv conv;
+            //     conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+            //     printf("%f,", conv.f);
+            // }
+            for (unsigned k = 0; k < MEM_VEC_FACTOR; k++)
+            {
+                printf("%f,", tmp[k]);
+            }
+            printf(")\n");
+#endif
+#endif
     }
 
 #ifdef DEBUG_LOG_PRINT
