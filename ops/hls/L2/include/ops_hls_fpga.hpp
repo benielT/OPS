@@ -156,16 +156,21 @@ class FPGA {
 
     template <typename T>
     std::vector<cl::Buffer> createDeviceBuffer(cl_mem_flags p_flags, const std::vector<host_buffer_t<T> >& p_buffer) {
+#if !defined(TAPA_SW_EMU) && !defined(TAPA_HW_EMU)
         size_t p_hbm_pc = p_buffer.size();
         std::vector<cl::Buffer> l_buffer(p_hbm_pc);
         for (int i = 0; i < p_hbm_pc; i++) {
             l_buffer[i] = createDeviceBuffer(p_flags, p_buffer[i]);
         }
         return l_buffer;
+#else
+        return std::vector<cl::Buffer>();
+#endif
     }
 
     template <typename T>
     cl::Buffer createDeviceBuffer(cl_mem_flags p_flags, const host_buffer_t<T>& p_buffer) {
+#if !defined(TAPA_SW_EMU) && !defined(TAPA_HW_EMU)
         const void* l_ptr = (const void*)p_buffer.data();
         if (bufferExists(l_ptr)) return m_bufferMaps[l_ptr];
 
@@ -191,16 +196,21 @@ class FPGA {
         }
 #endif
         return m_bufferMaps[l_ptr];
+#else
+        return cl::Buffer();
+#endif
     }
 
     template <typename T>
     void deleteDeviceBuffer(const host_buffer_t<T>& p_buffer)
     {
+#if !defined(TAPA_SW_EMU) && !defined(TAPA_HW_EMU)
     	const void* l_ptr = (const void*)p_buffer.data();
 		if (bufferExists(l_ptr))
 		{
 			m_bufferMaps.erase(l_ptr);
 		}
+#endif
     }
 
     void registerRuntimeEvents(const std::string& kernel_name, cl::Event& h2d_event, cl::Event& exec_event)
@@ -378,7 +388,7 @@ class FPGA {
 
 void _FPGA_set_args(ops::hls::FPGA *instance, const char *argv);
 
-void ops_init_backend(int argc, const char** argv, unsigned int devId = 0);
+void ops_init_backend(int argc, char** argv, unsigned int devId = 0);
 
 // template<typename _Period>
 // double ops_hls_get_execution_runtime(const std::string&);

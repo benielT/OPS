@@ -85,14 +85,22 @@ ifeq ($(HLS_JOBS),)
 HLS_JOBS = 10
 endif
 
+TAPA_CXXFLAGS =
 ifeq ($(HLS_TARGET_MODE),sw_emu)
-$(info hls mode: SW_EMU)
+$(warning [WARNING] tapa hls do not support SW_EMU switching to TAPA_SW_EMU)
+HLS_TARGET_MODE := tapa_sw_emu
+else ifeq ($(HLS_TARGET_MODE),tapa_sw_emu)
+$(info tapa hls mode: TAPA_SW_EMU)
+TAPA_CXXFLAGS += -DTAPA_SW_EMU
+else ifeq ($(HLS_TARGET_MODE),tapa_hw_emu)
+$(info tapa hls mode: TAPA_HW_EMU)
+TAPA_CXXFLAGS += -DTAPA_HW_EMU
 else ifeq ($(HLS_TARGET_MODE),hw_emu)
-$(info hls mode: HW_EMU)
+$(info tapa hls mode: HW_EMU)
 else ifeq ($(HLS_TARGET_MODE),hw)
-$(info hls mode: HW)
+$(info tapa hls mode: HW)
 else
-$(error hls build mode is not set: please set HLS_TARGET_MODE=<sw_emu/hw_emu/hw>)
+$(error hls build mode is not set: please set HLS_TARGET_MODE=<tapa_sw_emu/tapa_hw_emu/hw_emu/hw>)
 endif
 
 ifeq ($(TAPA_CLOCK_PERIOD),)
@@ -110,8 +118,11 @@ VPP = v++
 
 # OPS Include Paths
 TAPA_HLS_DEVICE_INC = -I$(OPS_INSTALL_PATH)/hls/include/device/ -I$(OPS_INSTALL_PATH)/hls/L1/include/
+ifeq ($(HLS_TARGET_MODE),tapa_sw_emu)
+TAPA_HLS_HOST_INC   = -I$(OPS_INSTALL_PATH)/c/include/ -I$(OPS_INSTALL_PATH)/hls/include/host/
+else
 TAPA_HLS_HOST_INC   = -I$(OPS_INSTALL_PATH)/c/include/ -I$(OPS_INSTALL_PATH)/hls/include/host/ -I$(OPS_INSTALL_PATH)/hls/ext/xcl2/ -I$(OPS_INSTALL_PATH)/hls/L1/include/ -I$(OPS_INSTALL_PATH)/hls/L2/include/
-
+endif
 # ---------------------------------------------------------
 # Compilation & Linker Flags
 # ---------------------------------------------------------
@@ -123,7 +134,7 @@ TAPA_FLAGS = --platform $(PLATFORM_PATH)/$(PLATFORM) --clock-period $(TAPA_CLOCK
 VPP_LINK_FLAGS= --target $(HLS_TARGET_MODE) --platform $(PLATFORM) --hls.jobs $(HLS_JOBS) --remote_ip_cache $(HLS_IP_CACHE_DIR)
 
 # Host Executable Flags (Injects the submodule include paths)
-TAPA_CXXFLAGS = -I$(TAPA_INC_DIR) -I$(XILINX_XRT)/include/ -I$(XILINX_VIVADO)/include/ -I$(TAPA_INCLUDE_DIR) -DVITIS_PLATFORM=$(PLATFORM) -DOPS_FPGA -D__USE_XOPEN2K8 -I$(XILINX_HLS)/include/ -fmessage-length=0 $(TAPA_HLS_HOST_INC) -D__VITIS_HLS__
+TAPA_CXXFLAGS += -I$(TAPA_INC_DIR) -I$(XILINX_XRT)/include/ -I$(XILINX_VIVADO)/include/ -I$(TAPA_INCLUDE_DIR) -DVITIS_PLATFORM=$(PLATFORM) -DOPS_FPGA -D__USE_XOPEN2K8 -I$(XILINX_HLS)/include/ -fmessage-length=0 $(TAPA_HLS_HOST_INC) -D__VITIS_HLS__
 
 
 # Host Linker Flags (Injects the submodule library path for libtapa)

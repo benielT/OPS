@@ -57,13 +57,15 @@ void _FPGA_set_args(ops::hls::FPGA *instance, const char *argv)
     }
 }
 
-void ops_init_backend(int argc, const char** argv, unsigned int devId)
+void ops_init_backend(int argc, char** argv, unsigned int devId)
 {
-    std::string xclbinFile = argv[1];
-
     unsigned int deviceId = devId;
 
     ops::hls::FPGA * fpga = ops::hls::FPGA::getInstance();
+   
+
+#if !defined(TAPA_SW_EMU) && !defined(TAPA_HW_EMU)
+    std::string xclbinFile = argv[1];
     fpga->setID(deviceId);
 
     if(!fpga->xclbin(xclbinFile))
@@ -75,6 +77,7 @@ void ops_init_backend(int argc, const char** argv, unsigned int devId)
     for (int n = 1; n < argc; n++) {
         _FPGA_set_args(fpga, argv[n]);
     }
+#endif
 }
 
 template<typename DurationType>
