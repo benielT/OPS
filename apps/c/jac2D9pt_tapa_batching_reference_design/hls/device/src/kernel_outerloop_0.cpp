@@ -175,33 +175,49 @@
 // just a tapa topfunction return read and write back with number of packats
 
 void axis_to_stream(const unsigned int outer_iter, const unsigned int stencilConfig_total_itr,::tapa::istream<::tapa::vec_t<float,vector_factor>>& arg0_axis_in, ::tapa::ostream<::tapa::vec_t<float,vector_factor>>& arg0_hls_out) {
-    size_t total_iteration = outer_iter * stencilConfig_total_itr;
-    // for (size_t i = 0; i < total_iteration; ) {
-    //     // non-blocking tapa api used
-    //     ap_uint<axis_data_width> data;
-    //     bool ok = arg0_axis_in.try_read(data);
-    //     if (ok) {
-    //         while (!arg0_hls_out.try_write(data)){};
-    //         i++;
-    //     }
-    // }
-    for (size_t i = 0; i < total_iteration; i++) {
-        ::tapa::vec_t<float,vector_factor> data;
-        arg0_axis_in.read(data);
-        arg0_hls_out.write(data);
+    // size_t total_iteration = outer_iter * stencilConfig_total_itr;
+
+#ifdef DEBUG_LOG
+    printf("[KERNEL_DEBUG]|%s| Starting axis_to_stream. outer_iter: %d, stencilConfig_total_itr: %d \n",__func__, outer_iter, stencilConfig_total_itr);
+#endif
+
+    for (unsigned int i = 0; i < outer_iter; i++) {
+        for (unsigned int j = 0; j < stencilConfig_total_itr; j++)
+        {
+            auto data = arg0_axis_in.read();
+            arg0_hls_out.write(data);
+#ifdef DEBUG_LOG
+        printf("[KERNEL_DEBUG]|%s| Read itr: %d, trans_id: %d, trans val: (",__func__, i, j);
+        for (int j = 0; j < vector_factor; j++) {
+            printf(" %f,", data[j]);
+        }
+        printf(")\n");
+#endif
+        }
     }
 }
 
 void stream_to_axis(const unsigned int outer_itr, const unsigned int stencilConfig_total_itr,::tapa::istream<::tapa::vec_t<float,vector_factor>>& arg0_hls_in,::tapa::ostream<::tapa::vec_t<float,vector_factor>>& arg0_axis_out) {
-    size_t total_iteration = outer_itr * stencilConfig_total_itr;
+    // size_t total_iteration = outer_itr * stencilConfig_total_itr;
     
-    for (size_t i = 0; i < total_iteration; i++) {
-        ::tapa::vec_t<float,vector_factor> data;
-        arg0_hls_in.read(data);
-        arg0_axis_out.write(data);
+#ifdef DEBUG_LOG
+    printf("[KERNEL_DEBUG]|%s| Starting stream_to_axis. total_iteration: %zu\n",__func__, total_iteration);
+#endif
+    for (unsigned int i = 0; i < outer_itr; i++) {
+        for (unsigned int j = 0; j < stencilConfig_total_itr; j++)
+        {
+            auto data = arg0_hls_in.read();
+            arg0_axis_out.write(data);
+#ifdef DEBUG_LOG
+        printf("[KERNEL_DEBUG]|%s| write itr: %d, trans_id: %d, trans val: (",__func__, i, j);
+        for (int j = 0; j < vector_factor; j++) {
+            printf(" %f,", data[j]);
+        }
+        printf(")\n");
+#endif
+        }
     }
 }
-
 
 void kernel_outerloop_0(
     const unsigned int outer_iter,
@@ -209,7 +225,7 @@ void kernel_outerloop_0(
     ::tapa::istream<::tapa::vec_t<float,vector_factor>>& arg0_axis_in,
     ::tapa::ostream<::tapa::vec_t<float,vector_factor>>& arg1_axis_out
 ) {
-   ::tapa::stream<::tapa::vec_t<float,vector_factor>> arg0_arg1_internal_stream("arg0_arg1_internal_stream");
+   ::tapa::stream<::tapa::vec_t<float,vector_factor>,2,4096> arg0_arg1_internal_stream("arg0_arg1_internal_stream");
 
    ::tapa::task()
         .invoke(axis_to_stream, outer_iter, stencilConfig_total_itr, arg0_axis_in, arg0_arg1_internal_stream)

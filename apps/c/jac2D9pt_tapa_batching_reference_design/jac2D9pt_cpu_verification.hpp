@@ -73,6 +73,29 @@ void initialise_grid(stencil_type* u, int size[2], int d_m[2], int d_p[2], int r
     }
 }
 
+void initialise_grid_test(stencil_type* u, int size[2], int d_m[2], int d_p[2], int range[4], int batch_size = 1)
+{
+    int grid_size_y = size[1] - d_m[1] + d_p[1];
+#ifdef OPS_FPGA
+    int grid_size_x = ((size[0] - d_m[0] + d_p[0] + mem_vector_factor - 1) / mem_vector_factor) * mem_vector_factor;
+#else
+    int grid_size_x = size[0] - d_m[0] + d_p[0];
+#endif
+    int actual_size_x = size[0] - d_m[0] + d_p[0];
+
+    for (int k = 0; k < batch_size; k++)
+    {
+        for (int j = range[2] - d_m[1]; j < range[3] -d_m[1]; j++)
+        {
+            for (int i = range[0] - d_m[0]; i < range[1] - d_m[0]; i++)
+            {
+                int index = j * grid_size_x + i + k * grid_size_x * grid_size_y;
+                u[index] = index;
+            }
+        }
+    }
+}
+
 void stencil_computation(stencil_type* u, stencil_type* u2, int size[2], int d_m[2], int d_p[2], int range[4], int batch_size = 1)
 {
     int grid_size_y = size[1] - d_m[1] + d_p[1];
@@ -107,6 +130,38 @@ void stencil_computation(stencil_type* u, stencil_type* u2, int size[2], int d_m
                                 u[index - grid_size_x + 1] * (-0.05) + \
                                 u[index + 1] * (-0.04) + \
                                 u[index + grid_size_x + 1] * (-0.03) ;
+                }
+		    }
+        }
+    }
+}
+
+void stencil_computation_test(stencil_type* u, stencil_type* u2, int size[2], int d_m[2], int d_p[2], int range[4], int batch_size = 1)
+{
+    int grid_size_y = size[1] - d_m[1] + d_p[1];
+#ifdef OPS_FPGA
+    int grid_size_x = ((size[0] - d_m[0] + d_p[0] + mem_vector_factor - 1) / mem_vector_factor) * mem_vector_factor;
+#else
+    int grid_size_x = size[0] - d_m[0] + d_p[0];
+#endif
+    int actual_size_x = size[0] - d_m[0] + d_p[0];
+
+    for (int k = 0; k < batch_size; k++)
+    {
+        for (int j = range[2] - d_m[1]; j < range[3] -d_m[1]; j++)
+        {
+            for (int i = range[0] - d_m[0]; i < range[1] - d_m[0]; i++)
+            {
+                int index = j * grid_size_x + i + k * grid_size_x * grid_size_y;
+
+                if(i == 0 || j == 0 || i == actual_size_x -1  || j==grid_size_y-1)
+                {
+                    float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+                    u2[index] = u[index];
+                } 
+                else 
+                {
+                    u2[index] = u[index] + 1;
                 }
 		    }
         }

@@ -1,10 +1,21 @@
 // Auto-generated at 2026-07-06 21:11:33.478567 by ops-translator
 
 #pragma once 
+#if !defined(TAPA_SW_EMU) && !defined(TAPA_HW_EMU)
 #include <ops_hls_rt_support.h>
+#else 
+#include <ops_tapa_rt_support.h>
+#endif
 #include "../../common/include/common_config.hpp"
 
+#if defined(TAPA_SW_EMU)
+#include "../../sim/sim_mega_kernel.hpp"
+#include <gflags/gflags.h>
+#include <tapa.h>
 
+#endif
+
+#if !defined(TAPA_SW_EMU) && !defined(TAPA_HW_EMU)
 class KernelWrapper_outerloop_0 : public ops::hls::Kernel
 {
 public:
@@ -266,19 +277,100 @@ private:
     cl::Kernel m_kernel_1;
     cl::Kernel m_datamover;
 };
+#else 
+void tapa_kernel_wrapper(ops::hls::AccessRange& range, unsigned int outer_iter,
+            ops::hls::Grid<float>& arg0,
+            ops::hls::Grid<float>& arg1)
+{   
+    ops::hls::SizeType read_stencil_d_m = { 1, 1, 0 };
+    ops::hls::SizeType read_stencil_d_p = { 1, 1, 0 };
+    ops::hls::SizeType write_stencil_d_m = {0,0,0};
+    ops::hls::SizeType write_stencil_d_p = {0,0,0};
+    auto read_stencilConfig = getStencilConfig(arg0.originalProperty, range, vector_factor, mem_vector_factor, read_stencil_d_m, read_stencil_d_p);
+    ops::hls::AccessRange read_range;
+    getAdjustedRange(arg0.originalProperty, range, read_range, read_stencil_d_m, read_stencil_d_p);
+    ops::hls::MemConfig memconfig;
+    ops::hls::genMemConfig<mem_data_width, axis_data_width, data_width>(arg0.originalProperty.grid_size, read_range, memconfig);
+    const unsigned int num_beats = memconfig.total_xblocks * arg0.originalProperty.batch_size;
+    const unsigned int num_of_pkts_per_beat = mem_data_width / axis_data_width;
+    const unsigned int num_of_pkts = num_beats * num_of_pkts_per_beat;
+
+    unsigned int total_iter_par_factor = 1;
+    unsigned int adjusted_outer_iter = (outer_iter + total_iter_par_factor - 1) / total_iter_par_factor;
+    
+#ifdef DEBUG_LOG
+    std::cout << "[DEBUG] Invoking TAPA mega-kernel in simulation mode..." << std::endl;
+#endif
+
+    size_t vec_size_arg0 = arg0.hostBuffer.size() / 16;
+    size_t vec_size_arg1 = arg1.hostBuffer.size() / 16;
+    // Invoke the TAPA software simulation
+    // FLAGS_bitstream is empty ("") during SW simulation, avoiding actual XCLBIN loading.
+
+    ::tapa::stream<::tapa::vec_t<float,vector_factor>,4,4096> arg0_axis("arg0_axis_stream");
+    ::tapa::stream<::tapa::vec_t<float,vector_factor>,4,4096> arg1_axis("arg1_axis_stream");
+
+//     tapa::invoke(sim_mega_kernel, "",
+//         num_beats,
+//         num_of_pkts,
+//         adjusted_outer_iter-1,
+//         adjusted_outer_iter,
+//         read_stencilConfig.total_itr,
+//         // Wrap the raw host pointers from the Grid class into TAPA memory maps
+//         tapa::read_write_mmap<tapa::vec_t<float, 16>>(
+//             reinterpret_cast<tapa::vec_t<float, 16>*>(arg0.hostBuffer.data()), 
+//             vec_size_arg0
+//         ),
+//         tapa::read_write_mmap<tapa::vec_t<float, 16>>(
+//             reinterpret_cast<tapa::vec_t<float, 16>*>(arg1.hostBuffer.data()), 
+//             vec_size_arg1
+//         )
+//     );
+        tapa::task()
+            .invoke(datamover_outerloop_0, "",
+                num_beats,
+                num_of_pkts,
+                adjusted_outer_iter,
+                // Wrap the raw host pointers from the Grid class into TAPA memory maps
+                tapa::read_write_mmap<tapa::vec_t<float, 16>>(
+                reinterpret_cast<tapa::vec_t<float, 16>*>(arg0.hostBuffer.data()), 
+                vec_size_arg0
+                ),
+                tapa::read_write_mmap<tapa::vec_t<float, 16>>(
+                reinterpret_cast<tapa::vec_t<float, 16>*>(arg1.hostBuffer.data()), 
+                vec_size_arg1
+                ),
+                arg0_axis,
+                arg1_axis
+        )
+            .invoke(kernel_outerloop_0, "",
+                adjusted_outer_iter,  
+                num_of_pkts,          
+                arg0_axis,
+                arg1_axis
+        );
+}
+#endif
 
 void isl0(int outer_iter, int* ops_range,
             ops::hls::Grid<float>& arg0,
             ops::hls::Grid<float>& arg1
 )
 {
-    static  KernelWrapper_outerloop_0 kernelWrapper_inst;
     ops::hls::AccessRange range;
     opsRange2hlsRange(2, ops_range, range, arg0.originalProperty);
+#if !defined(TAPA_SW_EMU) && !defined(TAPA_HW_EMU)
+    static  KernelWrapper_outerloop_0 kernelWrapper_inst;
+
     sendGrid(arg0);
     
     kernelWrapper_inst.run(range, outer_iter,
             arg0,
             arg1
     );
+#else
+    tapa_kernel_wrapper(range, outer_iter,
+            arg0,
+            arg1);
+#endif
 }

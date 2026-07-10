@@ -4,7 +4,7 @@
 PLATFORM_PATH=/opt/software/FPGA/Xilinx/platforms
 PLATFORM=xilinx_u280_gen3x16_xdma_1_202211_1
 # PLATFORM=xilinx_vck5000_gen4x8_xdma_2_202210_1
-HLS_TARGET_MODE=hw_emu
+HLS_TARGET_MODE=tapa_sw_emu
 HLS_JOBS=64
 include $(OPS_INSTALL_PATH)/../makefiles/Makefile_tapa.mk
 
@@ -29,16 +29,17 @@ else
 OPS_TARGET_CONFIG_FILE= ./config_vck5000.json
 endif
 
+
 ########  PRFOFILE OPTIONS (ONLY ENABLE ONE OPTION) ######
 
 ### Enable if wanted to profile
-CXXFLAGS += -DPROFILE
+# CXXFLAGS += -DPROFILE
 ### Enable if wanted to power_profile
 # CXXFLAGS += -DPOWER_PROFILE
 
 ########  VERIIFICATION OPTION  ######
 #Enable if wanted to verify
-# CXXFLAGS += -DVERIFICATION
+CXXFLAGS += -DVERIFICATION
 
 ######## ASYN_DISPATCH OPTION ########
 #Enable if wanted to use asynchronous dispatch
@@ -52,15 +53,33 @@ CXXFLAGS += -DBATCHING
 # CXXFLAGS += -DDEBUG_LOG
 # VPP_FLAGS += -DDEBUG_LOG
 
+TOP_MODULE_CPPS := $(wildcard ./hls/device/src/*.cpp)
+
+ifneq (,$(filter $(HLS_TARGET_MODE), tapa_sw_emu))
+	# If mode is tapa_sw_emu
+	TAPA_DEVICE_TARGET := 
+	OPS_FILES_GEN_HLS += $(wildcard ./hls/sim/*.cpp) $(TOP_MODULE_CPPS)
+	TAPA_CXXFLAGS += -I./hls/sim/ $(TAPA_HLS_DEVICE_INC) -I./hls/device/include/
+# 	TAPA_LDFLAGS += -ltapa -lfrt -lgflags -lglog -lboost_context -lboost_thread -lboost_system
+	CXX = tapa g++ --
+
+else ifeq (,$(filter $(HLS_TARGET_MODE), tapa_hw_emu))
+    # If mode is  TAPA_HW_EMU
+    TAPA_DEVICE_TARGET := ./hls/build/$(HLS_TARGET_MODE)/sim/$(APP).xo
+else
+    # Default for standard hw or hw_emu
+    TAPA_DEVICE_TARGET := ./hls/build/$(HLS_TARGET_MODE)/$(APP).xclbin
+endif
+
 # Default target
 .DEFAULT_GOAL := $(APP)_tapa
 
-$(APP)_tapa: Makefile ./hls/build/$(HLS_TARGET_MODE)/$(APP)_host ./hls/build/$(HLS_TARGET_MODE)/$(APP).xclbin
+$(APP)_tapa: Makefile ./hls/build/$(HLS_TARGET_MODE)/$(APP)_host $(TAPA_DEVICE_TARGET)
 		@echo ""
 		@echo ""
 		@echo "Building ${APP}_tapa"
 		@echo ""
-		
+
 ./hls/build/$(HLS_TARGET_MODE)/$(APP)_host: $(OPS_INSTALL_PATH)/hls/lib/$(OPS_COMPILER)/libops_hls.a $(OPS_INSTALL_PATH)/hls/lib/$(OPS_COMPILER)/libops_seq.a 
 		@echo ""
 		@echo ""
@@ -73,6 +92,19 @@ $(APP)_tapa: Makefile ./hls/build/$(HLS_TARGET_MODE)/$(APP)_host ./hls/build/$(H
 
 # TOP_MODULES_XOS := ${patsubst %.cpp, %.xo, ${patsubst hls/device/src/%, hls/build/$(HLS_TARGET_MODE)/%, ${shell ls hls/device/src/*.cpp}}}
 
+./hls/build/$(HLS_TARGET_MODE)/sim/$(APP).xo:
+		@echo ""
+		@echo ""
+		@echo "Building Simulation ${APP}_tapa.xo"
+		@echo ""
+		$(TAPA) -w $(TAPA_WORK_DIR) --verbose compile \
+			--top sim_mega_kernel \
+			$(TAPA_FLAGS) \
+			-o $@ \
+			-f ./hls/sim/sim_mega_kernel.cpp \
+			$(foreach src,$(TOP_MODULE_CPPS),-f $(src)) \
+			$(foreach flag,$(TAPA_HLS_DEVICE_INC) -I./hls/device/include/ -I./hls/sim/,--cflags $(flag));
+		
 ./hls/build/$(HLS_TARGET_MODE)/$(APP).xclbin: 
 		@echo ""
 		@echo ""
@@ -110,3 +142,5 @@ clean:
 	rm -rf ./hls/build/
 	rm -rf ./hls/profile_data/
 	rm -rf ./work.out/
+	rm -rf ./_x/
+	rm -rf ./.Xil/

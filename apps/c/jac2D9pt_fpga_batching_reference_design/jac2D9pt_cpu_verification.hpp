@@ -42,7 +42,7 @@
 typedef float stencil_type;
 extern const unsigned short mem_vector_factor;
 
-void initialise_grid(stencil_type* u, int size[2], int d_m[2], int d_p[2], int range[4], int batch_size = 1, int batchdim = 1)
+void initialise_grid(stencil_type* u, int size[2], int d_m[2], int d_p[2], int range[4], int batch_size = 1)
 {
     int grid_size_y = size[1] - d_m[1] + d_p[1];
 #ifdef OPS_FPGA
@@ -62,7 +62,7 @@ void initialise_grid(stencil_type* u, int size[2], int d_m[2], int d_p[2], int r
                 if(i == 0 || j == 0 || i == actual_size_x -1  || j==grid_size_y-1)
                 {
                     float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
-                    u[index] = index;
+                    u[index] = r;
                 } 
                 else 
                 {
@@ -73,7 +73,7 @@ void initialise_grid(stencil_type* u, int size[2], int d_m[2], int d_p[2], int r
     }
 }
 
-void stencil_computation(stencil_type* u, stencil_type* u2, int size[2], int d_m[2], int d_p[2], int range[4], int batch_size = 1, int batchdim = 1)
+void initialise_grid_test(stencil_type* u, int size[2], int d_m[2], int d_p[2], int range[4], int batch_size = 1)
 {
     int grid_size_y = size[1] - d_m[1] + d_p[1];
 #ifdef OPS_FPGA
@@ -85,12 +85,35 @@ void stencil_computation(stencil_type* u, stencil_type* u2, int size[2], int d_m
 
     for (int k = 0; k < batch_size; k++)
     {
-        int offset = k * grid_size_x * grid_size_y;
         for (int j = range[2] - d_m[1]; j < range[3] -d_m[1]; j++)
         {
             for (int i = range[0] - d_m[0]; i < range[1] - d_m[0]; i++)
             {
-                int index = j * grid_size_x + i + offset;
+                int index = j * grid_size_x + i + k * grid_size_x * grid_size_y;
+                u[index] = index;
+            }
+        }
+    }
+}
+
+void stencil_computation(stencil_type* u, stencil_type* u2, int size[2], int d_m[2], int d_p[2], int range[4], int batch_size = 1)
+{
+    int grid_size_y = size[1] - d_m[1] + d_p[1];
+#ifdef OPS_FPGA
+    int grid_size_x = ((size[0] - d_m[0] + d_p[0] + mem_vector_factor - 1) / mem_vector_factor) * mem_vector_factor;
+#else
+    int grid_size_x = size[0] - d_m[0] + d_p[0];
+#endif
+    int actual_size_x = size[0] - d_m[0] + d_p[0];
+
+    for (int k = 0; k < batch_size; k++)
+    {
+        for (int j = range[2] - d_m[1]; j < range[3] -d_m[1]; j++)
+        {
+            for (int i = range[0] - d_m[0]; i < range[1] - d_m[0]; i++)
+            {
+                int index = j * grid_size_x + i + k * grid_size_x * grid_size_y;
+
                 if(i == 0 || j == 0 || i == actual_size_x -1  || j==grid_size_y-1)
                 {
                     float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
@@ -98,30 +121,54 @@ void stencil_computation(stencil_type* u, stencil_type* u2, int size[2], int d_m
                 } 
                 else 
                 {
-                    // u2[index] = u[(j-1)*grid_size_x + (i-1) + offset] * (-0.07) + \
-                    //   	  	u[(j)*grid_size_x + (i-1) + offset] * (-0.08) + \
-                    //         u[(j+1)*grid_size_x + (i-1) + offset] * (-0.01) + \
-                    //         u[(j-1)*grid_size_x + (i) + offset] *   (-0.06) + \
-                    //         u[(j)*grid_size_x + (i) + offset] *   (0.36)   + \
-                    //         u[(j+1)*grid_size_x + (i) + offset]  * (-0.02) + \
-                    //         u[(j-1)*grid_size_x + (i+1) + offset] * (-0.05) + \
-                    //         u[(j)*grid_size_x + (i+1) + offset] * (-0.04) + \
-                    //         u[(j+1)*grid_size_x + (i+1) + offset] * (-0.03);
-                    u2[index] = u[(j-1)*grid_size_x + (i-1) + offset] * (0.125) +
-                                   u[(j)*grid_size_x + (i-1) + offset] * (0.125) +
-                                   u[(j+1)*grid_size_x + (i-1) + offset] * (0.125) +
-                                   u[(j-1)*grid_size_x + (i) + offset] *   (0.125) +
-                                   u[(j+1)*grid_size_x + (i) + offset]  * (0.125) +
-                                   u[(j-1)*grid_size_x + (i+1) + offset] * (0.125) +
-                                   u[(j)*grid_size_x + (i+1) + offset] * (0.125) +
-                                   u[(j+1)*grid_size_x + (i+1) + offset] * (0.125);
+                    u2[index] = u[index - grid_size_x - 1] * (-0.07) + \
+                                u[index - 1] * (-0.08) + \
+                                u[index + grid_size_x - 1] * (-0.01) + \
+                                u[index - grid_size_x] *   (-0.06) + \
+                                u[index] *   (0.36)   + \
+                                u[index + grid_size_x]  * (-0.02) + \
+                                u[index - grid_size_x + 1] * (-0.05) + \
+                                u[index + 1] * (-0.04) + \
+                                u[index + grid_size_x + 1] * (-0.03) ;
                 }
-            }
+		    }
         }
     }
 }
 
-void copy_grid(stencil_type* u2, stencil_type* u, int size[2], int d_m[2], int d_p[2], int range[4], int batch_size = 1, int batchdim = 1)
+void stencil_computation_test(stencil_type* u, stencil_type* u2, int size[2], int d_m[2], int d_p[2], int range[4], int batch_size = 1)
+{
+    int grid_size_y = size[1] - d_m[1] + d_p[1];
+#ifdef OPS_FPGA
+    int grid_size_x = ((size[0] - d_m[0] + d_p[0] + mem_vector_factor - 1) / mem_vector_factor) * mem_vector_factor;
+#else
+    int grid_size_x = size[0] - d_m[0] + d_p[0];
+#endif
+    int actual_size_x = size[0] - d_m[0] + d_p[0];
+
+    for (int k = 0; k < batch_size; k++)
+    {
+        for (int j = range[2] - d_m[1]; j < range[3] -d_m[1]; j++)
+        {
+            for (int i = range[0] - d_m[0]; i < range[1] - d_m[0]; i++)
+            {
+                int index = j * grid_size_x + i + k * grid_size_x * grid_size_y;
+
+                if(i == 0 || j == 0 || i == actual_size_x -1  || j==grid_size_y-1)
+                {
+                    float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+                    u2[index] = u[index];
+                } 
+                else 
+                {
+                    u2[index] = u[index] + 1;
+                }
+		    }
+        }
+    }
+}
+
+void copy_grid(stencil_type* u2, stencil_type* u, int size[2], int d_m[2], int d_p[2], int range[4], int batch_size = 1)
 {
     int grid_size_y = size[1] - d_m[1] + d_p[1];
 #ifdef OPS_FPGA
@@ -145,7 +192,7 @@ void copy_grid(stencil_type* u2, stencil_type* u, int size[2], int d_m[2], int d
 }
 
 
-bool verify(stencil_type * grid_data1, stencil_type *  grid_data2, int size[2], int d_m[2], int d_p[2], int range[4], int batch_size = 1, int batchdim = 1)
+bool verify(stencil_type * grid_data1, stencil_type *  grid_data2, int size[2], int d_m[2], int d_p[2], int range[4], int batch_size = 1)
 {
     bool passed = true;
     int grid_size_y = size[1] - d_m[1] + d_p[1];

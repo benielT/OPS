@@ -229,34 +229,67 @@
 //                 arg1_axis_in);
 // }
 
+#include <stdio.h>
 #include <ops_tapa_kernel_support.h>
 #include <datamover_outerloop_0.hpp>
 
+// #define DEBUG_LOG
+
 void hybrid_datamover_router(const unsigned int num_trans,
-        const unsigned int loopback_itr,
+        const unsigned int outerloop_itr,
        ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& arg0_mem_in,
-       ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& arg0_axis_in,
-       ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& arg1_axis_out,
+       ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& arg1_axis_in,
+       ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& arg0_axis_out,
        ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& arg1_mem_out)
 {
-    read_from_mem: for (unsigned int i = 0; i < num_trans; i++) {
-        #pragma HLS PIPELINE II=1
-        auto data = arg0_mem_in.read();
-        arg1_axis_out.write(data);
-    }
-
-    loopback: for (unsigned int itr = 0; itr < loopback_itr; itr++) {
-        for (unsigned int i = 0; i < num_trans; i++) {
-            #pragma HLS PIPELINE II=1
-            auto data = arg0_axis_in.read();
-            arg1_axis_out.write(data);
+#ifdef DEBUG_LOG
+    printf("[KERNEL_DEBUG]|%s| num_trans: %d, outerloop_itr: %d\n", __func__, num_trans, outerloop_itr);
+#endif
+    for (unsigned int itr = 0; itr < outerloop_itr+1; itr++) {
+        if (itr == 0) {
+            read_from_mem: for (unsigned int i = 0; i < num_trans; i++) {
+                #pragma HLS PIPELINE II=1
+                auto data = arg0_mem_in.read();
+                arg0_axis_out.write(data);
+#ifdef DEBUG_LOG
+                printf("[KERNEL_DEBUG]|%s|read_from_mem| forwarding trans: %d, trans val: (",__func__, i);
+                for (int j = 0; j < vector_factor; j++) {
+                    printf(" %f,", data[j]);
+                }
+                printf(")\n");
+#endif
+            }
         }
-    }
 
-    write_to_mem: for (unsigned int i = 0; i < num_trans; i++) {
-        #pragma HLS PIPELINE II=1
-         auto data = arg0_axis_in.read();
-        arg1_mem_out.write(data);
+        else if (itr == outerloop_itr) {
+            write_to_mem: for (unsigned int i = 0; i < num_trans; i++) {
+                #pragma HLS PIPELINE II=1
+                auto data = arg1_axis_in.read();
+                auto data_regged = register_it(data);
+                arg1_mem_out.write(data_regged);
+// #ifdef DEBUG_LOG
+                printf("[KERNEL_DEBUG]|%s|write_to_mem| forwarding trans: %d, trans val: (",__func__, i);
+                for (int j = 0; j < vector_factor; j++) {
+                    printf(" %f,", data[j]);
+                }
+                printf(")\n");
+// #endif
+            }
+        }
+        else {
+            loopback: for (unsigned int i = 0; i < num_trans; i++) {
+                #pragma HLS PIPELINE II=1
+                auto data = arg1_axis_in.read();
+                arg0_axis_out.write(data);
+#ifdef DEBUG_LOG
+                printf("[KERNEL_DEBUG]|%s|loopback| forwarding iter: %d, trans: %d, trans val: (",__func__, itr, i);
+                for (int j = 0; j < vector_factor; j++) {
+                    printf(" %f,", data[j]);
+                }
+                printf(")\n");
+#endif
+            }
+        }
     }
 }   
 
@@ -295,7 +328,7 @@ void task_stream2mem(
 void datamover_outerloop_0(
     const unsigned int num_beats,
     const unsigned int num_axis_trans,
-    const unsigned int loopback_itr,
+    const unsigned int outerloop_itr,
     // u
    ::tapa::mmap<::tapa::vec_t<float,mem_vector_factor>> arg0,
     // u2
@@ -313,12 +346,18 @@ void datamover_outerloop_0(
    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>> arg1_write_reduced_mem_strm("arg1_write_reduced_mem_strm");
    ::tapa::stream<::tapa::vec_t<stencil_type, mem_vector_factor>>  arg1_write_mem_strm("arg1_write_mem_strm");
 
-    // 2. Build the static hardware topology
+    // // 2. Build the static hardware topology
+    // void hybrid_datamover_router(const unsigned int num_trans,
+    //     const unsigned int loopback_itr,
+    //    ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& arg0_mem_in,
+    //    ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& arg1_axis_in,
+    //    ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& arg0_axis_out,
+    //    ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& arg1_mem_out)
    ::tapa::task()
         // Read Pipeline
         .invoke(task_mem2stream, arg0, arg0_read_mem_strm, num_beats)
         .invoke(task_stepdown, arg0_read_mem_strm, arg0_read_reduced_mem_strm, num_beats)
-        .invoke(hybrid_datamover_router, num_axis_trans, loopback_itr, 
+        .invoke(hybrid_datamover_router, num_axis_trans, outerloop_itr,
                 arg0_read_reduced_mem_strm, arg1_axis_in, arg0_axis_out, arg1_write_reduced_mem_strm)
         .invoke(task_stepup, arg1_write_reduced_mem_strm, arg1_write_mem_strm, num_beats)
         .invoke(task_stream2mem, arg1, arg1_write_mem_strm, num_beats);

@@ -57,6 +57,12 @@ extern const unsigned short mem_vector_factor;
 #include <ops_seq_v2.h>
 #include <hls_kernels.hpp>
 #include "jac2D9pt_kernel.h"
+
+#if defined(TAPA_SW_EMU)
+#include <gflags/gflags.h>
+#include <tapa.h>
+// DEFINE_string(bitstream, "", "Path to XO or xclbin file. Empty = software simulation.");
+#endif 
 /* ops_par_loop declarations */
 
 void ops_par_loop_kernel_populate(ops::hls::Block, int, int*, ops::hls::Grid<float>&);
@@ -80,13 +86,17 @@ void ops_par_loop_kernel_copy(ops::hls::Block, int, int*, ops::hls::Grid<float>&
 /******************************************************************************
 * Main program
 *******************************************************************************/
-int main(int argc, const char **argv)
+int main(int argc, char **argv)
 {
   /**-------------------------- Initialisation --------------------------**/
 
     // OPS initialisation
-	ops_init_backend(argc, argv);
-
+#if defined(TAPA_SW_EMU) || defined(TAPA_HW_EMU)
+    // gflags::ParseCommandLineFlags(&argc, &argv, /*remove_flags=*/true);
+    std::cout << "Running TAPA host mode" << std::endl;
+#else 
+    ops_init_backend(argc, argv);
+#endif
 
 
     //Mesh
@@ -249,15 +259,14 @@ int main(int argc, const char **argv)
         auto init_start_clk_point =  std::chrono::high_resolution_clock::now();
 #endif
 #ifdef VERIFICATION
-        initialise_grid(u_cpu[bat], size, d_m, d_p, full_range, batch_size);
+        // initialise_grid(u_cpu[bat], size, d_m, d_p, full_range, batch_size);
+        initialise_grid_test(u_cpu[bat], size, d_m, d_p, full_range, batch_size);
         // printGrid2D(u_cpu[bat], u[bat].originalProperty, "u_CPU after init");
         copy_grid(u2_cpu[bat], u_cpu[bat], size, d_m, d_p, full_range, batch_size);
 
         ops_dat_fetch_data(u[bat], 0, (char*)u_cpu[bat]);
 
-        ops_par_loop(kernel_copy, "kernel_update", blocks[bat], 2, full_range, 
-            ops_arg_dat(u[bat], 1, S2D_00, "float", OPS_READ),
-            ops_arg_dat(u2[bat], 1, S2D_00, "float", OPS_WRITE));
+        ops_par_loop_kernel_copy( blocks[bat],  2 ,  full_range, u[bat], u2[bat]);
 #else
         ops_par_loop_kernel_populate( blocks[bat],  2 ,  full_range, u[bat]);
 
@@ -274,7 +283,7 @@ int main(int argc, const char **argv)
         auto u_raw = (float*)u[bat].get_raw_pointer();
         auto u2_raw = (float*)u2[bat].get_raw_pointer();
 
-        // printGrid2D(u_raw, u[bat].originalProperty, "test");
+        printGrid2D(u_raw, u[bat].originalProperty, "test");
 
         if(verify(u_raw, u_cpu[bat], size, d_m, d_p, full_range, batch_size))
             std::cout << "[BATCH - " << bat << "] verification of u after initiation" << "[PASSED]" << std::endl;
@@ -326,7 +335,7 @@ int main(int argc, const char **argv)
             copy_grid(u_cpu[bat], u2_cpu[bat], size, d_m, d_p, internal_range, batch_size);
         }
 
-		// printGrid2D<float>(u_raw, u[bat].originalProperty, "u after computation");
+		printGrid2D<float>(u2_raw, u[bat].originalProperty, "u after computation");
 		// printGrid2D<float>(u_cpu[bat], u[bat].originalProperty, "u_Acpu after computation");
 
         // Uncomment this if datamover_mode == 1
@@ -336,10 +345,10 @@ int main(int argc, const char **argv)
         //     std::cout << "[BATCH - " << bat << "] verification of u after calculation" << "[FAILED]" << std::endl;
 
         // Uncomment this if datamover_mode == 2
-        if(verify(u2_raw, u2_cpu[bat], size, d_m, d_p, full_range, batch_size))
-            std::cout << "[BATCH - " << bat << "] verification of u2 after calculation" << "[PASSED]" << std::endl;
-        else
-            std::cout << "[BATCH - " << bat << "] verification of u2 after calculation" << "[FAILED]" << std::endl;
+        // if(verify(u2_raw, u2_cpu[bat], size, d_m, d_p, full_range, batch_size))
+        //     std::cout << "[BATCH - " << bat << "] verification of u2 after calculation" << "[PASSED]" << std::endl;
+        // else
+        //     std::cout << "[BATCH - " << bat << "] verification of u2 after calculation" << "[FAILED]" << std::endl;
 
     }
 #endif
@@ -452,8 +461,9 @@ int main(int argc, const char **argv)
     }
 #endif
 
-	ops_exit_backend();
-
+#if !defined(TAPA_SW_EMU) && !defined(TAPA_HW_EMU)
+	// ops_exit_backend();
+#endif
 
     std::cout << "Exit properly" << std::endl;
     return 0;

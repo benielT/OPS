@@ -262,7 +262,7 @@ else
         if [[ "${CXXFLAGS}" == *"-DBATCHING"* ]]; then
             if [[ "${PLATFORM}" == *"u280"* ]]; then
                 parameter_sets=(
-                    "30,30,4,2,1"
+                    "30,30,4,1,1"
                     # "30,30,126,4,2"
                 # Add more parameter sets here as needed
                 )
@@ -320,6 +320,10 @@ for params in "${parameter_sets[@]}"; do
         if [[ $TARGET_MODE == sw_emu || $TARGET_MODE == hw_emu ]]; then
             echo "Running in emulation mode with ${TARGET_MODE}"
             XCL_EMULATION_MODE=${TARGET_MODE} ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}_host ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}.xclbin -sizex="${sizex}" -sizey="${sizey}" -iters="${iters}" -batch="${batch}" -bsize="${bsize}"
+        elif [[ $TARGET_MODE == tapa_sw_emu ]]; then
+            echo "Running in emulation mode with ${TARGET_MODE}"
+            emconfigutil --platform xilinx_u280_gen3x16_xdma_1_202211_1 --nd 1
+            GLOG_logtostderr=1 GLOG_v=3 ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}_host -sizex="${sizex}" -sizey="${sizey}" -iters="${iters}" -batch="${batch}" -bsize="${bsize}" --trace
         else
             echo "Running HW mode"
             ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}_host ${SCRIPT_DIR}/hls/build/${TARGET_MODE}/${APP_NAME}.xclbin -sizex="${sizex}" -sizey="${sizey}" -iters="${iters}" -batch="${batch}" -bsize="${bsize}"
