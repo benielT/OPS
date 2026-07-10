@@ -335,7 +335,8 @@ int main(int argc, char **argv)
             copy_grid(u_cpu[bat], u2_cpu[bat], size, d_m, d_p, internal_range, batch_size);
         }
 
-		printGrid2D<float>(u2_raw, u[bat].originalProperty, "u after computation");
+		printGrid2D<float>(u_raw, u[bat].originalProperty, "u after computation");
+        printGrid2D<float>(u2_raw, u[bat].originalProperty, "u2 after computation");
 		// printGrid2D<float>(u_cpu[bat], u[bat].originalProperty, "u_Acpu after computation");
 
         // Uncomment this if datamover_mode == 1

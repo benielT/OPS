@@ -2,7 +2,7 @@
 #include <ops_tapa_kernel_support.h>
 #include <kernel_outerloop_0.hpp>
  
-
+// #define DEBUG_LOG
 
 
 // static void kernel_outerloop_0_dataflow_region_cascaded(const unsigned short slr_region, const ops::hls::StencilConfigCore stencilConfig,
@@ -185,9 +185,20 @@ void axis_to_stream(const unsigned int outer_iter, const unsigned int stencilCon
         for (unsigned int j = 0; j < stencilConfig_total_itr; j++)
         {
             auto data = arg0_axis_in.read();
+#ifdef DEBUG_LOG
+        printf("[KERNEL_DEBUG]|%s| Read itr: %d, trans_id: %d, in_trans val: (",__func__, i, j);
+        for (int j = 0; j < vector_factor; j++) {
+            printf(" %f,", data[j]);
+        }
+        printf(")\n");
+#endif
+            for (int k = 0; k < vector_factor; k++){
+                #pragma HLS UNROLL
+                data[k] += 1;
+            }
             arg0_hls_out.write(data);
 #ifdef DEBUG_LOG
-        printf("[KERNEL_DEBUG]|%s| Read itr: %d, trans_id: %d, trans val: (",__func__, i, j);
+        printf("[KERNEL_DEBUG]|%s| Read itr: %d, trans_id: %d, out_trans val: (",__func__, i, j);
         for (int j = 0; j < vector_factor; j++) {
             printf(" %f,", data[j]);
         }
@@ -201,7 +212,7 @@ void stream_to_axis(const unsigned int outer_itr, const unsigned int stencilConf
     // size_t total_iteration = outer_itr * stencilConfig_total_itr;
     
 #ifdef DEBUG_LOG
-    printf("[KERNEL_DEBUG]|%s| Starting stream_to_axis. total_iteration: %zu\n",__func__, total_iteration);
+    printf("[KERNEL_DEBUG]|%s| Starting stream_to_axis. outer_itr: %d, stencilConfig_total_itr: %d \n",__func__, outer_itr, stencilConfig_total_itr);
 #endif
     for (unsigned int i = 0; i < outer_itr; i++) {
         for (unsigned int j = 0; j < stencilConfig_total_itr; j++)

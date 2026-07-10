@@ -8,7 +8,7 @@
 #endif
 #include "../../common/include/common_config.hpp"
 
-#if defined(TAPA_SW_EMU)
+#if defined(TAPA_SW_EMU) || defined(TAPA_HW_EMU)
 #include "../../sim/sim_mega_kernel.hpp"
 #include <gflags/gflags.h>
 #include <tapa.h>
@@ -170,7 +170,7 @@ public:
         // OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.originalProperty.grid_size[1]));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, num_beats));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, num_of_pkts));
-        OCL_CHECK(err, err = m_datamover.setArg(narg++, adjusted_outer_iter - 1));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, adjusted_outer_iter));
 #ifndef OPS_TILING
         // OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.originalProperty.batch_size)); 
 #else
@@ -310,45 +310,22 @@ void tapa_kernel_wrapper(ops::hls::AccessRange& range, unsigned int outer_iter,
     ::tapa::stream<::tapa::vec_t<float,vector_factor>,4,4096> arg0_axis("arg0_axis_stream");
     ::tapa::stream<::tapa::vec_t<float,vector_factor>,4,4096> arg1_axis("arg1_axis_stream");
 
-//     tapa::invoke(sim_mega_kernel, "",
-//         num_beats,
-//         num_of_pkts,
-//         adjusted_outer_iter-1,
-//         adjusted_outer_iter,
-//         read_stencilConfig.total_itr,
-//         // Wrap the raw host pointers from the Grid class into TAPA memory maps
-//         tapa::read_write_mmap<tapa::vec_t<float, 16>>(
-//             reinterpret_cast<tapa::vec_t<float, 16>*>(arg0.hostBuffer.data()), 
-//             vec_size_arg0
-//         ),
-//         tapa::read_write_mmap<tapa::vec_t<float, 16>>(
-//             reinterpret_cast<tapa::vec_t<float, 16>*>(arg1.hostBuffer.data()), 
-//             vec_size_arg1
-//         )
-//     );
-        tapa::task()
-            .invoke(datamover_outerloop_0, "",
-                num_beats,
-                num_of_pkts,
-                adjusted_outer_iter,
-                // Wrap the raw host pointers from the Grid class into TAPA memory maps
-                tapa::read_write_mmap<tapa::vec_t<float, 16>>(
-                reinterpret_cast<tapa::vec_t<float, 16>*>(arg0.hostBuffer.data()), 
-                vec_size_arg0
-                ),
-                tapa::read_write_mmap<tapa::vec_t<float, 16>>(
-                reinterpret_cast<tapa::vec_t<float, 16>*>(arg1.hostBuffer.data()), 
-                vec_size_arg1
-                ),
-                arg0_axis,
-                arg1_axis
+    tapa::invoke(sim_mega_kernel, "",
+        num_beats,
+        num_of_pkts,
+        adjusted_outer_iter-1,
+        adjusted_outer_iter,
+        read_stencilConfig.total_itr,
+        // Wrap the raw host pointers from the Grid class into TAPA memory maps
+        tapa::read_write_mmap<tapa::vec_t<float, 16>>(
+            reinterpret_cast<tapa::vec_t<float, 16>*>(arg0.hostBuffer.data()), 
+            vec_size_arg0
+        ),
+        tapa::read_write_mmap<tapa::vec_t<float, 16>>(
+            reinterpret_cast<tapa::vec_t<float, 16>*>(arg1.hostBuffer.data()), 
+            vec_size_arg1
         )
-            .invoke(kernel_outerloop_0, "",
-                adjusted_outer_iter,  
-                num_of_pkts,          
-                arg0_axis,
-                arg1_axis
-        );
+    );
 }
 #endif
 

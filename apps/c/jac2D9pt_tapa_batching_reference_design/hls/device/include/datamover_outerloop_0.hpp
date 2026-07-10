@@ -9,11 +9,17 @@
 void datamover_outerloop_0(
     const unsigned int num_beats,
     const unsigned int num_axis_trans,
-    const unsigned int loopback_itr,
+    const unsigned int outerloop_itr,
     // u
+// #if defined(TAPA_SW_EMU) || defined(TAPA_HW_EMU)
+//    ::tapa::mmap<::tapa::vec_t<float,mem_vector_factor>>& arg0,
+//     // u2
+//    ::tapa::mmap<::tapa::vec_t<float,mem_vector_factor>>& arg1,
+// #else
    ::tapa::mmap<::tapa::vec_t<float,mem_vector_factor>> arg0,
     // u2
    ::tapa::mmap<::tapa::vec_t<float,mem_vector_factor>> arg1,
+// #endif
     // u (External Output)
    ::tapa::ostream<::tapa::vec_t<float,vector_factor>>& arg0_axis_out,
     // u2 (External Input)

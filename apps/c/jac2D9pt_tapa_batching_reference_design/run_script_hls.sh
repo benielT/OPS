@@ -262,7 +262,7 @@ else
         if [[ "${CXXFLAGS}" == *"-DBATCHING"* ]]; then
             if [[ "${PLATFORM}" == *"u280"* ]]; then
                 parameter_sets=(
-                    "30,30,4,1,1"
+                    "10,10,4,1,1"
                     # "30,30,126,4,2"
                 # Add more parameter sets here as needed
                 )
