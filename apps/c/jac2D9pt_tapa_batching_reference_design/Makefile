@@ -4,7 +4,7 @@
 PLATFORM_PATH=/opt/software/FPGA/Xilinx/platforms
 PLATFORM=xilinx_u280_gen3x16_xdma_1_202211_1
 # PLATFORM=xilinx_vck5000_gen4x8_xdma_2_202210_1
-HLS_TARGET_MODE=tapa_sw_emu
+HLS_TARGET_MODE=hw_emu
 HLS_JOBS=64
 include $(OPS_INSTALL_PATH)/../makefiles/Makefile_tapa.mk
 
@@ -62,9 +62,11 @@ ifneq (,$(filter $(HLS_TARGET_MODE), tapa_sw_emu))
 	TAPA_CXXFLAGS += -I./hls/sim/ $(TAPA_HLS_DEVICE_INC) -I./hls/device/include/
 # 	TAPA_LDFLAGS += -ltapa -lfrt -lgflags -lglog -lboost_context -lboost_thread -lboost_system
 	CXX = tapa g++ --
-
-else ifeq (,$(filter $(HLS_TARGET_MODE), tapa_hw_emu))
+else ifneq (,$(filter $(HLS_TARGET_MODE), tapa_hw_emu))
     # If mode is  TAPA_HW_EMU
+	OPS_FILES_GEN_HLS += $(wildcard ./hls/sim/*.cpp) $(TOP_MODULE_CPPS)
+	TAPA_CXXFLAGS += -I./hls/sim/ $(TAPA_HLS_DEVICE_INC) -I./hls/device/include/
+	CXX = tapa g++ --
     TAPA_DEVICE_TARGET := ./hls/build/$(HLS_TARGET_MODE)/sim/$(APP).xo
 else
     # Default for standard hw or hw_emu
@@ -101,9 +103,10 @@ $(APP)_tapa: Makefile ./hls/build/$(HLS_TARGET_MODE)/$(APP)_host $(TAPA_DEVICE_T
 			--top sim_mega_kernel \
 			$(TAPA_FLAGS) \
 			-o $@ \
+			$(foreach flag,$(TAPA_ADDITIONAL_FLAGS) ,--cflags $(flag)) \
 			-f ./hls/sim/sim_mega_kernel.cpp \
 			$(foreach src,$(TOP_MODULE_CPPS),-f $(src)) \
-			$(foreach flag,$(TAPA_HLS_DEVICE_INC) -I./hls/device/include/ -I./hls/sim/,--cflags $(flag));
+			$(foreach flag, $(TAPA_HLS_DEVICE_INC) -I./hls/device/include/ -I./hls/sim/,--cflags $(flag));
 		
 ./hls/build/$(HLS_TARGET_MODE)/$(APP).xclbin: 
 		@echo ""

@@ -86,15 +86,17 @@ HLS_JOBS = 10
 endif
 
 TAPA_CXXFLAGS =
+TAPA_ADDITIONAL_FLAGS = 
 ifeq ($(HLS_TARGET_MODE),sw_emu)
-$(warning [WARNING] tapa hls do not support SW_EMU switching to TAPA_SW_EMU)
-HLS_TARGET_MODE := tapa_sw_emu
+$(error [ERROR] tapa hls do not support SW_EMU switching to TAPA_SW_EMU)
 else ifeq ($(HLS_TARGET_MODE),tapa_sw_emu)
 $(info tapa hls mode: TAPA_SW_EMU)
 TAPA_CXXFLAGS += -DTAPA_SW_EMU
+TAPA_ADDITIONAL_FLAGS += -DTAPA_SW_EMU
 else ifeq ($(HLS_TARGET_MODE),tapa_hw_emu)
 $(info tapa hls mode: TAPA_HW_EMU)
 TAPA_CXXFLAGS += -DTAPA_HW_EMU
+TAPA_ADDITIONAL_FLAGS += -DTAPA_HW_EMU
 else ifeq ($(HLS_TARGET_MODE),hw_emu)
 $(info tapa hls mode: HW_EMU)
 else ifeq ($(HLS_TARGET_MODE),hw)
@@ -119,6 +121,8 @@ VPP = v++
 # OPS Include Paths
 TAPA_HLS_DEVICE_INC = -I$(OPS_INSTALL_PATH)/hls/include/device/ -I$(OPS_INSTALL_PATH)/hls/L1/include/
 ifeq ($(HLS_TARGET_MODE),tapa_sw_emu)
+TAPA_HLS_HOST_INC   = -I$(OPS_INSTALL_PATH)/c/include/ -I$(OPS_INSTALL_PATH)/hls/include/host/
+else ifeq ($(HLS_TARGET_MODE),tapa_hw_emu)
 TAPA_HLS_HOST_INC   = -I$(OPS_INSTALL_PATH)/c/include/ -I$(OPS_INSTALL_PATH)/hls/include/host/
 else
 TAPA_HLS_HOST_INC   = -I$(OPS_INSTALL_PATH)/c/include/ -I$(OPS_INSTALL_PATH)/hls/include/host/ -I$(OPS_INSTALL_PATH)/hls/ext/xcl2/ -I$(OPS_INSTALL_PATH)/hls/L1/include/ -I$(OPS_INSTALL_PATH)/hls/L2/include/
