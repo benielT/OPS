@@ -1,7 +1,7 @@
 // Auto-generated at 2026-07-06 21:11:34.184791 by ops-translator
 #include <ops_tapa_kernel_support.h>
 #include <kernel_outerloop_0.hpp>
- 
+#include <PE_jac2D_kernel_stencil.hpp> 
 // #define DEBUG_LOG
 
 
@@ -174,28 +174,29 @@
 
 // just a tapa topfunction return read and write back with number of packats
 
-void axis_to_stream(const unsigned int outer_iter, const unsigned int stencilConfig_total_itr,::tapa::istream<::tapa::vec_t<float,vector_factor>>& arg0_axis_in, ::tapa::ostream<::tapa::vec_t<float,vector_factor>>& arg0_hls_out) {
+void axis_to_stream(const unsigned int outer_itr, const unsigned int stencilConfig_total_itr, const unsigned short bsize, 
+        ::tapa::istream<::tapa::vec_t<float,vector_factor>>& arg0_axis_in, ::tapa::ostream<::tapa::vec_t<float,vector_factor>>& arg0_hls_out) {
     // size_t total_iteration = outer_iter * stencilConfig_total_itr;
-
+    unsigned int total_outer_itr = outer_itr * bsize;
 #ifdef DEBUG_LOG
-    printf("[KERNEL_DEBUG]|%s| Starting axis_to_stream. outer_iter: %d, stencilConfig_total_itr: %d \n",__func__, outer_iter, stencilConfig_total_itr);
+    printf("[KERNEL_DEBUG]|%s| Starting axis_to_stream. outer_iter: %d, bsize: %d, total_outer_itr: %d, stencilConfig_total_itr: %d \n",__func__, outer_itr, bsize, total_outer_itr, stencilConfig_total_itr);
 #endif
 
-    for (unsigned int i = 0; i < outer_iter; i++) {
+    for (unsigned int i = 0; i < total_outer_itr; i++) {
         for (unsigned int j = 0; j < stencilConfig_total_itr; j++)
         {
             auto data = arg0_axis_in.read();
-#ifdef DEBUG_LOG
-        printf("[KERNEL_DEBUG]|%s| Read itr: %d, trans_id: %d, in_trans val: (",__func__, i, j);
-        for (int j = 0; j < vector_factor; j++) {
-            printf(" %f,", data[j]);
-        }
-        printf(")\n");
-#endif
-            for (int k = 0; k < vector_factor; k++){
-                #pragma HLS UNROLL
-                data[k] += 1;
-            }
+// #ifdef DEBUG_LOG
+//         printf("[KERNEL_DEBUG]|%s| Read itr: %d, trans_id: %d, in_trans val: (",__func__, i, j);
+//         for (int j = 0; j < vector_factor; j++) {
+//             printf(" %f,", data[j]);
+//         }
+//         printf(")\n");
+// #endif
+//             for (int k = 0; k < vector_factor; k++){
+//                 #pragma HLS UNROLL
+//                 data[k] += 1;
+//             }
             arg0_hls_out.write(data);
 #ifdef DEBUG_LOG
         printf("[KERNEL_DEBUG]|%s| Read itr: %d, trans_id: %d, out_trans val: (",__func__, i, j);
@@ -208,13 +209,14 @@ void axis_to_stream(const unsigned int outer_iter, const unsigned int stencilCon
     }
 }
 
-void stream_to_axis(const unsigned int outer_itr, const unsigned int stencilConfig_total_itr,::tapa::istream<::tapa::vec_t<float,vector_factor>>& arg0_hls_in,::tapa::ostream<::tapa::vec_t<float,vector_factor>>& arg0_axis_out) {
+void stream_to_axis(const unsigned int outer_itr, const unsigned int stencilConfig_total_itr, const unsigned short bsize, 
+        ::tapa::istream<::tapa::vec_t<float,vector_factor>>& arg0_hls_in,::tapa::ostream<::tapa::vec_t<float,vector_factor>>& arg0_axis_out) {
     // size_t total_iteration = outer_itr * stencilConfig_total_itr;
-    
+    unsigned int total_outer_itr = outer_itr * bsize;
 #ifdef DEBUG_LOG
-    printf("[KERNEL_DEBUG]|%s| Starting stream_to_axis. outer_itr: %d, stencilConfig_total_itr: %d \n",__func__, outer_itr, stencilConfig_total_itr);
+    printf("[KERNEL_DEBUG]|%s| Starting axis_to_stream. outer_iter: %d, bsize: %d, total_outer_itr: %d, stencilConfig_total_itr: %d \n",__func__, outer_itr, bsize, total_outer_itr, stencilConfig_total_itr);
 #endif
-    for (unsigned int i = 0; i < outer_itr; i++) {
+    for (unsigned int i = 0; i < total_outer_itr; i++) {
         for (unsigned int j = 0; j < stencilConfig_total_itr; j++)
         {
             auto data = arg0_hls_in.read();
@@ -230,16 +232,110 @@ void stream_to_axis(const unsigned int outer_itr, const unsigned int stencilConf
     }
 }
 
-void kernel_outerloop_0(
-    const unsigned int outer_iter,
+
+// static void kernel_outerloop_0_dataflow_region_cascaded(const unsigned short slr_region, const ops::hls::StencilConfigCore stencilConfig,
+//     ::hls::stream<ap_uint<axis_data_width>> arg0_arg1_streams[iter_par_factor + 1]
+// )
+// {
+// #pragma HLS INLINE 
+
+//     const unsigned short PEId_offset = slr_region;
+//         ::hls::stream<ap_uint<axis_data_width>> node2_1_to_node3_0[iter_par_factor];
+//     #pragma HLS STREAM variable = node2_1_to_node3_0 depth = 10
+
+
+//     for (int i = 0; i < iter_par_factor; i++)
+//     {
+// #pragma HLS UNROLL factor=iter_par_factor
+//         //const unsigned short PEId_offset_i = PEId_offset + i;
+//         kernel_jac2D_kernel_stencil_PE(
+//                 PEId_offset, i, 
+//                 stencilConfig,
+//                 arg0_arg1_streams[i],
+//                 arg0_arg1_streams[i+1]
+//         );
+//     }
+// }
+
+void kernel_outerloop_0_dataflow_region(const unsigned short slr_region,
+    const unsigned int outer_itr,
+    const unsigned short stencilConfig_grid_size_0,
+    const unsigned short stencilConfig_grid_size_1,
+    const unsigned short stencilConfig_dim,
     const unsigned int stencilConfig_total_itr,
+    const unsigned short stencilConfig_lower_limit_0,
+    const unsigned short stencilConfig_lower_limit_1,
+    const unsigned short stencilConfig_upper_limit_0,
+    const unsigned short stencilConfig_upper_limit_1,
+    const unsigned short stencilConfig_outer_loop_limit,
+    const unsigned short stencilConfig_batch_size,
+    //u
     ::tapa::istream<::tapa::vec_t<float,vector_factor>>& arg0_axis_in,
+    //u2
     ::tapa::ostream<::tapa::vec_t<float,vector_factor>>& arg1_axis_out
 ) {
-   ::tapa::stream<::tapa::vec_t<float,vector_factor>,2,4096> arg0_arg1_internal_stream("arg0_arg1_internal_stream");
+
+    //creating stencilConfig
+    ops::hls::StencilConfigCore stencilConfig;
+
+    stencilConfig.dim = stencilConfig_dim;
+    stencilConfig.grid_size[0] = stencilConfig_grid_size_0;
+    stencilConfig.grid_size[1] = stencilConfig_grid_size_1;
+    stencilConfig.lower_limit[0] = stencilConfig_lower_limit_0;
+    stencilConfig.lower_limit[1] = stencilConfig_lower_limit_1;
+    stencilConfig.upper_limit[0] = stencilConfig_upper_limit_0;
+    stencilConfig.upper_limit[1] = stencilConfig_upper_limit_1;
+    stencilConfig.total_itr = stencilConfig_total_itr;
+    stencilConfig.outer_loop_limit = stencilConfig_outer_loop_limit;
+    stencilConfig.batch_size = stencilConfig_batch_size;
+
+   ::tapa::stream<::tapa::vec_t<float,vector_factor>,2,4096> arg0_internal_stream("arg0_arg1_internal_stream");
+   ::tapa::stream<::tapa::vec_t<float,vector_factor>,2,4096> arg1_internal_stream("arg1_arg1_internal_stream");
+   ::tapa::stream<::tapa::vec_t<float,vector_factor>,2,4096> arg0_arg1_internal_stream_0_to_1("arg0_arg1_internal_stream_0_to_1");
 
    ::tapa::task()
-        .invoke(axis_to_stream, outer_iter, stencilConfig_total_itr, arg0_axis_in, arg0_arg1_internal_stream)
-        .invoke(stream_to_axis, outer_iter, stencilConfig_total_itr, arg0_arg1_internal_stream, arg1_axis_out);
+        .invoke(axis_to_stream, outer_itr, stencilConfig_total_itr, stencilConfig_batch_size, arg0_axis_in, arg0_internal_stream)
+        .invoke(kernel_jac2D_kernel_stencil_PE, slr_region, 0, outer_itr, stencilConfig_grid_size_0, stencilConfig_grid_size_1, stencilConfig_dim, 
+                stencilConfig_total_itr, stencilConfig_lower_limit_0, stencilConfig_lower_limit_1, 
+                stencilConfig_upper_limit_0, stencilConfig_upper_limit_1, 
+                stencilConfig_outer_loop_limit, stencilConfig_batch_size, 
+                arg0_internal_stream, arg0_arg1_internal_stream_0_to_1)
+        .invoke(kernel_jac2D_kernel_stencil_PE, slr_region, 1, outer_itr, stencilConfig_grid_size_0, stencilConfig_grid_size_1, stencilConfig_dim, 
+                stencilConfig_total_itr, stencilConfig_lower_limit_0, stencilConfig_lower_limit_1, 
+                stencilConfig_upper_limit_0, stencilConfig_upper_limit_1, 
+                stencilConfig_outer_loop_limit, stencilConfig_batch_size, 
+                arg0_arg1_internal_stream_0_to_1, arg1_internal_stream)
+        // .invoke(kernel_jac2D_kernel_stencil_PE, slr_region, 0, outer_itr, stencilConfig_grid_size_0, stencilConfig_grid_size_1, stencilConfig_dim, 
+        //         stencilConfig_total_itr, stencilConfig_lower_limit_0, stencilConfig_lower_limit_1, 
+        //         stencilConfig_upper_limit_0, stencilConfig_upper_limit_1, 
+        //         stencilConfig_outer_loop_limit, stencilConfig_batch_size, 
+        //         arg0_internal_stream, arg1_internal_stream)
+        .invoke(stream_to_axis, outer_itr, stencilConfig_total_itr, stencilConfig_batch_size, arg1_internal_stream, arg1_axis_out);
+        
 
+}
+
+void kernel_outerloop_0(
+    const unsigned short slr_region,
+    const unsigned int outer_itr,
+    const unsigned short stencilConfig_grid_size_0,
+    const unsigned short stencilConfig_grid_size_1,
+    const unsigned short stencilConfig_dim,
+    const unsigned int stencilConfig_total_itr,
+    const unsigned short stencilConfig_lower_limit_0,
+    const unsigned short stencilConfig_lower_limit_1,
+    const unsigned short stencilConfig_upper_limit_0,
+    const unsigned short stencilConfig_upper_limit_1,
+    const unsigned short stencilConfig_outer_loop_limit,
+    const unsigned short stencilConfig_batch_size,
+    //u
+    ::tapa::istream<::tapa::vec_t<float,vector_factor>>& arg0_axis_in,
+    //u2
+    ::tapa::ostream<::tapa::vec_t<float,vector_factor>>& arg1_axis_out
+) {
+
+    ::tapa::task()
+        .invoke(kernel_outerloop_0_dataflow_region, slr_region, outer_itr, stencilConfig_grid_size_0, stencilConfig_grid_size_1, 
+                stencilConfig_dim, stencilConfig_total_itr, stencilConfig_lower_limit_0, stencilConfig_lower_limit_1, stencilConfig_upper_limit_0, 
+                stencilConfig_upper_limit_1, stencilConfig_outer_loop_limit, stencilConfig_batch_size, arg0_axis_in, arg1_axis_out);
 }

@@ -7,8 +7,20 @@
 
 
 void kernel_outerloop_0(
-    const unsigned int outer_iter,
+    const unsigned short slr_region,
+    const unsigned int outer_itr,
+    const unsigned short stencilConfig_grid_size_0,
+    const unsigned short stencilConfig_grid_size_1,
+    const unsigned short stencilConfig_dim,
     const unsigned int stencilConfig_total_itr,
+    const unsigned short stencilConfig_lower_limit_0,
+    const unsigned short stencilConfig_lower_limit_1,
+    const unsigned short stencilConfig_upper_limit_0,
+    const unsigned short stencilConfig_upper_limit_1,
+    const unsigned short stencilConfig_outer_loop_limit,
+    const unsigned short stencilConfig_batch_size,
+    //u
     ::tapa::istream<::tapa::vec_t<float,vector_factor>>& arg0_axis_in,
+    //u2
     ::tapa::ostream<::tapa::vec_t<float,vector_factor>>& arg1_axis_out
 );

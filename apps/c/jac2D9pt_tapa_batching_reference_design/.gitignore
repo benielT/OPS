@@ -8,3 +8,6 @@ _x/*
 .Xil/*
 *.log
 perf_profile.csv
+emconfig.json
+*.txt
+*.out

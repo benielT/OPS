@@ -106,25 +106,26 @@ public:
         printStencilConfig(read_stencilConfig, "read_stencilConfig");
 #endif
 
-		unsigned int total_iter_par_factor = 2;
-		unsigned int adjusted_outer_iter = (outer_iter + total_iter_par_factor - 1) / total_iter_par_factor;
+        // unsigned int total_iter_par_factor = 1;
+        unsigned int total_iter_par_factor = 4;
+        unsigned int adjusted_outer_iter = (outer_iter + total_iter_par_factor - 1) / total_iter_par_factor;
         int narg = 0;
          
-        // OCL_CHECK(err, err = m_kernel_0.setArg(narg++, (unsigned short)0));
+        OCL_CHECK(err, err = m_kernel_0.setArg(narg++, (unsigned short)0));
         OCL_CHECK(err, err = m_kernel_0.setArg(narg++, adjusted_outer_iter));
-        // OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.grid_size[0]));
-        // OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.grid_size[1]));
-        // OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.dim));
+        OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.grid_size[0]));
+        OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.grid_size[1]));
+        OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.dim));
         OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.total_itr));
 #ifndef OPS_TILING
-        // OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.lower_limit[0]));
-        // OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.lower_limit[1]));
-        // OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.upper_limit[0]));
-        // OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.upper_limit[1]));
+        OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.lower_limit[0]));
+        OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.lower_limit[1]));
+        OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.upper_limit[0]));
+        OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.upper_limit[1]));
  #endif
-        // OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.outer_loop_limit));
+        OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.outer_loop_limit));
 #ifndef OPS_TILING
-        // OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.batch_size));
+        OCL_CHECK(err, err = m_kernel_0.setArg(narg++, read_stencilConfig.batch_size));
 #else
         // OCL_CHECK(err, err = m_kernel_0.setArg(narg++, kernel_tile_size[0]));
         // OCL_CHECK(err, err = m_kernel_0.setArg(narg++, kernel_last_tile_size[0]));
@@ -133,21 +134,21 @@ public:
         // OCL_CHECK(err, err = m_kernel_0.setArg(narg++, last_tile_upper_limit_x));
 #endif
         narg = 0; 
-        // OCL_CHECK(err, err = m_kernel_1.setArg(narg++, (unsigned short)1));
+        OCL_CHECK(err, err = m_kernel_1.setArg(narg++, (unsigned short)1));
         OCL_CHECK(err, err = m_kernel_1.setArg(narg++, adjusted_outer_iter));
-        // OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.grid_size[0]));
-        // OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.grid_size[1]));
-        // OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.dim));
+        OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.grid_size[0]));
+        OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.grid_size[1]));
+        OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.dim));
         OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.total_itr));
 #ifndef OPS_TILING
-        // OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.lower_limit[0]));
-        // OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.lower_limit[1]));
-        // OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.upper_limit[0]));
-        // OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.upper_limit[1]));
+        OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.lower_limit[0]));
+        OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.lower_limit[1]));
+        OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.upper_limit[0]));
+        OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.upper_limit[1]));
  #endif
-        // OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.outer_loop_limit));
+        OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.outer_loop_limit));
 #ifndef OPS_TILING
-        // OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.batch_size));
+        OCL_CHECK(err, err = m_kernel_1.setArg(narg++, read_stencilConfig.batch_size));
 #else
         // OCL_CHECK(err, err = m_kernel_1.setArg(narg++, kernel_tile_size[0]));
         // OCL_CHECK(err, err = m_kernel_1.setArg(narg++, kernel_last_tile_size[0]));
@@ -295,7 +296,8 @@ void tapa_kernel_wrapper(ops::hls::AccessRange& range, unsigned int outer_iter,
     const unsigned int num_of_pkts_per_beat = mem_data_width / axis_data_width;
     const unsigned int num_of_pkts = num_beats * num_of_pkts_per_beat;
 
-    unsigned int total_iter_par_factor = 1;
+//     unsigned int total_iter_par_factor = 4;
+    unsigned int total_iter_par_factor = 4;
     unsigned int adjusted_outer_iter = (outer_iter + total_iter_par_factor - 1) / total_iter_par_factor;
     
 #ifdef DEBUG_LOG
@@ -310,12 +312,42 @@ void tapa_kernel_wrapper(ops::hls::AccessRange& range, unsigned int outer_iter,
     ::tapa::stream<::tapa::vec_t<float,vector_factor>,4,4096> arg0_axis("arg0_axis_stream");
     ::tapa::stream<::tapa::vec_t<float,vector_factor>,4,4096> arg1_axis("arg1_axis_stream");
 
+// #ifdef DEBUG_LOG
+    printf("==================================\n");
+    printf("Invoke Parameters\n");
+    printf("==================================\n");
+    printf("num_beats: %d\n", num_beats);
+    printf("num_of_pkts: %d\n", num_of_pkts);
+    printf("loopback_itr: %d\n", adjusted_outer_iter-1);
+    printf("adjusted_outer_iter: %d\n", adjusted_outer_iter);
+    printf("read_stencilConfig.grid_size[0]: %d\n", read_stencilConfig.grid_size[0]);
+    printf("read_stencilConfig.grid_size[1]: %d\n", read_stencilConfig.grid_size[1]);
+    printf("read_stencilConfig.dim: %d\n", read_stencilConfig.dim);
+    printf("read_stencilConfig.total_itr: %d\n", read_stencilConfig.total_itr);
+    printf("read_stencilConfig.lower_limit[0]: %d\n", read_stencilConfig.lower_limit[0]);
+    printf("read_stencilConfig.lower_limit[1]: %d\n", read_stencilConfig.lower_limit[1]);
+    printf("read_stencilConfig.upper_limit[0]: %d\n", read_stencilConfig.upper_limit[0]);
+    printf("read_stencilConfig.upper_limit[1]: %d\n", read_stencilConfig.upper_limit[1]);
+    printf("read_stencilConfig.outer_loop_limit: %d\n", read_stencilConfig.outer_loop_limit);
+    printf("read_stencilConfig.batch_size: %d\n", read_stencilConfig.batch_size);
+    printf("==================================\n");
+// #endif
+
     tapa::invoke(sim_mega_kernel, "",
         num_beats,
         num_of_pkts,
         adjusted_outer_iter-1,
         adjusted_outer_iter,
+        read_stencilConfig.grid_size[0],
+        read_stencilConfig.grid_size[1],
+        read_stencilConfig.dim,
         read_stencilConfig.total_itr,
+        read_stencilConfig.lower_limit[0],
+        read_stencilConfig.lower_limit[1],
+        read_stencilConfig.upper_limit[0],
+        read_stencilConfig.upper_limit[1],
+        read_stencilConfig.outer_loop_limit,
+        read_stencilConfig.batch_size,
         // Wrap the raw host pointers from the Grid class into TAPA memory maps
         tapa::read_write_mmap<tapa::vec_t<float, 16>>(
             reinterpret_cast<tapa::vec_t<float, 16>*>(arg0.hostBuffer.data()), 

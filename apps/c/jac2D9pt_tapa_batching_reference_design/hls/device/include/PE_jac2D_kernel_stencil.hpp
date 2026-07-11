@@ -5,6 +5,8 @@
 #include <ops_hls_kernel_support.h>
 #include "../../common/include/common_config.hpp"
 
+// #define DEBUG_LOG
+
 static constexpr unsigned short read_num_points_jac2D_kernel_stencil = 9;
 static constexpr unsigned short read_stencil_size_jac2D_kernel_stencil = 3;
 static constexpr unsigned short read_stencil_dim_jac2D_kernel_stencil = 2;
@@ -15,13 +17,13 @@ static constexpr unsigned short write_stencil_dim_jac2D_kernel_stencil = 2;
 
 static constexpr unsigned short vector_factor_jac2D_kernel_stencil_0 = (vector_factor ) * 1;
 static constexpr unsigned short axis_data_width_jac2D_kernel_stencil_0 = (vector_factor_jac2D_kernel_stencil_0 * data_width);
-typedef ap_uint<axis_data_width_jac2D_kernel_stencil_0> widen_jac2D_kernel_stencil_0_dt;
+typedef ::tapa::vec_t<stencil_type, vector_factor_jac2D_kernel_stencil_0> widen_jac2D_kernel_stencil_0_dt;
 static constexpr unsigned short vector_factor_jac2D_kernel_stencil_1 = (vector_factor ) * 1;
 static constexpr unsigned short axis_data_width_jac2D_kernel_stencil_1 = (vector_factor_jac2D_kernel_stencil_1 * data_width);
-typedef ap_uint<axis_data_width_jac2D_kernel_stencil_1> widen_jac2D_kernel_stencil_1_dt;
+typedef ::tapa::vec_t<stencil_type, vector_factor_jac2D_kernel_stencil_1> widen_jac2D_kernel_stencil_1_dt;
 
-typedef ::hls::stream<widen_jac2D_kernel_stencil_0_dt> widen_stream_jac2D_kernel_stencil_0_dt;
-typedef ::hls::stream<widen_jac2D_kernel_stencil_1_dt> widen_stream_jac2D_kernel_stencil_1_dt;
+typedef ::tapa::istream<widen_jac2D_kernel_stencil_0_dt> widen_stream_jac2D_kernel_stencil_0_dt;
+typedef ::tapa::ostream<widen_jac2D_kernel_stencil_1_dt> widen_stream_jac2D_kernel_stencil_1_dt;
 
 /*
     ArgDat(id=0, loc=/scratch/hpc-prf-acgasm/beniel/ops-hls-batching-tiling-artifacts/codegen_apps/batching/jacobian2d/u280_loopback_project/jac2D9pt.cpp/302:21, access_type=AccessType.OPS_READ, opt=True, dat_id=0, global_dat_id=-1, stencil_id=S2D_9PT)
@@ -44,23 +46,24 @@ inline void kernel_jac2D_kernel_stencil_core(
     printf("[KERNEL_INTERNAL_CORE]|%s| starting kernel core: kernel_jac2D_kernel_stencil_core\n",__func__);
 #endif
 
-    float tmp1 = reg_0_0 * (-0.07f);
-    float tmp2 = reg_0_3 * (-0.08f);
-    float tmp3 = reg_0_6 * (-0.01f);
-    float tmp4 = reg_0_1 * (-0.06f);
-    float tmp5 = reg_0_4 * (0.36f);
-    float tmp6 = reg_0_7 * (-0.02f);
-    float tmp7 = reg_0_2 * (-0.05f);
-    float tmp8 = reg_0_5 * (-0.04f);
-    float tmp9 = reg_0_8 * (-0.03f);
-    float tmp10 = tmp1 + tmp2;
-    float tmp11 = tmp3 + tmp4;
-    float tmp12 = tmp5 + tmp6;
-    float tmp13 = tmp7 + tmp8;
-    float tmp14 = tmp11 + tmp10;
-    float tmp15 = tmp12 + tmp13;
-    float tmp16 = tmp14 + tmp15;
-    reg_1_0 = tmp9 + tmp16;
+    // float tmp1 = reg_0_0 * (-0.07f);
+    // float tmp2 = reg_0_3 * (-0.08f);
+    // float tmp3 = reg_0_6 * (-0.01f);
+    // float tmp4 = reg_0_1 * (-0.06f);
+    // float tmp5 = reg_0_4 * (0.36f);
+    // float tmp6 = reg_0_7 * (-0.02f);
+    // float tmp7 = reg_0_2 * (-0.05f);
+    // float tmp8 = reg_0_5 * (-0.04f);
+    // float tmp9 = reg_0_8 * (-0.03f);
+    // float tmp10 = tmp1 + tmp2;
+    // float tmp11 = tmp3 + tmp4;
+    // float tmp12 = tmp5 + tmp6;
+    // float tmp13 = tmp7 + tmp8;
+    // float tmp14 = tmp11 + tmp10;
+    // float tmp15 = tmp12 + tmp13;
+    // float tmp16 = tmp14 + tmp15;
+    // reg_1_0 = tmp9 + tmp16;
+    reg_1_0 = reg_0_4 + 1;
 
 #ifdef DEBUG_LOG
     printf("[KERNEL_INTERNAL_CORE]|%s| read_val - reg_0_0: %f \n", __func__, reg_0_0);
@@ -156,7 +159,7 @@ public:
         */
         //  *** Read & write widen temporaries ****
         // arg0(u)
-            widen_jac2D_kernel_stencil_0_dt arg0_read_val = 0;
+            widen_jac2D_kernel_stencil_0_dt arg0_read_val;
         // arg1(u2)
             widen_jac2D_kernel_stencil_1_dt arg1_update_val;
         // 2
@@ -288,10 +291,10 @@ public:
                     printf("[DEBUG][INTERNAL][jac2D_kernel_stencil_PE_%d] read values arg0: (", m_PEId);
                     for (int ri = 0; ri < vector_factor; ri++)
                     {
-                        ops::hls::DataConv tmpConverter;
-                        tmpConverter.i = arg0_read_val.range((ri + 1)*s_datatype_size - 1, ri * s_datatype_size);
+                        // ops::hls::DataConv tmpConverter;
+                        // tmpConverter.i = arg0_read_val.range((ri + 1)*s_datatype_size - 1, ri * s_datatype_size);
 
-                        printf("%f ", tmpConverter.f);
+                        printf("%f ", arg0_read_val[ri]);
                     }
                     printf(")\n");
     #endif      
@@ -300,49 +303,59 @@ public:
                 vec2arr: for (unsigned short x = 0; x < vector_factor; x++)
                 {
                 #pragma HLS UNROLL factor=vector_factor
-                    ops::hls::DataConv arg0_tmpConverter_0_0;
-                    arg0_tmpConverter_0_0.i = arg0_widenStencilValues[1].range(s_datatype_size * (x + 1) - 1, x * s_datatype_size);
-                    arg0_rowArr_0_0[x + half_span_x] = arg0_tmpConverter_0_0.f; 
-                    ops::hls::DataConv arg0_tmpConverter_1_0;
-                    arg0_tmpConverter_1_0.i = arg0_widenStencilValues[4].range(s_datatype_size * (x + 1) - 1, x * s_datatype_size);
-                    arg0_rowArr_1_0[x + half_span_x] = arg0_tmpConverter_1_0.f; 
-                    ops::hls::DataConv arg0_tmpConverter_2_0;
-                    arg0_tmpConverter_2_0.i = arg0_widenStencilValues[7].range(s_datatype_size * (x + 1) - 1, x * s_datatype_size);
-                    arg0_rowArr_2_0[x + half_span_x] = arg0_tmpConverter_2_0.f; 
+                    // ops::hls::DataConv arg0_tmpConverter_0_0;
+                    // arg0_tmpConverter_0_0.i = arg0_widenStencilValues[1].range(s_datatype_size * (x + 1) - 1, x * s_datatype_size);
+                    // arg0_rowArr_0_0[x + half_span_x] = arg0_tmpConverter_0_0.f; 
+                    arg0_rowArr_0_0[x + half_span_x] = arg0_widenStencilValues[1][x];
+                    // ops::hls::DataConv arg0_tmpConverter_1_0;
+                    // arg0_tmpConverter_1_0.i = arg0_widenStencilValues[4].range(s_datatype_size * (x + 1) - 1, x * s_datatype_size);
+                    // arg0_rowArr_1_0[x + half_span_x] = arg0_tmpConverter_1_0.f; 
+                    arg0_rowArr_1_0[x + half_span_x] = arg0_widenStencilValues[4][x];
+                    // ops::hls::DataConv arg0_tmpConverter_2_0;
+                    // arg0_tmpConverter_2_0.i = arg0_widenStencilValues[7].range(s_datatype_size * (x + 1) - 1, x * s_datatype_size);
+                    // arg0_rowArr_2_0[x + half_span_x] = arg0_tmpConverter_2_0.f; 
+                    arg0_rowArr_2_0[x + half_span_x] = arg0_widenStencilValues[7][x];
 
                 }
                 vec2arr_rest:
                 {
                     //diff = -1
                     // access_idx = 0
-                    ops::hls::DataConv arg0_tmpConverter_0_0_0_7;
-                    arg0_tmpConverter_0_0_0_7.i = arg0_widenStencilValues[0].range(s_datatype_size * (7 + 1) - 1, s_datatype_size * 7);
-                    arg0_rowArr_0_0[0] = arg0_tmpConverter_0_0_0_7.f;
+                    // ops::hls::DataConv arg0_tmpConverter_0_0_0_7;
+                    // arg0_tmpConverter_0_0_0_7.i = arg0_widenStencilValues[0].range(s_datatype_size * (7 + 1) - 1, s_datatype_size * 7);
+                    // arg0_rowArr_0_0[0] = arg0_tmpConverter_0_0_0_7.f;
+                    arg0_rowArr_0_0[0] = arg0_widenStencilValues[0][7];
+
                     //diff = 1
                     // access_idx = 9
-                    ops::hls::DataConv arg0_tmpConverter_2_0_0_0;
-                    arg0_tmpConverter_2_0_0_0.i = arg0_widenStencilValues[2].range(s_datatype_size * (0 + 1) - 1, s_datatype_size * 0);
-                    arg0_rowArr_0_0[9] = arg0_tmpConverter_2_0_0_0.f;
+                    // ops::hls::DataConv arg0_tmpConverter_2_0_0_0;
+                    // arg0_tmpConverter_2_0_0_0.i = arg0_widenStencilValues[2].range(s_datatype_size * (0 + 1) - 1, s_datatype_size * 0);
+                    // arg0_rowArr_0_0[9] = arg0_tmpConverter_2_0_0_0.f;
+                    arg0_rowArr_0_0[9] = arg0_widenStencilValues[2][0];
                     //diff = -1
                     // access_idx = 0
-                    ops::hls::DataConv arg0_tmpConverter_0_1_0_7;
-                    arg0_tmpConverter_0_1_0_7.i = arg0_widenStencilValues[3].range(s_datatype_size * (7 + 1) - 1, s_datatype_size * 7);
-                    arg0_rowArr_1_0[0] = arg0_tmpConverter_0_1_0_7.f;
+                    // ops::hls::DataConv arg0_tmpConverter_0_1_0_7;
+                    // arg0_tmpConverter_0_1_0_7.i = arg0_widenStencilValues[3].range(s_datatype_size * (7 + 1) - 1, s_datatype_size * 7);
+                    // arg0_rowArr_1_0[0] = arg0_tmpConverter_0_1_0_7.f;
+                    arg0_rowArr_1_0[0] = arg0_widenStencilValues[3][7];
                     //diff = 1
                     // access_idx = 9
-                    ops::hls::DataConv arg0_tmpConverter_2_1_0_0;
-                    arg0_tmpConverter_2_1_0_0.i = arg0_widenStencilValues[5].range(s_datatype_size * (0 + 1) - 1, s_datatype_size * 0);
-                    arg0_rowArr_1_0[9] = arg0_tmpConverter_2_1_0_0.f;
+                    // ops::hls::DataConv arg0_tmpConverter_2_1_0_0;
+                    // arg0_tmpConverter_2_1_0_0.i = arg0_widenStencilValues[5].range(s_datatype_size * (0 + 1) - 1, s_datatype_size * 0);
+                    // arg0_rowArr_1_0[9] = arg0_tmpConverter_2_1_0_0.f;
+                    arg0_rowArr_1_0[9] = arg0_widenStencilValues[5][0];
                     //diff = -1
                     // access_idx = 0
-                    ops::hls::DataConv arg0_tmpConverter_0_2_0_7;
-                    arg0_tmpConverter_0_2_0_7.i = arg0_widenStencilValues[6].range(s_datatype_size * (7 + 1) - 1, s_datatype_size * 7);
-                    arg0_rowArr_2_0[0] = arg0_tmpConverter_0_2_0_7.f;
+                    // ops::hls::DataConv arg0_tmpConverter_0_2_0_7;
+                    // arg0_tmpConverter_0_2_0_7.i = arg0_widenStencilValues[6].range(s_datatype_size * (7 + 1) - 1, s_datatype_size * 7);
+                    // arg0_rowArr_2_0[0] = arg0_tmpConverter_0_2_0_7.f;
+                    arg0_rowArr_2_0[0] = arg0_widenStencilValues[6][7];
                     //diff = 1
                     // access_idx = 9
-                    ops::hls::DataConv arg0_tmpConverter_2_2_0_0;
-                    arg0_tmpConverter_2_2_0_0.i = arg0_widenStencilValues[8].range(s_datatype_size * (0 + 1) - 1, s_datatype_size * 0);
-                    arg0_rowArr_2_0[9] = arg0_tmpConverter_2_2_0_0.f;
+                    // ops::hls::DataConv arg0_tmpConverter_2_2_0_0;
+                    // arg0_tmpConverter_2_2_0_0.i = arg0_widenStencilValues[8].range(s_datatype_size * (0 + 1) - 1, s_datatype_size * 0);
+                    // arg0_rowArr_2_0[9] = arg0_tmpConverter_2_2_0_0.f;
+                    arg0_rowArr_2_0[9] = arg0_widenStencilValues[8][0];
                 }
                 process: for (unsigned short x = 0; x < vector_factor; x++)
                 {
@@ -375,23 +388,23 @@ public:
                             arg1_result
                     );
 
-                    ops::hls::DataConv arg1_tmpConvWrite;
+                    stencil_type arg1_tmpConvWrite;
 
                     if (not neg_cond)
                     {
-                        arg1_tmpConvWrite.f = arg1_result;
+                        arg1_tmpConvWrite = arg1_result;
                     }
                     else
                     {
 
         // [1, 0]
                 //dat_id: 1, dat: u2, swap_id: 0, swap_dat: u
-                        arg1_tmpConvWrite.f = arg0_rowArr_1_0[x + 1];
+                        arg1_tmpConvWrite = arg0_rowArr_1_0[x + 1];
                     }
                 // *** rw convertions ***
 
-                    arg1_update_val.range(s_datatype_size * (x + 1) - 1, x * s_datatype_size) = arg1_tmpConvWrite.i;
-
+                    // arg1_update_val.range(s_datatype_size * (x + 1) - 1, x * s_datatype_size) = arg1_tmpConvWrite.i;
+                    arg1_update_val[x] = arg1_tmpConvWrite;
                 }
                 write:
                 {
@@ -405,13 +418,13 @@ public:
                         printf("[DEBUG][INTERNAL][jac2D_kernel_stencil_PE_%d] wirte values arg1: (", m_PEId);
                         for (int ri = 0; ri < vector_factor; ri++)
                         {
-                            ops::hls::DataConv tmpConverter;
-                            tmpConverter.i = arg1_update_val.range((ri + 1)*s_datatype_size - 1, ri * s_datatype_size);
-                            printf("%f ", tmpConverter.f);
+                            // ops::hls::DataConv tmpConverter;
+                            // tmpConverter.i = arg1_update_val.range((ri + 1)*s_datatype_size - 1, ri * s_datatype_size);
+                            printf("%f ", arg1_update_val[ri]);
                         }
                         printf(")\n");
     #endif
-                        arg1_wr_buffer <<  arg1_update_val;
+                        arg1_wr_buffer.write(arg1_update_val);
                     }
                 }
             }
@@ -419,16 +432,39 @@ public:
     }
 };
 
-static void kernel_jac2D_kernel_stencil_PE(
-    const unsigned short& PEId_offset,
-    const unsigned short& PEId_i,
-    const ops::hls::StencilConfigCore& stencilConfig,
-            //u
-            widen_stream_jac2D_kernel_stencil_0_dt& arg0_rd_buffer,
-            //u2
-            widen_stream_jac2D_kernel_stencil_1_dt& arg1_wr_buffer
+void kernel_jac2D_kernel_stencil_PE(
+    const unsigned short PEId_offset,
+    const unsigned short PEId_i,
+    const unsigned int outer_itr,
+    // const ops::hls::StencilConfigCore stencilConfig,
+    // --- Replace struct with primitives ---
+    const unsigned short stencilConfig_grid_size_0,
+    const unsigned short stencilConfig_grid_size_1,
+    const unsigned short stencilConfig_dim,
+    const unsigned int stencilConfig_total_itr,
+    const unsigned short stencilConfig_lower_limit_0,
+    const unsigned short stencilConfig_lower_limit_1,
+    const unsigned short stencilConfig_upper_limit_0,
+    const unsigned short stencilConfig_upper_limit_1,
+    const unsigned short stencilConfig_outer_loop_limit,
+    const unsigned short stencilConfig_batch_size,
+    //u
+    widen_stream_jac2D_kernel_stencil_0_dt& arg0_rd_buffer,
+    //u2
+    widen_stream_jac2D_kernel_stencil_1_dt& arg1_wr_buffer
 )
 {
+    ops::hls::StencilConfigCore stencilConfig;
+    stencilConfig.dim = stencilConfig_dim;
+    stencilConfig.grid_size[0] = stencilConfig_grid_size_0;
+    stencilConfig.grid_size[1] = stencilConfig_grid_size_1;
+    stencilConfig.lower_limit[0] = stencilConfig_lower_limit_0;
+    stencilConfig.lower_limit[1] = stencilConfig_lower_limit_1;
+    stencilConfig.upper_limit[0] = stencilConfig_upper_limit_0;
+    stencilConfig.upper_limit[1] = stencilConfig_upper_limit_1;
+    stencilConfig.total_itr = stencilConfig_total_itr;
+    stencilConfig.outer_loop_limit = stencilConfig_outer_loop_limit;
+    stencilConfig.batch_size = stencilConfig_batch_size;
     Stencil_jac2D_kernel_stencil stencil;
 
     short PEId = PEId_offset * iter_par_factor + PEId_i;
@@ -443,11 +479,11 @@ static void kernel_jac2D_kernel_stencil_PE(
     printf("[KERNEL_DEBUG][%d]|%s| starting stencil kernel PE\n", PEId, __func__);
 #endif
 
+    for (unsigned int itr = 0; itr < outer_itr; itr++) {
     stencil.stencilRun(
             arg0_rd_buffer,
-            arg1_wr_buffer
-
-);
+            arg1_wr_buffer);
+    }
 
 #ifdef DEBUG_LOG
     printf("[KERNEL_DEBUG][%d]|%s| Ending stencil kernel PE\n", PEId, __func__);
