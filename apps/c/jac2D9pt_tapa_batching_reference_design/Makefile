@@ -6,6 +6,7 @@ PLATFORM=xilinx_u280_gen3x16_xdma_1_202211_1
 # PLATFORM=xilinx_vck5000_gen4x8_xdma_2_202210_1
 HLS_TARGET_MODE=hw_emu
 HLS_JOBS=64
+TAPA_POST_SYNTH_REPORT=1
 include $(OPS_INSTALL_PATH)/../makefiles/Makefile_tapa.mk
 
 

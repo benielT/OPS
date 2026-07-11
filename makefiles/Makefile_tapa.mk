@@ -134,6 +134,10 @@ endif
 # TAPA Device Compilation Flags
 # Note: The tapac command requires standard include directives to locate the submodule's tapac.h
 TAPA_FLAGS = --platform $(PLATFORM_PATH)/$(PLATFORM) --clock-period $(TAPA_CLOCK_PERIOD)
+ifeq ($(TAPA_POST_SYNTH_REPORT),1)
+TAPA_FLAGS += --enable-synth-util
+endif
+
 # Vitis Linking Flags for .xo to .xclbin phase
 VPP_LINK_FLAGS= --target $(HLS_TARGET_MODE) --platform $(PLATFORM) --hls.jobs $(HLS_JOBS) --remote_ip_cache $(HLS_IP_CACHE_DIR)
 
