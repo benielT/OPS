@@ -43,6 +43,13 @@ namespace hls {
 
 #if VITIS_HAS_SYNTH_PRINT && defined(__SYNTHESIS__)
 
+// Forward declare Xilinx intrinsics to satisfy TAPA's Clang parser (tapacc)
+extern "C" {
+    void _ssdm_op_PrintNone(const char*);
+    void _ssdm_op_PrintInt(const char*, int);
+    void _ssdm_op_PrintDouble(const char*, unsigned long long);
+}
+
 // Required because blackbox does not support double
 typedef union {
     double d;
