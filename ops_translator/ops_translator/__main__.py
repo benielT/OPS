@@ -447,7 +447,7 @@ def codegen(args: Namespace, scheme: Scheme, app: Application, target_config: di
         user_types_candidates = [Path(dir, user_types_name) for dir in include_dirs]
         user_types_file = safeFind(user_types_candidates, lambda p: p.is_file())
 
-        if not scheme.target.name == "hls": 
+        if not scheme.target.name in ["hls", "tapa"]: 
             source, name = scheme.genMasterKernel(env, app, user_types_file, target_config, force_soa)
         else:
             source, name = scheme.genMasterKernel(env, app, user_types_file, target_config, force_soa, outerloop_enbl=True)
@@ -503,7 +503,7 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
             print(f"Generated Device common_config.hpp")
 
     #Generate host linking config cfg file
-    source, extension = scheme.genConfigHost(env, target_config, app, app.programs[0])
+    source, extension = scheme.genConfigLink(env, target_config, app, app.programs[0])
     new_source = re.sub(r'\n\s*\n', '\n\n', source)
     
     # From output files path
@@ -715,6 +715,52 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
 
                 if args.verbose:
                     print(f"Generated iterloop repeater src {i} of {len(app.uniqueOuterLoops())}: {path}")
+             
+    # for tapa generate simulation files       
+    if (scheme.target.name == "tapa"):
+        #Generate host linking config cfg file
+        out = scheme.genDeviceSimulation(env, target_config, app, app.programs[0])
+         
+        (sim_inc_source, sim_inc_extension) = out[0]
+        (sim_src_source, sim_src_extension) = out[1]
+        
+        # Writing Simulation include
+        path = None
+        if scheme.lang.kernel_dir:
+            Path(args.out, scheme.target.name, "sim").mkdir(parents=True, exist_ok=True)
+            path = Path(args.out, scheme.target.name, "sim", f"sim_mega_kernel.{sim_inc_extension}")                
+        else:
+            path = Path(args.out,f"{scheme.target.name}_sim_mega_kernel.{sim_inc_extension}")
+
+        # Write the gernerated include file
+        logging.debug(f"writing sim_mega_kernel.{sim_inc_extension} include to {path}")
             
+        # Write the gernerated source file
+        with open(path, "w") as file:
+            file.write(f"{scheme.lang.com_delim} Auto-generated at {datetime.now()} by ops-translator\n")
+            file.write(sim_inc_source)
+
+            if args.verbose:
+                print(f"Generated sim_mega_kernel.{sim_inc_extension}: {path}")
+        
+        # Writing simulation source
+        path = None
+        if scheme.lang.kernel_dir:
+            Path(args.out, scheme.target.name, "sim").mkdir(parents=True, exist_ok=True)
+            path = Path(args.out, scheme.target.name, "sim", f"sim_mega_kernel.{sim_src_extension}")                
+        else:
+            path = Path(args.out,f"{scheme.target.name}_sim_mega_kernel.{sim_src_extension}")
+
+        # Write the gernerated include file
+        logging.debug(f"writing sim_mega_kernel.{sim_src_extension} source file to {path}")
+            
+        # Write the gernerated source file
+        with open(path, "w") as file:
+            file.write(f"{scheme.lang.com_delim} Auto-generated at {datetime.now()} by ops-translator\n")
+            file.write(sim_src_source)
+
+            if args.verbose:
+                print(f"Generated sim_mega_kernel.{sim_src_extension}: {path}")
+        
 if __name__ == "__main__":
     main()

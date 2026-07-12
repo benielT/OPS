@@ -478,7 +478,7 @@ class CppHLS(Scheme):
             ), self.common_config_extension
         ) 
     
-    def genConfigHost(
+    def genConfigLink(
         self,
         env: Environment,
         config: dict,
@@ -552,9 +552,29 @@ class CppTapa(CppHLS):
     iterloop_host_kernelwrap_extension = "hpp"
     loop_device_PE_extension = "hpp"
     stencil_device_extension = "hpp"
-    sim_super_kernel_inc_template = "hpp"
-    sim_super_kernel_src_template = "cpp"
+    sim_super_kernel_inc_extension = "hpp"
+    sim_super_kernel_src_extension = "cpp"
 
+    def genDeviceSimulation(
+        self,
+        env: Environment,
+        program: Program,
+        app: Application,
+        config: dict
+    ) -> Tuple[str, str]:
+        include_tamplate = env.get_template(str(self.sim_super_kernel_inc_template))
+        source_tamplate = env.get_template(str(self.sim_super_kernel_src_template))
+        
+        return (
+            [include_tamplate.render(
+                config = config,
+                prog = program
+            ), self.sim_super_kernel_inc_extension],
+            [source_tamplate.render(
+                config = config,
+                prog = program
+            ), self.sim_super_kernel_src_extension])
+    
 class CppCuda(Scheme):
     lang = Lang.find("cpp")
     target = Target.find("cuda")
