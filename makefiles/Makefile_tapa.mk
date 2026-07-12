@@ -110,7 +110,7 @@ TAPA_CLOCK_PERIOD = 3.33
 endif 
 
 ifeq ($(TAPA_WORK_DIR),)
-TAPA_WORK_DIR = ./hls/build/$(HLS_TARGET_MODE)/tapa_work_dir
+TAPA_WORK_DIR = ./tapa/build/$(HLS_TARGET_MODE)/tapa_work_dir
 endif
 
 $(info TAPA target mode: $(HLS_TARGET_MODE) on $(PLATFORM))
@@ -142,7 +142,7 @@ endif
 VPP_LINK_FLAGS= --target $(HLS_TARGET_MODE) --platform $(PLATFORM) --hls.jobs $(HLS_JOBS) --remote_ip_cache $(HLS_IP_CACHE_DIR)
 
 # Host Executable Flags (Injects the submodule include paths)
-TAPA_CXXFLAGS += -I$(TAPA_INC_DIR) -I$(XILINX_XRT)/include/ -I$(XILINX_VIVADO)/include/ -I$(TAPA_INCLUDE_DIR) -DVITIS_PLATFORM=$(PLATFORM) -DOPS_FPGA -D__USE_XOPEN2K8 -I$(XILINX_HLS)/include/ -fmessage-length=0 $(TAPA_HLS_HOST_INC) -D__VITIS_HLS__
+TAPA_CXXFLAGS += -std=c++17 -I$(TAPA_INC_DIR) -I$(XILINX_XRT)/include/ -I$(XILINX_VIVADO)/include/ -I$(TAPA_INCLUDE_DIR) -DVITIS_PLATFORM=$(PLATFORM) -DOPS_FPGA -DOPS_TAPA -D__USE_XOPEN2K8 -I$(XILINX_HLS)/include/ -fmessage-length=0 $(TAPA_HLS_HOST_INC) -D__VITIS_HLS__
 
 
 # Host Linker Flags (Injects the submodule library path for libtapa)

@@ -497,6 +497,24 @@ run_hls_app:
 #
 # TAPA version
 #
+TAPA_TOP_MODULE_CPPS := $(wildcard ./tapa/device/src/*.cpp)
+
+ifneq (,$(filter $(HLS_TARGET_MODE), tapa_sw_emu))
+	# If mode is tapa_sw_emu
+	TAPA_DEVICE_TARGET := 
+	OPS_FILES_GEN_HLS += $(wildcard ./tapa/sim/*.cpp) $(TOP_MODULE_CPPS)
+	TAPA_CXXFLAGS += -I./tapa/sim/ $(TAPA_HLS_DEVICE_INC) -I./tapa/device/include/
+	CXX = tapa -w $(TAPA_WORK_DIR) g++ --
+else ifneq (,$(filter $(HLS_TARGET_MODE), tapa_hw_emu))
+    # If mode is  TAPA_HW_EMU
+	OPS_FILES_GEN_HLS += $(wildcard ./tapa/sim/*.cpp) $(TOP_MODULE_CPPS)
+	TAPA_CXXFLAGS += -I./tapa/sim/ $(TAPA_HLS_DEVICE_INC) -I./taps/device/include/
+	CXX = tapa -w $(TAPA_WORK_DIR) g++ --
+    TAPA_DEVICE_TARGET := ./tapa/build/$(HLS_TARGET_MODE)/sim_$(APP).xo
+else
+    # Default for standard hw or hw_emu
+    TAPA_DEVICE_TARGET := ./tapa/build/$(HLS_TARGET_MODE)/$(APP).xclbin
+endif
 
 $(APP)_tapa: Makefile .generated_tapa ./tapa/build/$(HLS_TARGET_MODE)/$(APP)_host ./tapa/build/$(HLS_TARGET_MODE)/$(APP).xclbin
 		@echo ""
@@ -508,24 +526,43 @@ $(APP)_tapa: Makefile .generated_tapa ./tapa/build/$(HLS_TARGET_MODE)/$(APP)_hos
 		@echo ""
 		@echo "Building ${APP}_tapa_host"
 		test -d ./tapa/build/$(HLS_TARGET_MODE) || mkdir -p ./tapa/build/$(HLS_TARGET_MODE)
-		$(CXX) -o $@ $(OPS_FILES_GEN_HLS) $(CXXFLAGS) $(TAPA_CXXFLAGS) -I./ -I./hls/host/kernel_wrappers/ $(TAPA_LDFLAGS)
+		$(CXX) -o $@ $(OPS_FILES_GEN_HLS) $(CXXFLAGS) $(TAPA_CXXFLAGS) -I./ -I./tapa/host/kernel_wrappers/ $(TAPA_LDFLAGS)
 
-./tapa/build/$(HLS_TARGET_MODE)/$(APP).xo: .generated_tapa
+./tapa/build/$(HLS_TARGET_MODE)/sim_$(APP).xo: .generated_tapa
 		@echo ""
-		@echo "Generating TAPA XO for ${APP}"
+		@echo "Generating Simulation TAPA XO for ${APP}"
 		test -d ./tapa/build/$(HLS_TARGET_MODE) || mkdir -p ./tapa/build/$(HLS_TARGET_MODE)
-		$(TAPAC) \
+		$(TAPA) -w $(TAPA_WORK_DIR) --verbose compile \
+			--top sim_mega_kernel \
 			$(TAPA_FLAGS) \
-			--top $(APP)_kernel \
 			-o $@ \
-			$(VPP_FLAGS) \
-			./hls/device/src/$(APP)_kernel.cpp
+			$(foreach flag,$(TAPA_ADDITIONAL_FLAGS) ,--cflags $(flag)) \
+			-f ./tapa/sim/sim_mega_kernel.cpp \
+			$(foreach src,$(TOP_MODULE_CPPS),-f $(src)) \
+			$(foreach flag, $(TAPA_HLS_DEVICE_INC) -I./tapa/device/include/ -I./tapa/sim/,--cflags $(flag));
 
-./tapa/build/$(HLS_TARGET_MODE)/$(APP).xclbin: ./tapa/build/$(HLS_TARGET_MODE)/$(APP).xo
+./hls/build/$(HLS_TARGET_MODE)/$(APP).xclbin: 
 		@echo ""
-		@echo "Linking TAPA XO to XCLBIN"
-		test -d tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/ || mkdir -p tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/
-		$(VPP) -l $(VPP_LINK_FLAGS) --temp_dir tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/ -o $@ $<
+		@echo ""
+		@echo "Building ${APP}.xclbin"
+		@echo ""
+		test -d $(TAPA_WORK_DIR) || mkdir -p $(TAPA_WORK_DIR)
+		test -d ./tapa/build/$(HLS_TARGET_MODE)/temp_dir || mkdir -p ./tapa/build/$(HLS_TARGET_MODE)/temp_dir
+		@for xo_file in ${basename ${notdir ${shell ls ./tapa/device/src/*.cpp}}}; do \
+			if [ ! -f "tapa/build/$(HLS_TARGET_MODE)/$${xo_file}.xo" ]; then \
+				echo "Compiling $${xo_file}"; \
+				$(TAPA) -w $(TAPA_WORK_DIR) compile --top $${xo_file} $(TAPA_FLAGS) -o tapa/build/$(HLS_TARGET_MODE)/$${xo_file}.xo -f ./tapa/device/src/$${xo_file}.cpp $(foreach flag,$(TAPA_HLS_DEVICE_INC) -I./tapa/device/include/,--cflags $(flag)); \
+			fi \
+		done
+
+		@if [ -n "$(OPS_HLS_XSA_PLATFORM)" ]; then \
+			echo "Building XSA platform"; \
+			$(VPP) --link -s -O3 $(VPP_LINK_FLAGS) --temp_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link --log_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/logs --config tapa/host/xrt.cfg -o ./tapa/build/$(HLS_TARGET_MODE)/$(APP).xsa  ${patsubst %.cpp, %.xo, ${patsubst ./tapa/device/src/%, ./tapa/build/$(HLS_TARGET_MODE)/%, $(shell ls ./tapa/device/src/*.cpp 2>/dev/null)}}; \
+			$(VPP) --package -s -O3 --target $(HLS_TARGET_MODE) --platform $(PLATFORM) --temp_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link --log_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/logs ./tapa/build/$(HLS_TARGET_MODE)/$(APP).xsa -o "$@"; \
+		else \
+			echo "Building non-XSA platform"; \
+			$(VPP) --link -s -O3 $(VPP_LINK_FLAGS) --temp_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link --log_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/logs --config tapa/host/xrt.cfg -o "$@"  ${patsubst %.cpp, %.xo, ${patsubst ./tapa/device/src/%, ./tapa/build/$(HLS_TARGET_MODE)/%, $(shell ls ./tapa/device/src/*.cpp 2>/dev/null)}}; \
+		fi
 
 .PHONY: build_tapa_host
 build_tapa_host: 
