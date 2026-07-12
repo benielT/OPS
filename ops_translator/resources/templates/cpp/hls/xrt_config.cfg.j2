@@ -24,7 +24,7 @@ stream_connect=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_out:kernel_ou
                 {% if loop.last %}
                     {% if prog.is_interleave() %}
                         {% for i in range(config["tile_banks"]) %}
-                           {% if config["max_SLR_count"] == 3 and config["SLR_count"] >= 2 %}
+                           {% if config["max_SLR_count"] == 3 and config["SLR_count"] >= 2 and target == "hls" %}
 stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_{{i}}_axis_out:repeater_outerloop_{{ilh.id}}_1.arg{{ilh.getSwapArg(arg).id}}_{{i}}_axis_in
 stream_connect=repeater_outerloop_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_in:{{config["axis_interconnect_buff_size"]}}
                            {% else %}
@@ -32,7 +32,7 @@ stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_{{i}}
                            {% endif %}
                         {% endfor %}
                     {% else %}
-                        {% if config["max_SLR_count"] == 3 and config["SLR_count"] >= 2 %}
+                        {% if config["max_SLR_count"] == 3 and config["SLR_count"] >= 2 and target == "hls" %}
 stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_out:repeater_outerloop_{{ilh.id}}_1.arg{{ilh.getSwapArg(arg).id}}_axis_in
 stream_connect=repeater_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
                         {% else %}
@@ -64,7 +64,7 @@ slr=kernel_outerloop_inst_{{ilh.id}}_{{loop.index0+1}}:SLR{{slr_id}}
 slr=kernel_outerloop_inst_{{ilh.id}}_{{loop.index0+1}}:SLR{{slr_id}}
             {% endfor %}
         {% endif %}
-        {% if config["max_SLR_count"] == 3 and config["SLR_count"] >= 2 %}
+        {% if config["max_SLR_count"] == 3 and config["SLR_count"] >= 2 and target == "hls" %}
 slr=repeater_outerloop_{{ilh.id}}_1:SLR1
         {% endif%}
     {% endfor %}
@@ -111,6 +111,12 @@ freqHz={{config["datamover_clock"]}}:{% for ilh, program in app.uniqueOuterLoops
 
 tolerance=0.12:{% for ilh, program in app.uniqueOuterLoops() %}datamover_outerloop_{{ilh.id}}_1{{", " if not loop.last}}{% endfor %}  
     {% endif %}
+{% endif %}
+
+{% if target == "tapa" %}
+# Tapa kernel.xo clock matched to 300MHz in linking with Vitis
+[advanced]
+param=compiler.userPostSysLinkOverlayTcl=/pc2/users/a/acgasm01/scratch/beniel/ops-hls-batching-tiling-artifacts/OPS/scripts/hls/tapa_fix_clock.tcl
 {% endif %}
 
 {% if config["profile"] %}

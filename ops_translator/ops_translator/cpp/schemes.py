@@ -498,7 +498,8 @@ class CppHLS(Scheme):
                 config=config,
                 app=app,
                 FPGABankPlacer = placer,
-                prog = prog
+                prog = prog,
+                target = self.target.name
             ), self.host_config_extension) 
     
     def genStencilDecl(
