@@ -171,7 +171,8 @@ class CppHLS(Scheme):
                 prog=program,
                 ndim=program.ndim,
                 consts=consts,
-                config=config
+                config=config,
+                target=self.target.name
             ),
             self.iterloop_host_kernelwrap_extension
         )
