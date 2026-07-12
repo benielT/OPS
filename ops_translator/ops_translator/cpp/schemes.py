@@ -514,6 +514,47 @@ class CppHLS(Scheme):
             ), self.stencil_device_extension
         )
 
+class CppTapa(CppHLS):
+    lang = Lang.find("cpp")
+    target = Target.find("tapa")
+
+    # loop_host_kernelwrap_template = Path("cpp/hls/loop_kernelwrap.hpp.j2")
+    loop_host_cpu_template = Path("cpp/hls/loop_host_cpu.hpp.j2")
+    # loop_device_inc_template = Path("cpp/hls/loop_dev_inc_hls.hpp.j2")
+    # loop_device_src_template = Path("cpp/hls/loop_dev_src_hls.cpp.j2")
+    # loop_datamover_inc_template = Path("cpp/hls/datamover_dev_inc_hls.hpp.j2")
+    # loop_datamover_src_template = Path("cpp/hls/datamover_dev_src_hls.cpp.j2")
+    loop_device_PE_template = Path("cpp/hls/loop_dev_PE_hls_V2.hpp.j2")
+    
+    iterloop_datamover_inc_template = Path("cpp/hls/tapa/iter_loop_datamover_dev_inc_hls.hpp.j2")
+    iterloop_datamover_src_template = Path("cpp/hls/tapa/iter_loop_datamover_dev_src_hls.cpp.j2")
+    iterloop_device_inc_template = Path("cpp/hls/tapa/iter_loop_dev_inc_hls.hpp.j2")
+    iterloop_device_src_template = Path("cpp/hls/tapa/iter_loop_dev_src_hls.cpp.j2")
+    iterloop_repeater_src_template = Path("cpp/hls/repeater.cpp.j2")
+    iterloop_host_kernelwrap_template = Path("cpp/hls/iter_loop_host_kernelwrap.hpp.j2")
+    sim_super_kernel_inc_template = Path("cpp/hls/tapa/sim_super_kernel.hpp.j2")
+    sim_super_kernel_src_template = Path("cpp/hls/tapa/sim_super_kernel.cpp.j2")
+    
+    # stencil_device_template = Path("cpp/hls/stencil_dev_hls.hpp.j2")
+    master_kernel_template = Path("cpp/hls/master_kernel.cpp.j2")
+    common_config_template = Path("cpp/hls/common_config_dev_hls.hpp.j2")
+    host_config_template = Path("cpp/hls/xrt_config.cfg.j2")
+    
+    loop_kernel_extension = "hpp"
+    master_kernel_extension = "hpp"
+    common_config_extension = "hpp"
+    host_config_extension = "cfg"
+    iterloop_device_inc_extension = "hpp"
+    iterloop_device_src_extension = "cpp"
+    iterloop_datamover_inc_extension = "hpp"
+    iterloop_datamover_src_extension = "cpp"
+    iterloop_repeater_src_extension = "cpp"
+    iterloop_host_kernelwrap_extension = "hpp"
+    loop_device_PE_extension = "hpp"
+    stencil_device_extension = "hpp"
+    sim_super_kernel_inc_template = "hpp"
+    sim_super_kernel_src_template = "cpp"
+
 class CppCuda(Scheme):
     lang = Lang.find("cpp")
     target = Target.find("cuda")
@@ -659,5 +700,6 @@ Scheme.register(CppMPIOpenMP)
 Scheme.register(CppCuda)
 Scheme.register(CppHip)
 Scheme.register(CppHLS)
+Scheme.register(CppTapa)
 Scheme.register(CppOpenMPOffload)
 Scheme.register(CppSycl)

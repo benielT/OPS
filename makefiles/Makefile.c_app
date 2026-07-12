@@ -72,10 +72,20 @@ DEFINES += $(filter -D%, $(CXXFLAGS))
 	@echo "OPS_EXTENTIONS: ${OPS_GENERATED_SUFFIX}_hls"
 	@echo "OPS_GENERATED: ${OPS_GENERATED_HLS}"
 	which python3
-	python3 $(OPS_INSTALL_PATH)/../ops_translator/ops_translator $(VERBOSE) $(DUMP) $(DUMP_AST) $(OPS_GEN_DEBUG) --fpga $(OPS_TARGET_CONFIG_JSON) $(DEFINES) -DOPS_FPGA -I $(OPS_INSTALL_PATH)/c/include/ --file_paths $(OPS_FILES) -dff $(OPS_GEN_ISL_DF_FORMAT)
+	python3 $(OPS_INSTALL_PATH)/../ops_translator/ops_translator $(VERBOSE) $(DUMP) $(DUMP_AST) $(OPS_GEN_DEBUG) --hls $(OPS_TARGET_CONFIG_JSON) $(DEFINES) -DOPS_FPGA -I $(OPS_INSTALL_PATH)/c/include/ --file_paths $(OPS_FILES) -dff $(OPS_GEN_ISL_DF_FORMAT)
 	@echo ""
 	rm -f .generated_hls
 	touch .generated_hls
+
+.generated_tapa: $(HEADERS) $(OPS_FILES) $(OPS_INSTALL_PATH)/../ops_translator/ops_translator/*.py
+	@echo "generating translations for ${OPS_FILES}"
+	@echo "OPS_EXTENTIONS: ${OPS_GENERATED_SUFFIX}_hls"
+	@echo "OPS_GENERATED: ${OPS_GENERATED_HLS}"
+	which python3
+	python3 $(OPS_INSTALL_PATH)/../ops_translator/ops_translator $(VERBOSE) $(DUMP) $(DUMP_AST) $(OPS_GEN_DEBUG) --tapa $(OPS_TARGET_CONFIG_JSON) $(DEFINES) -DOPS_FPGA -I $(OPS_INSTALL_PATH)/c/include/ --file_paths $(OPS_FILES) -dff $(OPS_GEN_ISL_DF_FORMAT)
+	@echo ""
+	rm -f .generated_tapa
+	touch .generated_tapa
     
 # check what targets can not be built with current environment setting and give warnings
 ifneq ($(strip $(TARGETS)),)
@@ -488,19 +498,19 @@ run_hls_app:
 # TAPA version
 #
 
-$(APP)_tapa: Makefile .generated_hls ./tapa/build/$(HLS_TARGET_MODE)/$(APP)_host ./tapa/build/$(HLS_TARGET_MODE)/$(APP).xclbin
+$(APP)_tapa: Makefile .generated_tapa ./tapa/build/$(HLS_TARGET_MODE)/$(APP)_host ./tapa/build/$(HLS_TARGET_MODE)/$(APP).xclbin
 		@echo ""
 		@echo ""
 		@echo "Building ${APP}_tapa"
 		@echo ""
 
-./tapa/build/$(HLS_TARGET_MODE)/$(APP)_host: .generated_hls $(OPS_INSTALL_PATH)/hls/lib/$(OPS_COMPILER)/libops_hls.a $(OPS_INSTALL_PATH)/hls/lib/$(OPS_COMPILER)/libops_seq.a 
+./tapa/build/$(HLS_TARGET_MODE)/$(APP)_host: .generated_tapa $(OPS_INSTALL_PATH)/hls/lib/$(OPS_COMPILER)/libops_hls.a $(OPS_INSTALL_PATH)/hls/lib/$(OPS_COMPILER)/libops_seq.a 
 		@echo ""
 		@echo "Building ${APP}_tapa_host"
 		test -d ./tapa/build/$(HLS_TARGET_MODE) || mkdir -p ./tapa/build/$(HLS_TARGET_MODE)
 		$(CXX) -o $@ $(OPS_FILES_GEN_HLS) $(CXXFLAGS) $(TAPA_CXXFLAGS) -I./ -I./hls/host/kernel_wrappers/ $(TAPA_LDFLAGS)
 
-./tapa/build/$(HLS_TARGET_MODE)/$(APP).xo: .generated_hls
+./tapa/build/$(HLS_TARGET_MODE)/$(APP).xo: .generated_tapa
 		@echo ""
 		@echo "Generating TAPA XO for ${APP}"
 		test -d ./tapa/build/$(HLS_TARGET_MODE) || mkdir -p ./tapa/build/$(HLS_TARGET_MODE)
@@ -567,8 +577,8 @@ clean:
 	rm -f $(APP)_mpi_openacc
 	rm -f $(APP)_mpi_openacc_tiled
 	rm -f $(OPS_GENERATED)
-	rm -f .generated constants_list.txt cudafe .generated_hls
-	rm -rf ./mpi_openmp ./cuda ./hip ./openmp_offload ./sycl ./openacc ./hls
+	rm -f .generated constants_list.txt cudafe .generated_hls .generated_tapa
+	rm -rf ./mpi_openmp ./cuda ./hip ./openmp_offload ./sycl ./openacc ./hls ./tapa
 	rm -f *_ops_hls.cpp
 	rm -rf _x .Xil xcd.log
 	rm -f ops_translator_run.log source_pp.txt

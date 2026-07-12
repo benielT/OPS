@@ -50,7 +50,8 @@ def main(argv=None) -> None:
     target_names = [target.name for target in Target.all()]
     parser.add_argument("-t", "--target", help="Code-gereration target", type=str, action="append", nargs=1, choices=target_names, default=[])
 
-    parser.add_argument("-fpga", "--fpga", help="Generate program for FPGA vitis HLS", action="store_true")
+    parser.add_argument("-hls", "--hls", help="Generate program for FPGA vitis HLS", action="store_true")
+    parser.add_argument("-tapa", "--tapa", help="Generate program for FPGA vitis HLS TAPA", action="store_true")
     parser.add_argument("-dff","--df_img_format", help="Dataflow IR Image Dump Format", type=str, default="png")
     
     #invoking arg parser
@@ -113,11 +114,15 @@ def main(argv=None) -> None:
     Type.set_formatter(lang.formatType)
 
     if len(args.target) == 0:
-        if not args.fpga:
+        if not args.hls and not args.tapa:
             args.target = [[target_name] for target_name in target_names]
             args.target.remove(["hls"])
-        else:
+            args.target.remove(["tapa"])
+        elif args.hls:
             args.target = [["hls"]]
+        else:
+            args.target = [["tapa"]]
+
 
     print(f"Targets: {args.target}")
     try:
@@ -214,7 +219,7 @@ def main(argv=None) -> None:
         target.verify_config(app)
         
         #Calling Optimizer for FPGA
-        if target.name == "hls": 
+        if target.name == "hls" or target.name == "tapa": 
             logging.info("Code-gen : Starting optimization phase for target: " + target.name)
             for program in app.programs:
                 logging.info("Optimizing program: %s", str(program.path))
@@ -224,7 +229,7 @@ def main(argv=None) -> None:
         logging.info("Code-gen : Generating target specific template, scheme - " + scheme.target.name)
         codegen(args, scheme, app, target.config, args.force_soa)
         
-        if target.name == "hls":
+        if target.name == "hls" or target.name == "tapa":
             codegenHLSDevice(args, scheme, app, target.config, args.force_soa)
 
         if args.verbose:
@@ -236,7 +241,7 @@ def main(argv=None) -> None:
         include_dirs = set([Path(dir) for [dir] in args.I])
         defines = [define for [define] in args.D]
 
-        if (args.fpga):
+        if (args.hls or args.tapa):
             logging.warning("only FPGA vitis HLS mode selected")
             source = lang.translateProgram(program, include_dirs, defines, app_consts, target.config, args.force_soa, True)
         else:   
@@ -248,7 +253,7 @@ def main(argv=None) -> None:
         new_file = os.path.splitext(os.path.basename(program.path))[0]
         ext = os.path.splitext(os.path.basename(program.path))[1]
         
-        if (args.fpga):
+        if (args.hls or args.tapa):
             new_path = Path(args.out, f"{new_file}{args.suffix}_hls{ext}")
         else:
             new_path = Path(args.out, f"{new_file}{args.suffix}{ext}")
@@ -355,7 +360,7 @@ def codegen(args: Namespace, scheme: Scheme, app: Application, target_config: di
         path = None
         if scheme.lang.kernel_dir:
             
-            if scheme.target.name == "hls":
+            if scheme.target.name in ["hls", "tapa"]:
                 Path(args.out, scheme.target.name, "host", "kernel_wrappers").mkdir(parents=True, exist_ok=True)
                 path = Path(args.out, scheme.target.name, "host", "kernel_wrappers", f"{loop.kernel}_kernel.hpp")                
             else:
@@ -367,13 +372,13 @@ def codegen(args: Namespace, scheme: Scheme, app: Application, target_config: di
                     path = Path(args.out, scheme.target.name, f"{loop.kernel}_{scheme.target.suffix}_kernel.{extension}")
         else:
             
-            if scheme.target.name == "hls":
+            if scheme.target.name in ["hls", "tapa"]:
                 path = Path(args.out,f"{loop.kernel}_{scheme.target.name}_kernel_wrapper.hpp")
             else:
                 path = Path(args.out,f"{loop.kernel}_{scheme.target.name}_kernel.{extension}")
 
         # Write the gernerated source file
-        if not scheme.target.name == "hls" or loop.iterativeLoopId == -1:
+        if not scheme.target.name in ["hls", "tapa"] or loop.iterativeLoopId == -1:
             with open(path, "w") as file:
 
                 file.write(f"{scheme.lang.com_delim} Auto-generated at {datetime.now()} by ops-translator\n")
@@ -407,7 +412,7 @@ def codegen(args: Namespace, scheme: Scheme, app: Application, target_config: di
                 print(f"Skipping loop host {i} of {len(app.uniqueLoops())}: {path}")
 
     # # Generate iterativeLoop Host
-    if scheme.target.name == "hls":
+    if scheme.target.name in ["hls", "tapa"]:
         translatedIterUIDs = []
         for i, (iterloop, program) in enumerate(app.uniqueOuterLoops()):
             if iterloop.unique_id in translatedIterUIDs:
@@ -451,7 +456,7 @@ def codegen(args: Namespace, scheme: Scheme, app: Application, target_config: di
         path = None
 
         if scheme.lang.kernel_dir:
-            if scheme.target.name == "hls":
+            if scheme.target.name in ["hls", "tapa"]:
                 Path(args.out, scheme.target.name, "host", "kernel_wrappers").mkdir(parents=True, exist_ok=True)
                 path = Path(args.out, scheme.target.name, "host", "kernel_wrappers", name)
             else:

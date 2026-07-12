@@ -392,7 +392,9 @@ class HLS(Target):
                 raise CodegenError(f"Target {self.name} config error: internal_storage={internal_storage} not supported on platform {platform}. Supported: {supported_storage}") 
             
 
-            
+class TAPA(HLS):
+    name = "tapa"
+    kernel_translation = True       
 
 Target.register(MPIOpenMP)
 Target.register(F2CMPIOpenMP)
@@ -405,3 +407,5 @@ Target.register(OpenMPOffload)
 Target.register(Sycl)
 Target.register(F2CSycl)
 Target.register(HLS)
+Target.register(TAPA)
+
