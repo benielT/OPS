@@ -144,6 +144,7 @@ class FPGA {
 
         // Creating Program
         OCL_CHECK(err, m_program = cl::Program(m_context, {m_device}, bins, NULL, &err));
+        m_programName = binaryFile;
         return true;
     }
     const cl::Context& getContext() const { return m_context; }
@@ -320,6 +321,10 @@ class FPGA {
         else 
             return 0;
     }
+    
+    std::string getProgramName() {
+        return m_programName;
+    }
 
    protected:
     bool bufferExists(const void* p_ptr) const {
@@ -376,6 +381,7 @@ class FPGA {
     cl::Context m_context;
     cl::CommandQueue m_queue;
     cl::Program m_program;
+    std::string m_programName;
     std::unordered_map<const void*, cl::Buffer> m_bufferMaps;
     std::unordered_map<std::string, std::vector<RuntimeEventRecords>> m_runtimeEvents;
     bool OPS_tiling;
