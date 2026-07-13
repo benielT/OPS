@@ -1,0 +1,53 @@
+{% block headers %}
+#pragma once
+#include <ops_tapa_kernel_support.h>
+#include "../../common/include/common_config.hpp"
+#include <datamover_outerloop_{{ilh.id}}.hpp>
+{% if islist(config["iter_par_factor"]) %}
+    {% for slr_id in range(config["SLR_count"]) %}
+#include <kernel_outerloop_{{ilh.id}}_{{slr_id}}.hpp>
+    {% endfor %}
+{% else %}
+#include <kernel_outerloop_{{ilh.id}}.hpp>
+{% endif %}
+{% endblock %}
+
+{% block prototype %}
+void sim_mega_kernel_{{ilh.id}}(const unsigned int num_beats,
+        const unsigned int num_of_axis_trans,
+        const unsigned int loopback_itr,
+        const unsigned int outer_itr,
+    {% for idx in range(prog.ndim)%}
+        const unsigned short stencilConfig_grid_size_{{idx}},
+    {% endfor %}
+        const unsigned short stencilConfig_dim,
+        const unsigned short stencilConfig_total_itr,
+    {% for idx in range(prog.ndim)%}
+        const unsigned short stencilConfig_lower_limit_{{idx}},
+    {% endfor %}
+    {% for idx in range(prog.ndim)%}
+        const unsigned short stencilConfig_upper_limit_{{idx}},
+    {% endfor %}
+        const unsigned short stencilConfig_outer_loop_limit,
+        const unsigned short stencilConfig_batch_size,
+    {% for arg in ilh.joint_args|ops_gbl%}
+        const {{arg.typ}} {{get_arg_gbl_name(arg)}},
+    {% endfor %}
+    {% for const in consts %}
+        const {{const.typ}} {{const.ptr}}{{"," if not loop.last}}
+    {% endfor %}
+    {% for arg in ilh.joint_args|ops_dat %}
+    //{{ilh.dats[arg.dat_id][0].ptr}}
+        {% if config["tile_banks"] > 1 %}
+            {% for i in range(config["tile_banks"]) %}
+        ::tapa::mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg{{(arg.id)}}_b{{i}}{{"," if not loop.last}}
+            {% endfor %}
+        {% else %}
+        ::tapa::mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg{{(arg.id)}}{{"," if not loop.last}}
+        {% endif %}
+    {% endfor %}
+)
+{% endblock %}
+{% block implementation %}
+;
+{% endblock %}

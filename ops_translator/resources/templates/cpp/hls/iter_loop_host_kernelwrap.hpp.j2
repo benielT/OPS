@@ -5,9 +5,21 @@
 
 {% block prologue %}
 #pragma once 
+{% if target == "tapa" %}
+#if !defined(TAPA_SW_EMU) && !defined(TAPA_HW_EMU)
+{% endif %}
 #include <ops_hls_rt_support.h>
+{% if target == "tapa" %}
+#else
+#include <ops_tapa_rt_support.h>
+#endif
+{% endif %}
 #include "../../common/include/common_config.hpp"
 
+{% if target == "tapa" %}
+#include <tapa.h>
+#include "../../sim/sim_mega_kernel_{{ilh.id}}.hpp"
+{% endif %}
 {% endblock %}
 
 {% block loopback_checker %}
@@ -516,7 +528,7 @@ void tapa_kernelwrapper_outerloop_{{ilh.id}}(
     {% endif %}
     {% endfor %}
 
-    tapa::invoke(sim_mega_kernel, ops::hls::FPGA::getInstance()->getProgramName().c_str(),
+    tapa::invoke(sim_mega_kernel_{{ilh.id}}, ops::hls::FPGA::getInstance()->getProgramName().c_str(),
             num_beats, num_of_pkts, adjusted_outer_iter-1, adjusted_outer_iter,
         {% for idx in range(ndim)%}
             read_stencilConfig.grid_size[{{idx}}],
@@ -539,7 +551,6 @@ void tapa_kernelwrapper_outerloop_{{ilh.id}}(
         {% endfor %}
         {% for arg in ilh.joint_args|ops_dat %}
 #ifdef OPS_TILING
-    printf("Tiles per grid: %d \n", arg0.alt_banks);
             {% if config["tile_banks"] > 1 and config["datamover_lib"] == 1 %}
                 {% for i in range(config["tile_banks"]) %}
             ::tapa::read_write_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>>(

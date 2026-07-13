@@ -560,6 +560,7 @@ class CppTapa(CppHLS):
     def genDeviceSimulation(
         self,
         env: Environment,
+        iterLoop: ops.IterLoop,
         program: Program,
         app: Application,
         config: dict
@@ -567,14 +568,31 @@ class CppTapa(CppHLS):
         include_tamplate = env.get_template(str(self.sim_super_kernel_inc_template))
         source_tamplate = env.get_template(str(self.sim_super_kernel_src_template))
         
+        kernel_processor = KernelProcess()
+        consts = []
+        
+        for df_node in iterLoop.get_active_df_graph().getAllLoopNodes():
+                kernel_idx = df_node.node_uid
+                loop = df_node.loop
+                kernel_func = self.translateKernel(loop, program, app, kernel_idx)
+                kernel_func = kernel_processor.clean_kernel_func_text(kernel_func)
+                kernel_body, kernel_args = kernel_processor.get_kernel_body_and_arg_list(kernel_func)
+                kernel_body = self.hls_replace_accessors(kernel_body, kernel_args, loop, program)
+                kernel_consts = self.find_const_in_kernel(kernel_body, program.consts)
+                consts.extend(x for x in kernel_consts if x not in consts)
+                
         return (
             [include_tamplate.render(
                 config = config,
-                prog = program
+                prog = program,
+                ilh = iterLoop,
+                consts = consts
             ), self.sim_super_kernel_inc_extension],
             [source_tamplate.render(
                 config = config,
-                prog = program
+                prog = program,
+                ilh = iterLoop,
+                consts = consts
             ), self.sim_super_kernel_src_extension])
     
 class CppCuda(Scheme):

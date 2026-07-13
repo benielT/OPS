@@ -1,0 +1,14 @@
+{% extends "cpp/hls/tapa/sim_super_kernel.hpp.j2" %}
+
+{% block headers %}
+#include <sim_mega_kernel_{{ilh.id}}.hpp>
+{% endblock %}
+
+{% block prototype %}
+{{super()}}
+{% endblock %}
+{% block implementation %}
+{
+
+}
+{% endblock %}
