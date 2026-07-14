@@ -1,54 +1,4 @@
-{% macro axis_name(arg) -%}
-    {%- if arg is not ops_rw -%}
-arg{{arg.id}}_axis_{{"in" if (arg is ops_read) else ("out" if (arg is ops_write))}}
-    {%- endif -%}
-{%- endmacro -%}
-{% macro axis_name_t2(arg, suffix) -%}
-arg{{arg.id}}_axis_{{suffix}}
-{%- endmacro -%}
-{% macro axis_name_t3(arg, infix, suffix=none) -%}
-    {%- if arg is not ops_rw and suffix==none -%}
-arg{{arg.id}}_{{infix}}_axis_{{"in" if (arg is ops_read) else ("out" if (arg is ops_write))}}
-    {%- else -%}
-arg{{arg.id}}_{{infix}}_axis_{{suffix}}
-    {%- endif -%}
-{%- endmacro -%}
-{% macro hls_name(arg) -%}
-    {%- if arg is not ops_rw -%}
-arg{{arg.id}}_hls_stream_{{"in" if (arg is ops_read) else ("out" if (arg is ops_write))}}
-    {%- endif -%}
-{%- endmacro -%}
-{% macro hls_name_t2(arg, suffix) -%}
-arg{{arg.id}}_hls_stream_{{suffix}}
-{%- endmacro -%}
-{% macro axis_data_width(arg) -%}
-    {%- if ilh.dats[arg.dat_id][0].isMultiDim() -%}
-multidim_axis_data_width_{{ilh.id}}_{{ilh.dats[arg.dat_id][0].ptr}}
-    {%- else -%}
-axis_data_width
-    {%- endif -%}
-{%- endmacro -%}
-{% macro axis_data_width_datid(dat_id) -%}
-    {%- if ilh.dats[dat_id][0].isMultiDim() -%}
-multidim_axis_data_width_{{ilh.id}}_{{ilh.dats[dat_id][0].ptr}}
-    {%- else -%}
-axis_data_width
-    {%- endif -%}
-{%- endmacro -%}
-{% macro total_bytes(arg) -%}
-    {%- if ilh.dats[arg.dat_id][0].isMultiDim() -%}
-total_bytes_d{{ilh.dats[arg.dat_id][0].dim}}
-    {%- else -%}
-total_bytes
-    {%- endif -%}
-{%- endmacro -%}
-{% macro num_pkts(arg) -%}
-    {%- if ilh.dats[arg.dat_id][0].isMultiDim() -%}
-num_pkts_d{{ilh.dats[arg.dat_id][0].dim}}
-    {%- else -%}
-num_pkts
-    {%- endif -%}
-{%- endmacro -%}
+{% import "cpp/hls/iter_loop_dev_macros.j2" as lmac %}
 {% block header_block %}
 #pragma once
     {% for df_node in ilh.get_active_df_graph().getAllLoopNodes() %}
@@ -133,22 +83,22 @@ extern "C" void kernel_outerloop_{{ilh.id}}
         {% if arg is not ops_rw %}
             {% if prog.is_interleave() %}
                 {% for tile in range(config["tile_banks"]) %}
-        hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name_t3(arg,tile)-}}{{"," if not (loop.last and first_loop_last)}}
+        hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t3(arg,tile)-}}{{"," if not (loop.last and first_loop_last)}}
                 {% endfor %}
             {% else %}
-        hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name(arg)-}}{{"," if not loop.last}}
+        hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name(arg)-}}{{"," if not loop.last}}
             {% endif %}
         {% else %}
             {% if prog.is_interleave() %}
                 {% for tile in range(config["tile_banks"]) %}
-       hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name_t3(arg, tile, "in")-}},
+       hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t3(arg, tile, "in")-}},
                 {% endfor %}
                 {% for tile in range(config["tile_banks"]) %}
-       hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name_t3(arg, tile, "out")-}}{{"," if not (loop.last and first_loop_last)}}
+       hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t3(arg, tile, "out")-}}{{"," if not (loop.last and first_loop_last)}}
                 {% endfor %}
             {% else %}
-        hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name_t2(arg, "in")-}},
-        hls::stream <ap_axiu<{{axis_data_width(arg)}}, 0, 0, 0>>& {{axis_name_t2(arg, "out")-}}{{"," if not loop.last}}
+        hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t2(arg, "in")-}},
+        hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t2(arg, "out")-}}{{"," if not loop.last}}
             {% endif %}
         {% endif %}
     {% endfor %}
