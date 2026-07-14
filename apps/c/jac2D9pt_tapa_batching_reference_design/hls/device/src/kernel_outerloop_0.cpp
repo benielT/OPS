@@ -289,9 +289,9 @@ void kernel_outerloop_0_dataflow_region(const unsigned short slr_region,
     stencilConfig.outer_loop_limit = stencilConfig_outer_loop_limit;
     stencilConfig.batch_size = stencilConfig_batch_size;
 
-   ::tapa::stream<::tapa::vec_t<float,vector_factor>,2,4096> arg0_internal_stream("arg0_arg1_internal_stream");
-   ::tapa::stream<::tapa::vec_t<float,vector_factor>,2,4096> arg1_internal_stream("arg1_arg1_internal_stream");
-   ::tapa::stream<::tapa::vec_t<float,vector_factor>,2,4096> arg0_arg1_internal_stream_0_to_1("arg0_arg1_internal_stream_0_to_1");
+   ::tapa::stream<::tapa::vec_t<float,vector_factor>,16,4096> arg0_internal_stream("arg0_arg1_internal_stream");
+   ::tapa::stream<::tapa::vec_t<float,vector_factor>,16,4096> arg1_internal_stream("arg1_arg1_internal_stream");
+   ::tapa::stream<::tapa::vec_t<float,vector_factor>,16,4096> arg0_arg1_internal_stream_0_to_1("arg0_arg1_internal_stream_0_to_1");
 
    ::tapa::task()
         .invoke(axis_to_stream, outer_itr, stencilConfig_total_itr, stencilConfig_batch_size, arg0_axis_in, arg0_internal_stream)
