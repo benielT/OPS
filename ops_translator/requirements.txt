@@ -14,3 +14,4 @@ pydot==3.0.2
 pillow==10.4.0
 rustworkx==0.15.1
 jaro-winkler==2.0.3
+clang-format==22.1.8
