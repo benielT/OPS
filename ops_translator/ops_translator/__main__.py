@@ -24,6 +24,7 @@ from store import Application, ParseError
 from target import Target
 from util import getVersion, safeFind, isFilePath, isDirPath, jsonReadFile
 from util import create_cpp_main, replace_fortran_program_with_subroutine
+from util import format_cpp_code
 
 def main(argv=None) -> None:
     #Build arg parser
@@ -535,7 +536,9 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
             [(loop_PE_inc_source, loop_PE_inc_extension)] = scheme.genLoopDevice(env, loop, program, app, target_config, i, iterloop, node)
 
             loop_PE_inc_source = re.sub(r'\n\s*\n', '\n\n', loop_PE_inc_source)
-                
+            
+            loop_PE_inc_source = format_cpp_code(loop_PE_inc_source, loop_PE_inc_extension)
+            
             #kernel inc
             path = None
             if scheme.lang.kernel_dir:
@@ -569,6 +572,10 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
             else:
                 iter_kernel_src_tups.append(out[i])
             
+        # apply formating
+        for i in range(len(iter_kernel_inc_tups)):
+            iter_kernel_inc_tups[i] = (format_cpp_code(iter_kernel_inc_tups[i][0], iter_kernel_inc_tups[i][1]), iter_kernel_inc_tups[i][1])
+            iter_kernel_src_tups[i] = (format_cpp_code(iter_kernel_src_tups[i][0], iter_kernel_src_tups[i][1]), iter_kernel_src_tups[i][1])
 
         # else:
         #     [(iter_datamov_inc_source, iter_datamov_inc_extension),
@@ -726,6 +733,9 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
             
             #Generate host linking config cfg file
             out = scheme.genDeviceSimulation(env, iterloop, app.programs[0], app, target_config)
+            
+            out[0] = (format_cpp_code(out[0][0], out[0][1]), out[0][1])
+            out[1] = (format_cpp_code(out[1][0], out[1][1]), out[1][1])
             
             (sim_inc_source, sim_inc_extension) = out[0]
             (sim_src_source, sim_src_extension) = out[1]

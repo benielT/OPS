@@ -822,5 +822,40 @@ def replace_fortran_program_with_subroutine(files):
         print("No valid PROGRAM/END PROGRAM pair found in the given files.")
 
 
+def format_cpp_code(source_code: str, file_extension: str = "cpp") -> str:
+    """
+    Takes a C/C++/Header string, applies clang-format, and returns the formatted string.
+    Safely falls back to the original string if clang-format is missing or fails.
+    """
+    # Only attempt to format known C/C++ extensions
+    valid_extensions = ["c", "cpp", "h", "hpp", "inc"]
+    if file_extension.lstrip(".") not in valid_extensions:
+        return source_code
 
+    try:
+        # -assume-filename helps clang-format apply the correct language rules
+        # -style=file tells it to look for a .clang-format file in the directory, 
+        # or you can hardcode a style like "-style=LLVM" or "-style=Google"
+        process = subprocess.Popen(
+            ["clang-format", f"-assume-filename=dummy.{file_extension.lstrip('.')}", "-style=LLVM"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        formatted_code, errors = process.communicate(input=source_code)
+
+        if process.returncode != 0:
+            logging.warning(f"clang-format failed. Skipping formatting. Error: {errors}")
+            return source_code
+
+        return formatted_code
+
+    except FileNotFoundError:
+        logging.warning("clang-format not found on system PATH. Skipping formatting.")
+        return source_code
+    except Exception as e:
+        logging.warning(f"Unexpected error during clang-format: {e}")
+        return source_code
 
