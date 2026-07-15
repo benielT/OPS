@@ -47,6 +47,11 @@ def translateProgram(source: str, program: Program, app_consts: List[Const], arg
         index = buffer.search(r'\s* ops_init\(') + 1
         buffer.insert(index, '\tops_init_backend();\n')
 
+    if (buffer.search(r'.*ops_partition.*') and not buffer.search(r'*ops_par_loop_blocks_all*')):
+        index = buffer.search(r'.*ops_partition.*')
+        buffer.insert(index+1, "ops_par_loop_blocks_all(ops_get_batch_size());")
+        
+        
     # 5. Find the Global declarations of constant and add relevant OpenACC pragmas
     # Add #pragma acc declare create() near main declarations of variable (no need to place near extern declarations)
     # Add #pragma acc update device() near initialization of those variables
@@ -99,6 +104,14 @@ def translateProgram(source: str, program: Program, app_consts: List[Const], arg
     # 6. Translation
     new_source = buffer.translate()
 
+    # 6.4. search and replate ops_decl_block and for batching
+    if (program.isBatching()):
+        new_source = re.sub(
+            r'ops_decl_block\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)',
+            r'ops_decl_block_batch(\1, \2, ops_get_batch_size())',
+            new_source
+        )
+        
     # 7. Substitude the ops_seq.h/ops_seq_v2.h with ops_lib_core.h
     new_source = re.sub(r'#include\s+("|<)\s*ops_seq(_v2)?\.h\s*("|>)', '#include "ops_lib_core.h"', new_source)
 
@@ -365,7 +378,20 @@ def translateProgramHLS(source: str, program: Program, app_consts: List[Const], 
                 if line.find(";") != -1:
                     break
                 index += 1
+    
+    if (program.isBatching()):
+        if (buffer.search(r'.*ops_partition.*') and not buffer.search(r'.*ops_par_loop_blocks_all.*')):
+            index = buffer.search(r'.*ops_partition.*')
+            buffer.insert(index+1, "#ifndef OPS_FPGA")
+            buffer.insert(index+1, "ops_par_loop_blocks_all();")
+            buffer.insert(index+1, "#endif")
         
+    if (program.isBatching()):
+        if (buffer.search(r'.*ops_decl_block.*')):
+            index = buffer.search(r'.*ops_decl_block.*')
+            before, after = buffer.get(index).split("ops_decl_block", 1)
+            buffer.update(index, "ops_decl_block_batch" + after)
+            
     # 10. Removing ops_partition        
     if (buffer.search(r'.*ops_partition.*')):
         index = buffer.search(r'.*ops_partition.*')

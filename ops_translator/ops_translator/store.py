@@ -145,11 +145,15 @@ class Program:
     soa_val: Optional[bool] = False
     init_flag: Optional[bool] = False
     tiling: Optional[bool] = False
+    batching : Optional[bool] = False
     tile_sizes: List[int] = field(default_factory=lambda: [-1, -1, -1])  # x,y,z
     tiling_type: Optional[TilingType] = TilingType.TILE_TYPE_ROW
 
     def isTiling(self) -> bool:
         return self.tiling
+    
+    def isBatching(self) -> bool:
+        return self.batching
     
     def getTileSizes(self) -> Union[List[int], None]:
         if self.isTiling():
@@ -195,6 +199,7 @@ class Program:
         outString += "ndim=" + str(self.ndim) + ",\n"
         outString += "soa=" + str(self.soa_val) + ",\n"
         outString += "tiling=" + str(self.tiling) + ", tile_sizes=" + str(self.tile_sizes) + ", tile_type=" + str(self.tiling_type) + "\n"
+        outString += "batching= " + str(self.batching) + "\n"
         outString += "\n---------------------\n"
         outString += "       consts        \n"
         outString += "---------------------\n"

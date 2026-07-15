@@ -392,12 +392,15 @@ ops::hls::Block ops_hls_decl_block(int dims, std::string name)
 	return block;
 }
 
-ops::hls::Block ops_hls_decl_block_batch(int dims, std::string name, int batch_size)
+ops::hls::Block ops_hls_decl_block_batch(int dims, std::string name, int batch_size=-1)
 {
     ops::hls::Block block;
     block.dims = dims;
     block.name = std::string(name);
-    block.batch_size = batch_size;
+	if (batch_size == -1)
+		block.batch_size = ops::hls::FPGA::getInstance()->getOPSBatchSize();
+	else 
+    	block.batch_size = batch_size;
     
     return block;
 }

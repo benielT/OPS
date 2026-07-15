@@ -80,14 +80,14 @@ class Cpp(Lang):
             )
 
         if isl_directives is not None:
-            return translation_unit, source, isl_directives, preprocessor.is_ops_tiled(), preprocessor.get_ops_tile_sizes(), preprocessor.is_ops_tiling_interleaved()
+            return translation_unit, source, isl_directives, preprocessor.is_ops_tiled(), preprocessor.get_ops_tile_sizes(), preprocessor.is_ops_tiling_interleaved(), preprocessor.is_ops_batched_implicit()
         else:
             return translation_unit, source,  
 
     def parseProgram(self, path: Path, include_dirs: Set[Path], defines: List[str]) -> Program:
         ast, source = self.parseFile(path, frozenset(include_dirs), frozenset(defines))
-        ast_pp, source_pp, isl_directives, is_tiled, tile_sizes, is_interleave =  self.parseFile(path, frozenset(include_dirs), frozenset(defines), preprocess = True)
-
+        ast_pp, source_pp, isl_directives, is_tiled, tile_sizes, is_interleave, is_ops_batched_implicit =  self.parseFile(path, frozenset(include_dirs), frozenset(defines), preprocess = True)
+        
         with open("./source_pp.txt", "w") as f:        
             f.write("=================================================================================")
             f.write("================================== source PP ====================================")
@@ -98,7 +98,7 @@ class Cpp(Lang):
                 
         # TODO: Find the global ndim programatically
         tilingType = TilingType.TILE_TYPE_INTERLEAVE if is_interleave else TilingType.TILE_TYPE_ROW
-        program = Program(path, ast, ast_pp, source_pp, isl_directives, tiling=is_tiled, tile_sizes=tile_sizes, tiling_type = tilingType)
+        program = Program(path, ast, ast_pp, source_pp, isl_directives, tiling=is_tiled, tile_sizes=tile_sizes, tiling_type=tilingType, batching=is_ops_batched_implicit)
 
         cpp.parser.parseLoops(ast, program)
         cpp.parser.parseMeta(ast_pp.cursor, program)

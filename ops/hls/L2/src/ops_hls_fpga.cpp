@@ -55,6 +55,19 @@ void _FPGA_set_args(ops::hls::FPGA *instance, const char *argv)
         instance->setOPSTileSizeY((unsigned short)atoi(temp +  strlen("OPS_TILESIZE_Y=")));
         std::cout << "\n OPS Tile size in Y = " << instance->getOPSTileSizeY() << '\n';
     }
+
+    pch = strstr(argv, "OPS_BATCH_SIZE=");
+    if (pch != NULL) {
+        snprintf(temp, 64, "%s", pch);
+        instance->setOPSBatchSize((unsigned int)atoi(temp +  strlen("OPS_BATCH_SIZE=")));
+        std::cout << "\n OPS Tile size in Y = " << instance->getOPSBatchSize() << '\n';
+    }
+}
+
+unsigned int ops_get_batch_size()
+{
+    ops::hls::FPGA * fpga = ops::hls::FPGA::getInstance();
+    return fpga->getOPSBatchSize();
 }
 
 void ops_init_backend(int argc, const char** argv, unsigned int devId)
