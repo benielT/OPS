@@ -32,6 +32,7 @@ class Preprocessor(pcpp.Preprocessor):
         self.__is_ops_tiled_flag = False
         self.__ops_tile_sizes = [-1,-1,-1]  # x,y,z
         self.__is_ops_tiled_interleave = False
+        self.__is_ops_batched_implicit = False
 
     # preprocessor hook
     def on_comment(self, tok: str) -> bool:
@@ -94,6 +95,9 @@ class Preprocessor(pcpp.Preprocessor):
             return True
         return False
     
+    def is_ops_batched_implicit(self) -> bool:
+        return self.__is_ops_batched_implicit
+    
     def extract_macro_value(self, name: str, macro: Any) -> Any:
         if isinstance(macro.value, list) and len(macro.value) > 0:
             token = macro.value[0]
@@ -128,7 +132,17 @@ class Preprocessor(pcpp.Preprocessor):
                 self.__is_ops_tiled_interleave = True
                 print(f"[PREPROC] OPS TILING INTERLEAVE flag set")
                 
-
+            elif name == "OPS_BATCHED":
+                self.__is_ops_batched_implicit = True
+                print(f"[PREPROC] OPS BATCHED flag set")
+                
+    def verify(self):
+        if self.__is_ops_tiled_interleave and not self.__is_ops_tiled_flag:
+            logging.error("[PREPROC] OPS_HLS_TILE_ITERLEAVE used without OPS_TILING")
+            
+        if self.__is_ops_batched_implicit and self.__is_ops_tiled_flag:
+            logging.error("[PREPROC] OPS_BATCHED used with OPS_TILING. Tiling and batching cannot be used together")
+            
     def parse(self, input, source) -> None:
         super().parse(input, source)
         self.post_process()
