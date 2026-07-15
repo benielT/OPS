@@ -298,6 +298,10 @@ class FPGA {
         OPS_tiling_size_y = tile_y;
     }
 
+    void setOPSBatchSize(unsigned int batch_size) {
+        OPS_batch_size = batch_size;
+    }
+
     unsigned short getOPSTileSizeX() {
         if (isOPSTiling())
             return OPS_tiling_size_x;
@@ -310,6 +314,10 @@ class FPGA {
             return OPS_tiling_size_y;
         else 
             return 0;
+    }
+
+    unsigned int getOPSBatchSize() {
+        return OPS_batch_size;
     }
 
    protected:
@@ -340,6 +348,7 @@ class FPGA {
         OPS_tiling = false;
         OPS_tiling_size_x = 0;
         OPS_tiling_size_y = 0;
+        OPS_batch_size = 1;
     }
     FPGA(unsigned int p_id = 0, std::string deviceName = "") {
         getDevices(deviceName);
@@ -347,6 +356,7 @@ class FPGA {
         OPS_tiling = false;
         OPS_tiling_size_x = 0;
         OPS_tiling_size_y = 0;
+        OPS_batch_size = 1;
     }
 
     FPGA(unsigned int p_id, const std::vector<cl::Device>& devices) {
@@ -356,6 +366,7 @@ class FPGA {
         OPS_tiling = false;
         OPS_tiling_size_x = 0;
         OPS_tiling_size_y = 0;
+        OPS_batch_size = 1;
     }
 
 
@@ -372,6 +383,7 @@ class FPGA {
     bool OPS_tiling;
     unsigned short OPS_tiling_size_x;
     unsigned short OPS_tiling_size_y;
+    unsigned int OPS_batch_size;
 };
 
 }
@@ -393,5 +405,7 @@ template<typename DurationType>
 double ops_hls_get_total_execution_runtime(const std::string& kernel_name);
 
 void ops_exit_backend();
+
+unsigned int ops_get_batch_size();
 
 #endif /* DOXYGEN_SHOULD_SKIP_THIS */
