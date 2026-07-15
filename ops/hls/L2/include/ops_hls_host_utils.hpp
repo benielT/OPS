@@ -156,72 +156,21 @@ void genTileMetadataCPU(
         const unsigned short diff_y = range.end[1] - range.start[1];
         const unsigned short realized_tile_size_x_beats = tile_size_x_beats > num_xblocks ? num_xblocks : tile_size_x_beats;
         const unsigned short tile_count_x = ((num_xblocks - realized_tile_size_x_beats) + effective_tile_size_x_beats - 1) / effective_tile_size_x_beats + 1;
+
+	#if defined(OPS_HLS_TILE_INTERLEAVE_V2)
+		const unsigned short last_tile_size_x_beats = tile_count_x > 1 ? num_xblocks - (tile_count_x - 1) * effective_tile_size_x_beats : realized_tile_size_x_beats;
+		last_tile_size_x_beats = last_tile_size_x_beats % OPS_HLS_TILE_BANKS == 0 ? last_tile_size_x_beats : ((last_tile_size_x_beats + OPS_HLS_TILE_BANKS - 1) / OPS_HLS_TILE_BANKS) * OPS_HLS_TILE_BANKS;
+        last_tile_upper_limit_x = range.end[0] - (((tile_count_x - 1) * effective_tile_size_x_beats) << ShiftBits);
+	#else
         const unsigned short last_tile_size_x_beats = tile_count_x > 1 ? num_xblocks - (tile_count_x - 1) * effective_tile_size_x_beats : realized_tile_size_x_beats;
         last_tile_upper_limit_x = range.end[0] - (((tile_count_x - 1) * effective_tile_size_x_beats) << ShiftBits);
+	#endif
 
         const unsigned short realized_tile_size_y = tile_dim == 2 ? tile_size[1] > diff_y ? diff_y : tile_size[1] : grid_size[1];
         const unsigned short tile_count_y = ((diff_y - realized_tile_size_y) + effective_tile_size_y - 1) / effective_tile_size_y + 1;
         const unsigned short last_tile_size_y = tile_count_y > 1 ? diff_y - (tile_count_y - 1) * effective_tile_size_y : realized_tile_size_y;
         // const unsigned short last_tile_upper_limit_y = TILE_DIM == 2 ? range.end[1] - (tile_count_y - 1) * effective_tile_size_y : range.end[1];
 
-// #ifndef __SYNTHESIS__
-//     #if defined(OPS_FPGA) && defined(OPS_TILING)
-//         if (tile_size[0] != POW2(LOG2_NON_CONSTEXPR(tile_size[0]))) {
-//             OPSException ex(OPS_RUNTIME_ERROR);
-//             ex << "ERROR: x tile_size (" << tile_size[0] << ") has to be power of 2" 
-//                     << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set";
-//             throw ex;
-//         }
-
-//         if (tile_size[0] <= overlap_size[0]) {
-//             OPSException ex(OPS_RUNTIME_ERROR);
-//             ex << "ERROR: x tile_size (" << tile_size[0] << ") is less than the minimum required overlap size (" << overlap_size[0] << ") in x direction. " 
-//                     << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set";
-//             throw ex;
-//         }
-
-//         if (tile_size[0] > OPS_MAXTILESIZE_X) {
-//             OPSException ex(OPS_RUNTIME_ERROR);
-//             ex << "ERROR: x tile_size (" << tile_size[0] << ") is greater than the minimum tile supported by the generated hardware (" << OPS_MAXTILESIZE_X << ") in x direction. " 
-//                     << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set. If bigger tile size need, rebuild with bigger OPS_MAXTILESIZE_X";
-//             throw ex;
-//         }
-
-//         if (tile_size_x_beats > realized_tile_size_x_beats) {
-//             std::cout << "[OPS_WARNING]: Grid is smaller than tile_size in x direction. Running without tiling in x direction" << std::endl;
-//         }
-//         if (float(effective_tile_size_x_beats) / float(tile_size_x_beats) < 0.75) {
-//             std::cout << "[OPS_WARNING]: Effective tile size is: " << float(effective_tile_size_x_beats) / float(tile_size_x_beats) << ", which is less than 75%. " 
-//                     << " Please increase the tile size ( max: " << OPS_MAXTILESIZE_X << ") to utilize more performance"<< std::endl;
-//         }
-
-//         if (tile_dim == 2) {
-//             if (tile_size[1] <= overlap_size[1]) {
-//                 OPSException ex(OPS_RUNTIME_ERROR);
-//                 ex << "ERROR: y tile_size (" << tile_size[1] << ") is less than the minimum required overlap size (" << overlap_size[1] << ") in y direction. " 
-//                         << "Please make sure appropriate OPS_TILESIZE_Y runtime flag is properly set";
-//                 throw ex;
-//             }
-//         #ifdef OPS_MAXTILESIZE_Y
-//             if (tile_size[1] > OPS_MAXTILESIZE_Y) {
-//                 OPSException ex(OPS_RUNTIME_ERROR);
-//                 ex << "ERROR: y tile_size (" << tile_size[1] << ") is greater than the minimum tile supported by the generated hardware (" << OPS_MAXTILESIZE_Y << ") in y direction. " 
-//                         << "Please make sure appropriate OPS_TILESIZE_Y runtime flag is properly set. If bigger tile size need, rebuild with bigger OPS_MAXTILESIZE_Y";
-//                 throw ex;
-//             }
-//         #endif
-//             if (tile_size[1] > realized_tile_size_y) {
-//                 std::cout << "[OPS_WARNING]: Grid is smaller than tile_size in y direction. Running without tiling in y direction" << std::endl;
-//             }
-//         #ifdef OPS_MAXTILESIZE_Y
-//             if (float(effective_tile_size_y) / float(tile_size[1] ) < 0.75) {
-//                 std::cout << "[OPS_WARNING]: Effective tile size is: " << float(effective_tile_size_y) / float(tile_size[1] ) << ", which is less than 75%" 
-//                         << " Please increase the tile size ( max: " << OPS_MAXTILESIZE_Y << ") to utilize more performance"<< std::endl;
-//             }
-//         #endif
-//         }
-//     #endif
-// #endif
         // Total xblocks calculations
         const unsigned short diff_z = range.end[2] - range.start[2];
         const unsigned short tile_count_min_1_x = tile_count_x - 1;
@@ -255,8 +204,6 @@ void genTileMetadataCPU(
         // #endif
 }
 
-#include <cstdio> // Ensure printf is available if not already included
-
 const unsigned short get_overlap_size(unsigned short mem_vector_factor, unsigned short half_span, unsigned short total_PEs) {
     auto val =  ((total_PEs * half_span  + mem_vector_factor - 1) / mem_vector_factor) * mem_vector_factor * 2;
 
@@ -284,7 +231,7 @@ unsigned short getInterleaveGridSizeX(unsigned short actual_grid_size_x, unsigne
 {
     unsigned short init_grid_size_x = ((actual_grid_size_x + mem_vector_factor - 1) / mem_vector_factor) * mem_vector_factor;
 
-#ifdef DEBUG_LOG_PRINT
+#ifdef DEBUG_LOG
     printf("|DEBUG_LOG|%s| inputs: actual_grid_size_x=%u, half_span=%u, vector_factor=%u, mem_vector_factor=%u, total_PEs=%u\n",
             __func__, actual_grid_size_x, half_span, vector_factor, mem_vector_factor, total_PEs);
     printf("|DEBUG_LOG|%s| init_grid_size_x: %u\n", __func__, init_grid_size_x);
@@ -309,13 +256,19 @@ unsigned short getInterleaveGridSizeX(unsigned short actual_grid_size_x, unsigne
 
     genTileMetadataCPU(mem_vector_factor, 2, mock_grid_size, mock_read_range, tile_size, overlap_size,
             effective_tile_size, last_tile_size, tile_count, last_tile_upper_limit_x, total_xblocks_widen);
-    
+
+#ifdef OPS_HLS_TILE_INTERLEAVE_V2
+	unsigned short interleave_mem_vector_factor = mem_vector_factor * OPS_HLS_TILE_BANKS;
+	unsigned short final_grid_size_x = ((actual_grid_size_x + interleave_mem_vector_factor - 1) / interleave_mem_vector_factor) * interleave_mem_vector_factor;
+	unsigned short adjusted_last_tile_x = 0;
+#else
     unsigned short min_tile_size_val = getMinTileSize(vector_factor, mem_vector_factor);
     unsigned short adjusted_last_tile_x = last_tile_size[0] < min_tile_size_val ? min_tile_size_val : last_tile_size[0];
 
     unsigned short final_grid_size_x = (init_grid_size_x + (adjusted_last_tile_x - last_tile_size[0]) * mem_vector_factor);
+#endif 
 
-#ifdef DEBUG_LOG_PRINT
+#ifdef DEBUG_LOG
     printf("|DEBUG_LOG|%s| genTileMetadataCPU results: effective_tile_size={%u, %u}, last_tile_size={%u, %u}, tile_count={%u, %u}\n",
             __func__, effective_tile_size[0], effective_tile_size[1], last_tile_size[0], last_tile_size[1], tile_count[0], tile_count[1]);
     printf("|DEBUG_LOG|%s| genTileMetadataCPU results: last_tile_upper_limit_x=%u, total_xblocks_widen=%u\n",
@@ -326,6 +279,20 @@ unsigned short getInterleaveGridSizeX(unsigned short actual_grid_size_x, unsigne
 
     return final_grid_size_x;
 }
+
+// void generateTileMetadata(unsigned int* tiles, unsigned short& tile_count, const unsigned short tile_max_count, const unsigned short tile_size, const unsigned short grid_siz, const unsigned short effective_size, const unsigned short overlap_size) {
+
+// 	if (tiles == nullptr) {
+// 		throw std::runtime_error("[RUNTIM_ERROR]: tile has to be non-null");
+// 	}
+// 	tile_count = 0;
+
+// 	for (uint i = 0; i < tile_max_count; i++) {
+// 		tile_count++;
+// 		tiles[i] = i * effective_size | tile
+// 	}
+// }
+
 #endif
 
 #ifndef OPS_HLS_V2

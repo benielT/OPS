@@ -32,6 +32,7 @@
 // #include "CL/cl_ext_xilinx.h"
 // This file is required for OpenCL C++ wrapper APIs
 #include "../../ext/xcl2/xcl2.hpp"
+#define OPS_HLS_TILE_INTERLEAVE_V2
 
 template <typename T>
 using host_buffer_t = std::vector<T, aligned_allocator<T> >;
