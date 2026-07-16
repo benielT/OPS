@@ -463,7 +463,8 @@ class CppHLS(Scheme):
                  widen_read_stencil_desc = widen_read_stencil_desc,
                  isTiling = program.isTiling(),
                  tiles=program.getTileSizes(),
-                 is_list_itr_par = isinstance(config["iter_par_factor"],list)
+                 is_list_itr_par = isinstance(config["iter_par_factor"],list),
+                 target = self.target.name
                  ),self.loop_device_PE_extension)]
         )
     
@@ -597,7 +598,8 @@ class CppTapa(CppHLS):
                 config = config,
                 prog = program,
                 ilh = iterLoop,
-                consts = consts
+                consts = consts,
+                is_list_itr_par = isinstance(config["iter_par_factor"],list)
             ), self.sim_super_kernel_src_extension])
     
 class CppCuda(Scheme):
