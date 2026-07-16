@@ -116,7 +116,7 @@ tolerance=0.12:{% for ilh, program in app.uniqueOuterLoops() %}datamover_outerlo
 {% if target == "tapa" %}
 # Tapa kernel.xo clock matched to 300MHz in linking with Vitis
 [advanced]
-param=compiler.userPostSysLinkOverlayTcl=/pc2/users/a/acgasm01/scratch/beniel/ops-hls-batching-tiling-artifacts/OPS/scripts/hls/tapa_fix_clock.tcl
+param=compiler.userPostSysLinkOverlayTcl={{scripts_path}}/hls/tapa_fix_clock.tcl
 {% endif %}
 
 {% if config["profile"] %}

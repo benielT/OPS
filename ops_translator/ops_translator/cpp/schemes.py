@@ -12,6 +12,7 @@ from util import KernelProcess, findIdx, function_name
 import re
 import logging
 from cpp import optimizer
+import os
 
 class CppMPIOpenMP(Scheme):
     lang = Lang.find("cpp")
@@ -62,7 +63,7 @@ class CppHLS(Scheme):
     stencil_device_template = Path("cpp/hls/stencil_dev_hls.hpp.j2")
     master_kernel_template = Path("cpp/hls/master_kernel.cpp.j2")
     common_config_template = Path("cpp/hls/common_config_dev_hls.hpp.j2")
-    host_config_template = Path("cpp/hls/xrt_config.cfg.j2")
+    link_config_template = Path("cpp/hls/xrt_config.cfg.j2")
     
     loop_kernel_extension = "hpp"
     master_kernel_extension = "hpp"
@@ -486,20 +487,24 @@ class CppHLS(Scheme):
         app: Application,
         prog: Program
     ) -> Tuple[str, str]:
-        template = env.get_template(str(self.host_config_template))     
+        template = env.get_template(str(self.link_config_template))     
         
         if (config["HBM_tile_racks"] > 0):
             placer = FPGABankPlacer(config["tile_bank_placement_policy"], 
                                                 config["HBM_banks"], config["HBM_tile_racks"])
         else:
             placer = None
-            
+           
+        ops_install_path = os.getenv("OPS_INSTALL_PATH", None)
+        scripts_path = Path(ops_install_path, "../", "scripts").resolve()
+                                     
         return (template.render(
                 config=config,
                 app=app,
                 FPGABankPlacer = placer,
                 prog = prog,
-                target = self.target.name
+                target = self.target.name,
+                scripts_path = scripts_path
             ), self.host_config_extension) 
     
     def genStencilDecl(
@@ -540,7 +545,7 @@ class CppTapa(CppHLS):
     # stencil_device_template = Path("cpp/hls/stencil_dev_hls.hpp.j2")
     master_kernel_template = Path("cpp/hls/master_kernel.cpp.j2")
     common_config_template = Path("cpp/hls/common_config_dev_hls.hpp.j2")
-    host_config_template = Path("cpp/hls/xrt_config.cfg.j2")
+    link_config_template = Path("cpp/hls/xrt_config.cfg.j2")
     
     loop_kernel_extension = "hpp"
     master_kernel_extension = "hpp"
