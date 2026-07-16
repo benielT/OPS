@@ -733,12 +733,12 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
             
             #Generate host linking config cfg file
             out = scheme.genDeviceSimulation(env, iterloop, app.programs[0], app, target_config)
+            new_out = []
+            new_out.append((format_cpp_code(out[0][0], out[0][1]), out[0][1]))
+            new_out.append((format_cpp_code(out[1][0], out[1][1]), out[1][1]))
             
-            out[0] = (format_cpp_code(out[0][0], out[0][1]), out[0][1])
-            out[1] = (format_cpp_code(out[1][0], out[1][1]), out[1][1])
-            
-            (sim_inc_source, sim_inc_extension) = out[0]
-            (sim_src_source, sim_src_extension) = out[1]
+            (sim_inc_source, sim_inc_extension) = new_out[0]
+            (sim_src_source, sim_src_extension) = new_out[1]
             
             # Writing Simulation include
             path = None
