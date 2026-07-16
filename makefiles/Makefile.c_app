@@ -497,17 +497,17 @@ run_hls_app:
 #
 # TAPA version
 #
-TAPA_TOP_MODULE_CPPS := $(wildcard ./tapa/device/src/*.cpp)
+TAPA_TOP_MODULE_CPPS=$(wildcard ./tapa/device/src/*.cpp)
 
 ifneq (,$(filter $(HLS_TARGET_MODE), tapa_sw_emu))
 	# If mode is tapa_sw_emu
 	TAPA_DEVICE_TARGET := 
-	OPS_FILES_GEN_HLS += $(wildcard ./tapa/sim/*.cpp) $(TOP_MODULE_CPPS)
+	OPS_FILES_GEN_HLS += $(wildcard ./tapa/sim/*.cpp) $(TAPA_TOP_MODULE_CPPS)
 	TAPA_CXXFLAGS += -I./tapa/sim/ $(TAPA_HLS_DEVICE_INC) -I./tapa/device/include/
 	CXX = tapa -w $(TAPA_WORK_DIR) g++ --
 else ifneq (,$(filter $(HLS_TARGET_MODE), tapa_hw_emu))
     # If mode is  TAPA_HW_EMU
-	OPS_FILES_GEN_HLS += $(wildcard ./tapa/sim/*.cpp) $(TOP_MODULE_CPPS)
+	OPS_FILES_GEN_HLS += $(wildcard ./tapa/sim/*.cpp) $(TAPA_TOP_MODULE_CPPS)
 	TAPA_CXXFLAGS += -I./tapa/sim/ $(TAPA_HLS_DEVICE_INC) -I./taps/device/include/
 	CXX = tapa -w $(TAPA_WORK_DIR) g++ --
     TAPA_DEVICE_TARGET := ./tapa/build/$(HLS_TARGET_MODE)/sim_$(APP).xo
@@ -525,6 +525,7 @@ $(APP)_tapa: Makefile .generated_tapa ./tapa/build/$(HLS_TARGET_MODE)/$(APP)_hos
 ./tapa/build/$(HLS_TARGET_MODE)/$(APP)_host: .generated_tapa $(OPS_INSTALL_PATH)/hls/lib/$(OPS_COMPILER)/libops_hls.a $(OPS_INSTALL_PATH)/hls/lib/$(OPS_COMPILER)/libops_seq.a 
 		@echo ""
 		@echo "Building ${APP}_tapa_host"
+		@echo "Files used ${OPS_FILES_GEN_HLS}"
 		test -d ./tapa/build/$(HLS_TARGET_MODE) || mkdir -p ./tapa/build/$(HLS_TARGET_MODE)
 		$(CXX) -o $@ $(OPS_FILES_GEN_HLS) $(CXXFLAGS) $(TAPA_CXXFLAGS) -I./ -I./tapa/host/kernel_wrappers/ $(TAPA_LDFLAGS)
 
