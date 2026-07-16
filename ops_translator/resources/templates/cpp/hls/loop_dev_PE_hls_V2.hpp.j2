@@ -1,3 +1,5 @@
+{% import "cpp/hls/stencil_config_macros.j2" as sconf with context %}
+
 {%- macro hls_stream_name(arg) -%}
     {%- if arg is not ops_rw -%}
 arg{{arg.id}}_{{"rd" if (arg is ops_read) else ("wr" if (arg is ops_write))}}_buffer
@@ -65,7 +67,11 @@ widen_stream_{{lh.kernel}}_{{arg.id}}_dt
 {% block header_block %}
 #ifndef __LOOP_PE_{{lh.kernel|upper}}__
 #define __LOOP_PE_{{lh.kernel|upper}}__
+{% if target == "hls" %}
 #include <ops_hls_kernel_support.h>
+{% else %}
+#include <ops_tapa_kernel_support.h>
+{% endif %}
 #include "../../common/include/common_config.hpp"
 
  
@@ -95,18 +101,46 @@ static constexpr unsigned short {{axis_data_width_name(arg)}} = ({{vector_factor
     {% if prog.is_interleave() %}
 static constexpr unsigned short {{axis_data_width_name(arg)}}_min_1 = {{axis_data_width_name(arg)}} - 1;
     {% endif %}
+    {% if target == "hls" %}
 typedef ap_uint<{{axis_data_width_name(arg)}}> {{widen_dt_name(arg)}};
+    {% else %}
+typedef ::tapa::vec_t<stencil_type, {{vector_factor_name(arg)}}> {{widen_dt_name(arg)}};
+    {% endif %}
     {% if prog.is_interleave() %}
+        {% if target == "hls" %}
 static constexpr unsigned short half_{{axis_data_width_name(arg)}} = ({{vector_factor_name(arg)}} * data_width) >> 1;
 static constexpr unsigned short half_{{axis_data_width_name(arg)}}_min_1 = half_{{axis_data_width_name(arg)}} - 1;
 typedef ap_uint<half_{{axis_data_width_name(arg)}}> half_{{widen_dt_name(arg)}};
+        {% else %}
+static constexpr unsigned short half_{{vector_factor_name(arg)}} = {{vector_factor_name(arg)}} >> 1;
+# static constexpr unsigned short half_{{axis_data_width_name(arg)}}_min_1 = half_{{axis_data_width_name(arg)}} - 1;
+typedef ::tapa::vec_t<stencil_type, half_{{vector_factor_name(arg)}}> half_{{widen_dt_name(arg)}};
+        {% endif %}
     {% endif %}
 {% endfor %} 
 {% for arg in lh.args | ops_dat%}
     {% if prog.is_interleave() %}
+        {% if target == "hls" %}
 typedef ::hls::stream<half_{{widen_dt_name(arg)}}> half_{{widen_stream_dt_name(arg)}};
+        {% else %}
+            {% if arg is ops_read_or_rw %}
+typedef ::tapa::istream<half_{{widen_dt_name(arg)}}>  half_in_{{widen_stream_dt_name(arg)}};
+            {% endif %}
+            {% if arg is ops_write_or_rw %}
+typedef ::tapa::ostream<half_{{widen_dt_name(arg)}}>  half_out_{{widen_stream_dt_name(arg)}};
+            {% endif %}
+        {% endif %}
     {% else %}
+        {% if target == "hls" %}
 typedef ::hls::stream<{{widen_dt_name(arg)}}> {{widen_stream_dt_name(arg)}};
+        {% else %}
+            {% if arg is ops_read_or_rw %}
+typedef ::tapa::istream<{{widen_dt_name(arg)}}> in_{{widen_stream_dt_name(arg)}};
+            {% endif %}
+            {% if arg is ops_write_or_rw %}
+typedef ::tapa::ostream<{{widen_dt_name(arg)}}> out_{{widen_stream_dt_name(arg)}};
+            {% endif %}
+        {% endif %}
     {% endif %}
 {% endfor %} 
 
@@ -237,27 +271,27 @@ public:
         {% if arg is ops_dat %}
             {% if (arg is ops_read) %}
                 {% if prog.is_interleave() %}
-            half_{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "l_rd")-}},
-            half_{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "u_rd")-}}{{"," if (not loop.last or not last_check)}}
+            half_{{"in_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "l_rd")-}},
+            half_{{"in_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "u_rd")-}}{{"," if (not loop.last or not last_check)}}
                 {% else %}
-            {{widen_stream_dt_name(arg)}}& {{hls_stream_name(arg)-}}{{"," if (not loop.last or not last_check)}}
+            {{"in_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name(arg)-}}{{"," if (not loop.last or not last_check)}}
                 {% endif %}
             {% elif arg is ops_write %}
                 {% if prog.is_interleave() %}
-            half_{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "l_wr")-}},
-            half_{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "u_wr")-}}{{"," if (not loop.last or not last_check)}}
+            half_{{"out_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "l_wr")-}},
+            half_{{"out_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "u_wr")-}}{{"," if (not loop.last or not last_check)}}
                 {% else %}
-            {{widen_stream_dt_name(arg)}}& {{hls_stream_name(arg)-}}{{"," if (not loop.last or not last_check)}}
+            {{"out_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name(arg)-}}{{"," if (not loop.last or not last_check)}}
                 {% endif %}
             {% else %}
                 {% if prog.is_interleave() %}
-            half_{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "l_rd")-}},
-            half_{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "u_rd")-}},
-            half_{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "l_wr")-}},
-            half_{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "u_wr")-}}{{"," if (not loop.last or not last_check)}}
+            half_{{"in_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "l_rd")-}},
+            half_{{"in_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "u_rd")-}},
+            half_{{"out_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "l_wr")-}},
+            half_{{"out_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "u_wr")-}}{{"," if (not loop.last or not last_check)}}
                 {% else %}
-            {{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "rd")-}},
-            {{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "wr")-}}{{"," if (not loop.last or not last_check)}}
+            {{"in_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "rd")-}},
+            {{"out_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "wr")-}}{{"," if (not loop.last or not last_check)}}
                 {% endif %}
             {% endif %}
         {% elif arg is ops_gbl %}
@@ -540,11 +574,11 @@ public:
         {% for arg in lh.args|ops_dat %}
         // arg{{arg.id}}({{lh.dats[arg.dat_id].ptr}})
             {% if arg is ops_read %}
-            {{widen_dt_name(arg)}} arg{{arg.id}}_read_val = 0;
+            {{widen_dt_name(arg)}} arg{{arg.id}}_read_val{% if target == "hls"%} = 0{% endif %};
             {% elif arg is ops_write %}
             {{widen_dt_name(arg)}} arg{{arg.id}}_update_val;
             {% else %}
-            {{widen_dt_name(arg)}} arg{{arg.id}}_read_val = 0;
+            {{widen_dt_name(arg)}} arg{{arg.id}}_read_val{% if target == "hls" %} = 0{% endif %};
             {{widen_dt_name(arg)}} arg{{arg.id}}_update_val;
             {% endif %}
         {% endfor %}
@@ -785,8 +819,21 @@ public:
                     {
                 {% for arg in get_read_args_from_stencil(stencil_ptr, lh) %}
                     {% if prog.is_interleave() %}
+                        {% if target == "hls" %}
                         arg{{arg.id}}_read_val.range(half_{{axis_data_width_name(arg)}}_min_1, 0) = {{hls_stream_name_t2(arg, "l_rd")-}}.read();
                         arg{{arg.id}}_read_val.range({{axis_data_width_name(arg)}}_min_1, half_{{axis_data_width_name(arg)}}) = {{hls_stream_name_t2(arg, "u_rd")-}}.read();
+                        {% else %}
+                        auto arg{{arg.id}}_tmp_l_rd_val =  {{hls_stream_name_t2(arg, "l_rd")-}}.read();
+                        auto arg{{arg.id}}_tmp_u_rd_val =  {{hls_stream_name_t2(arg, "u_rd")-}}.read();
+                        for (unsigned short v_id = 0; v_id < half_{{vector_factor_name(arg)}}; v_id++) {
+                            #pragma HLS UNROLL
+                            arg{{arg.id}}_read_val[v_id] = arg{{arg.id}}_tmp_l_rd_val[v_id];
+                        }
+                        for (unsigned short v_id = 0; v_id < half_{{vector_factor_name(arg)}}; v_id++) {
+                            #pragma HLS UNROLL
+                            arg{{arg.id}}_read_val[ half_{{vector_factor_name(arg)}} + v_id] = arg{{arg.id}}_tmp_u_rd_val[v_id];
+                        }
+                        {% endif %}
                     {% else %}
                         arg{{arg.id}}_read_val = arg{{arg.id}}_rd_buffer.read();
                     {% endif %}
@@ -876,18 +923,24 @@ public:
             {% if lh.dats[arg.dat_id].isMultiDim() %}
                     for (int ri = 0; ri < {% if prog.is_interleave() -%} subtile_full_vector_factor {%- else -%}{{vector_factor_name(arg)}}{% endif %}; ri++)
                     {
+                {% if target == "hls" %}
                         ops::hls::DataConv tmpConverter;
                         tmpConverter.i = arg{{arg.id}}_read_val.range((ri + 1)*s_datatype_size - 1, ri * s_datatype_size);
-                    
                         printf("%f ", tmpConverter.f);
+                {% else %}
+                        printf("%f ", arg{{arg.id}}_read_val[ri]);
+                {% endif %} 
                     }
             {% else %}
                     for (int ri = 0; ri < {% if prog.is_interleave() -%} subtile_full_vector_factor {%- else -%} vector_factor {%- endif %}; ri++)
                     {
+                {% if target == "hls" %}
                         ops::hls::DataConv tmpConverter;
                         tmpConverter.i = arg{{arg.id}}_read_val.range((ri + 1)*s_datatype_size - 1, ri * s_datatype_size);
-                    
                         printf("%f ", tmpConverter.f);
+                {% else %}
+                        printf("%f ", arg{{arg.id}}_read_val[ri]);
+                {% endif %}
                     }
             {% endif %}
                     printf(")\n");
@@ -913,14 +966,22 @@ public:
                     {% if point.x == row_discriptor.base_point.x %}
                         {% if lh.dats[arg.dat_id].isMultiDim() %}
                             {% for m_dim in range(lh.dats[arg.dat_id].dim) %}
+                                {% if target == "hls" %}
                     ops::hls::DataConv arg{{arg.id}}_{{m_dim}}_tmpConverter_{{point.y}}_{{point.z}};
                     arg{{arg.id}}_{{m_dim}}_tmpConverter_{{point.y}}_{{point.z}}.i = arg{{arg.id}}_widenStencilValues[{{widen_stencil.points.index(widen_point)}}].range(s_datatype_size * (x_d{{lh.dats[arg.dat_id].dim}} + {{m_dim + 1}}) - 1, (x_d{{lh.dats[arg.dat_id].dim}} + {{m_dim}}) * s_datatype_size);
                     arg{{arg.id}}_{{m_dim}}_rowArr_{{row_discriptor.row_id[0]}}_{{row_discriptor.row_id[1]}}[x + half_span_x] = arg{{arg.id}}_{{m_dim}}_tmpConverter_{{point.y}}_{{point.z}}.f; 
+                                {% else %}
+                    arg{{arg.id}}_{{m_dim}}_rowArr_{{row_discriptor.row_id[0]}}_{{row_discriptor.row_id[1]}}[x + half_span_x] = arg{{arg.id}}_widenStencilValues[{{widen_stencil.points.index(widen_point)}}][x_d{{lh.dats[arg.dat_id].dim}} + {{m_dim}}];
+                                {% endif %}
                             {% endfor %}
                         {% else %}
+                            {% if target == "hls" %}
                     ops::hls::DataConv arg{{arg.id}}_tmpConverter_{{point.y}}_{{point.z}};
                     arg{{arg.id}}_tmpConverter_{{point.y}}_{{point.z}}.i = arg{{arg.id}}_widenStencilValues[{{widen_stencil.points.index(widen_point)}}].range(s_datatype_size * (x + 1) - 1, x * s_datatype_size);
                     arg{{arg.id}}_rowArr_{{row_discriptor.row_id[0]}}_{{row_discriptor.row_id[1]}}[x + half_span_x] = arg{{arg.id}}_tmpConverter_{{point.y}}_{{point.z}}.f; 
+                            {% else %}
+                    arg{{arg.id}}_rowArr_{{row_discriptor.row_id[0]}}_{{row_discriptor.row_id[1]}}[x + half_span_x] = arg{{arg.id}}_widenStencilValues[{{widen_stencil.points.index(widen_point)}}][x]; 
+                            {% endif %}
                         {% endif %}
                     {% endif %}
                 {% endfor %}
@@ -950,14 +1011,22 @@ public:
                                 {% if lh.dats[arg.dat_id].isMultiDim() %}
                                 {% set i_d = i * lh.dats[arg.dat_id].dim %}
                                     {% for m_dim in range(lh.dats[arg.dat_id].dim) %}
+                                        {% if target == "hls" %}
                     ops::hls::DataConv arg{{arg.id}}_{{m_dim}}_tmpConverter_{{point.x}}_{{point.y}}_{{point.z}}_{{i}};
                     arg{{arg.id}}_{{m_dim}}_tmpConverter_{{point.x}}_{{point.y}}_{{point.z}}_{{i}}.i = arg{{arg.id}}_widenStencilValues[{{widen_stencil.points.index(widen_point)}}].range(s_datatype_size * ({{i_d + m_dim}} + 1) - 1, s_datatype_size * {{i + m_dim}});
                     arg{{arg.id}}_{{m_dim}}_rowArr_{{row_discriptor.row_id[0]}}_{{row_discriptor.row_id[1]}}[{{access_idx}}] = arg{{arg.id}}_{{m_dim}}_tmpConverter_{{point.x}}_{{point.y}}_{{point.z}}_{{i}}.f;
+                                        {% else %}
+                    arg{{arg.id}}_{{m_dim}}_rowArr_{{row_discriptor.row_id[0]}}_{{row_discriptor.row_id[1]}}[{{access_idx}}] =  arg{{arg.id}}_widenStencilValues[{{widen_stencil.points.index(widen_point)}}][{{i + m_dim}}];
+                                        {% endif %}
                                     {% endfor %}
                                 {% else %}
+                                    {% if target == "hls" %}
                     ops::hls::DataConv arg{{arg.id}}_tmpConverter_{{point.x}}_{{point.y}}_{{point.z}}_{{i}};
                     arg{{arg.id}}_tmpConverter_{{point.x}}_{{point.y}}_{{point.z}}_{{i}}.i = arg{{arg.id}}_widenStencilValues[{{widen_stencil.points.index(widen_point)}}].range(s_datatype_size * ({{i}} + 1) - 1, s_datatype_size * {{i}});
                     arg{{arg.id}}_rowArr_{{row_discriptor.row_id[0]}}_{{row_discriptor.row_id[1]}}[{{access_idx}}] = arg{{arg.id}}_tmpConverter_{{point.x}}_{{point.y}}_{{point.z}}_{{i}}.f;
+                                    {% else %}
+                    arg{{arg.id}}_rowArr_{{row_discriptor.row_id[0]}}_{{row_discriptor.row_id[1]}}[{{access_idx}}] = arg{{arg.id}}_widenStencilValues[{{widen_stencil.points.index(widen_point)}}][{{i}}];
+                                    {% endif %}
                                 {% endif %}
                             {% endif %}
                         {% endfor %}
@@ -1075,10 +1144,18 @@ public:
             {% if (arg is ops_write or arg is ops_rw) %}
                 {% if lh.dats[arg.dat_id].isMultiDim() %}
                     {% for m_dim in range(lh.dats[arg.dat_id].dim) %}
+                        {% if target == "hls" %}
                     ops::hls::DataConv arg{{arg.id}}_{{m_dim}}_tmpConvWrite;
+                        {% else %}
+                    stencil_type arg{{arg.id}}_{{m_dim}}_tmpWriteVal;
+                        {% endif %}
                     {% endfor %}
                 {% else %}
+                    {% if target == "hls" %}
                     ops::hls::DataConv arg{{arg.id}}_tmpConvWrite;
+                    {% else %}
+                    stencil_type arg{{arg.id}}_tmpWriteVal;
+                    {% endif %}
                 {% endif %}
             {% endif %}
         {% endfor %}
@@ -1088,10 +1165,18 @@ public:
         {% for arg in lh.args|ops_dat|ops_write %}
             {% if lh.dats[arg.dat_id].isMultiDim() %}
                 {% for m_dim in range(lh.dats[arg.dat_id].dim) %}
+                    {% if target == "hls" %}
                         arg{{arg.id}}_{{m_dim}}_tmpConvWrite.f = arg{{arg.id}}_{{m_dim}}_result;
+                    {% else %}
+                        arg{{arg_id}}_{{m_dim}}_tmpWriteVal = arg{{arg.id}}_{{m_dim}}_result;
+                    {% endif %}
                 {% endfor %}
             {% else %}
+                {% if target == "hls" %}
                         arg{{arg.id}}_tmpConvWrite.f = arg{{arg.id}}_result;
+                {% else %}
+                        arg{{arg.id}}_tmpWriteVal = arg{{arg.id}}_result;
+                {% endif %}
             {% endif %}
         {% endfor %}
                     }
@@ -1107,18 +1192,34 @@ public:
                 {% if get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh) %}
                     {% if lh.dats[arg.dat_id].isMultiDim() %}
                         {% for m_dim in range(lh.dats[arg.dat_id].dim) %}
+                            {% if target == "hls" %}
                         arg{{arg.id}}_{{m_dim}}_tmpConvWrite.f = arg{{get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).id}}_{{m_dim}}_rowArr_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.y}}_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.z}}[x + {{base_offset}}];
+                            {% else %}
+                        arg{{arg.id}}_{{m_dim}}_tmpWriteVal = = arg{{get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).id}}_{{m_dim}}_rowArr_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.y}}_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.z}}[x + {{base_offset}}];
+                            {% endif %}
                         {% endfor %}
                     {% else %}
+                        {% if target == "hls" %}
                         arg{{arg.id}}_tmpConvWrite.f = arg{{get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).id}}_rowArr_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.y}}_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.z}}[x + {{base_offset}}];
+                        {% else %}
+                        arg{{arg.id}}_tmpWriteVal = arg{{get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).id}}_rowArr_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.y}}_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.z}}[x + {{base_offset}}];
+                        {% endif %}
                     {% endif %}
                 {% else %}
                     {% if lh.dats[arg.dat_id].isMultiDim() %}
                         {% for m_dim in range(lh.dats[arg.dat_id].dim) %}
-                        arg{{arg.id}}_{{m_dim}}_tmpConvWrite.f = 0.0;
+                            {% if target == "hls" %}
+                        arg{{arg.id}}_{{m_dim}}_tmpConvWrite.f = 0.0f;
+                            {% else %}
+                        arg{{arg.id}}_{{m_dim}}_tmpWriteVal = 0.0f;
+                            {% endif %}
                         {% endfor %}
                     {% else %}
-                        arg{{arg.id}}_tmpConvWrite.f = 0.0;
+                        {% if target == "hls" %}
+                        arg{{arg.id}}_tmpConvWrite.f = 0.0f;
+                        {% else %}
+                        arg{{arg.id}}_tmpWriteVal = 0.0f;
+                        {% endif %}
                     {% endif %}
                 {% endif %}
         {% endfor %}
@@ -1126,23 +1227,39 @@ public:
                 // *** rw convertions ***
         {% for arg in lh.args|ops_dat|ops_rw %}
             {% set base_offset = read_stencil.base_point.x - prog.findStencil(arg.stencil_ptr).base_point.x %}
-                {% if lh.dats[arg.dat_id].isMultiDim() %}
-                        {% for m_dim in range(lh.dats[arg.dat_id].dim) %}
+            {% if lh.dats[arg.dat_id].isMultiDim() %}
+                {% for m_dim in range(lh.dats[arg.dat_id].dim) %}
+                    {% if target == "hls" %}
                     arg{{arg.id}}_{{m_dim}}_tmpConvWrite.f = arg{{arg.id}}_{{m_dim}}_rowArr_{{prog.findStencil(arg.stencil_ptr).base_point.y}}_{{prog.findStencil(arg.stencil_ptr).base_point.z}}[x + {{prog.findStencil(arg.stencil_ptr).base_point.x + base_offset}}];
-                        {% endfor %}
-                {% else %}
+                    {% else %}
+                    arg{{arg.id}}_{{m_dim}}_tmpWriteVal = arg{{arg.id}}_{{m_dim}}_rowArr_{{prog.findStencil(arg.stencil_ptr).base_point.y}}_{{prog.findStencil(arg.stencil_ptr).base_point.z}}[x + {{prog.findStencil(arg.stencil_ptr).base_point.x + base_offset}}];
+                    {% endif %}
+                {% endfor %}
+            {% else %}
+                {% if target == "hls" %}
                     arg{{arg.id}}_tmpConvWrite.f = arg{{arg.id}}_rowArr_{{prog.findStencil(arg.stencil_ptr).base_point.y}}_{{prog.findStencil(arg.stencil_ptr).base_point.z}}[x + {{prog.findStencil(arg.stencil_ptr).base_point.x + base_offset}}];
+                {% else %}
+                    arg{{arg.id}}_tmpWriteVal = arg{{arg.id}}_rowArr_{{prog.findStencil(arg.stencil_ptr).base_point.y}}_{{prog.findStencil(arg.stencil_ptr).base_point.z}}[x + {{prog.findStencil(arg.stencil_ptr).base_point.x + base_offset}}];
                 {% endif %}
+            {% endif %}
         {% endfor %}
 
         {% for arg in lh.args|ops_dat %}
             {% if (arg is ops_write or arg is ops_rw) %}
                 {% if lh.dats[arg.dat_id].isMultiDim() %}
                     {% for m_dim in range(lh.dats[arg.dat_id].dim) %}
+                        {% if target == "hls" %}
                     arg{{arg.id}}_update_val.range(s_datatype_size * (x + {{m_dim + 1}}) - 1, (x + {{m_dim}}) * s_datatype_size) = arg{{arg.id}}_{{m_dim}}_tmpConvWrite.i;
+                        {% else %}
+                    arg{{arg.id}}_update_val[x + {{m_dim}}] = arg{{arg.id}}_{{m_dim}}_tmpWriteVal;
+                        {% endif %}
                     {% endfor %}
                 {% else %}
+                    {% if target == "hls" %}
                     arg{{arg.id}}_update_val.range(s_datatype_size * (x + 1) - 1, x * s_datatype_size) = arg{{arg.id}}_tmpConvWrite.i;
+                    {% else %}
+                    arg{{arg.id}}_update_val[x] = arg{{arg.id}}_tmpWriteVal;
+                    {% endif %}
                 {% endif %}
             {% endif %}
         {% endfor %} 
@@ -1159,26 +1276,42 @@ public:
                     {% if lh.dats[arg.dat_id].isMultiDim() %}
                         {% for m_dim in range(lh.dats[arg.dat_id].dim) %}
                             {% for x in range(((read_stencil.stencil_size.x - 1)/2)|int) %}
+                                {% if target == "hls" %}
                     ops::hls::DataConv arg{{arg.id}}_{{m_dim}}_{{x}}_tmpConvWrite;
                     arg{{arg.id}}_{{m_dim}}_{{x}}_tmpConvWrite.f = arg{{get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).id}}_{{m_dim}}_rowArr_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.y}}_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.z}}[{{x + base_offset}}];
                     arg{{arg.id}}_update_val.range(s_datatype_size * {{(x + m_dim + 1)}} - 1, {{(x + m_dim)}} * s_datatype_size) = arg{{arg.id}}_{{m_dim}}_{{x}}_tmpConvWrite.i;
+                                {% else %}
+                    arg{{arg.id}}_update_val[{{x + m_dim}}] = arg{{get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).id}}_{{m_dim}}_rowArr_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.y}}_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.z}}[{{x + base_offset}}]
+                                {% endif %}
                             {% endfor %}
                             {% for x in range(adj_vector_factor_plus_half_span, adj_vector_factor_full) %}
+                                {% if target == "hls" %}
                     ops::hls::DataConv arg{{arg.id}}_{{m_dim}}_{{x}}_tmpConvWrite;
                     arg{{arg.id}}_{{m_dim}}_{{x}}_tmpConvWrite.f = arg{{get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).id}}_{{m_dim}}_rowArr_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.y}}_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.z}}[{{x + base_offset}}];
                     arg{{arg.id}}_update_val.range(s_datatype_size * {{(x + m_dim + 1)}} - 1, {{(x + m_dim)}} * s_datatype_size) = arg{{arg.id}}_{{m_dim}}_{{x}}_tmpConvWrite.i;
+                                {% else %}
+                    arg{{arg.id}}_update_val[{{(x + m_dim)}}] = arg{{get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).id}}_{{m_dim}}_rowArr_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.y}}_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.z}}[{{x + base_offset}}];
+                                {% endif %}
                             {% endfor %}
                         {% endfor %}
                     {% else %}
                         {% for x in range(((read_stencil.stencil_size.x - 1)/2)|int) %}
+                            {% if target == "hls" %}
                     ops::hls::DataConv arg{{arg.id}}_{{x}}_tmpConvWrite;
                     arg{{arg.id}}_{{x}}_tmpConvWrite.f = arg{{get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).id}}_rowArr_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.y}}_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.z}}[{{x + base_offset}}];
                     arg{{arg.id}}_update_val.range(s_datatype_size * {{(x + 1)}} - 1, {{x}} * s_datatype_size) = arg{{arg.id}}_{{x}}_tmpConvWrite.i;
+                            {% else %}
+                    arg{{arg.id}}_update_val[{{x}}] = arg{{get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).id}}_rowArr_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.y}}_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.z}}[{{x + base_offset}}];
+                            {% endif %}
                         {% endfor %}
                         {% for x in range(adj_vector_factor_plus_half_span, adj_vector_factor_full) %}
+                            {% if target == "hls" %}
                     ops::hls::DataConv arg{{arg.id}}_{{x}}_tmpConvWrite;
                     arg{{arg.id}}_{{x}}_tmpConvWrite.f = arg{{get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).id}}_rowArr_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.y}}_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.z}}[{{x + base_offset}}];
                     arg{{arg.id}}_update_val.range(s_datatype_size * {{(x + 1)}} - 1, {{x}} * s_datatype_size) = arg{{arg.id}}_{{x}}_tmpConvWrite.i;
+                            {% else %}
+                    arg{{arg.id}}_update_val[{{x}}] = arg{{get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).id}}_rowArr_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.y}}_{{prog.findStencil(get_read_arg_from_dat(lh.dats[datMap[arg.dat_id]], lh).stencil_ptr).base_point.z}}[{{x + base_offset}}];
+                            {% endif %}
                         {% endfor %}
                     {% endif %}
                 {% endif %}
@@ -1206,18 +1339,26 @@ public:
                         printf("[DEBUG][INTERNAL][{{lh.kernel}}_PE_%d{%if prog.is_interleave() %}:%d{% endif %}] wirte values arg{{arg.id}}: (", m_PEId{%if prog.is_interleave() %}, SUB_TILE_ID{% endif %});
                         for (int ri = 0; ri < {{vector_factor_name(arg)}}; ri++)
                         {
+                    {% if target == "hls"%}
                             ops::hls::DataConv tmpConverter;
                             tmpConverter.i = arg{{arg.id}}_update_val.range((ri + 1)*s_datatype_size - 1, ri * s_datatype_size);
                             printf("%f ", tmpConverter.f);
+                    {% else %}
+                            printf("%f ", arg{{arg.id}}_update_val[ri]);
+                    {% endif %}
                         }
                         printf(")\n");
                 {% else %}
                         printf("[DEBUG][INTERNAL][{{lh.kernel}}_PE_%d{%if prog.is_interleave() %}:%d{% endif %}] wirte values arg{{arg.id}}: (", m_PEId{%if prog.is_interleave() %}, SUB_TILE_ID{% endif %});
                         for (int ri = 0; ri < {% if prog.is_interleave() -%} subtile_full_vector_factor {%- else -%} vector_factor {%- endif %}; ri++)
                         {
+                    {% if target == "hls" %}
                             ops::hls::DataConv tmpConverter;
                             tmpConverter.i = arg{{arg.id}}_update_val.range((ri + 1)*s_datatype_size - 1, ri * s_datatype_size);
                             printf("%f ", tmpConverter.f);
+                    {% else %}
+                            printf("%f ", arg{{arg.id}}_update_val[ri]);
+                    {% endif %}
                         }
                         printf(")\n");
                 {% endif %}
@@ -1227,10 +1368,30 @@ public:
         {% for arg in lh.args|ops_dat %}
             {% if (arg is ops_write or arg is ops_rw)  %}
                 {% if prog.is_interleave() %}
+                    {% if target == "hls" %}
                     {{hls_stream_name_t2(arg, "l_wr")-}} << arg{{arg.id}}_update_val.range(half_{{axis_data_width_name(arg)}}_min_1, 0);
                     {{hls_stream_name_t2(arg, "u_wr")-}} << arg{{arg.id}}_update_val.range({{axis_data_width_name(arg)}}_min_1, half_{{axis_data_width_name(arg)}});
+                    {% else %}
+                    half_{{widen_dt_name(arg)}} arg{{arg.id}}_tmp_l_wr_val;
+                    half_{{widen_dt_name(arg)}} arg{{arg.id}}_tmp_u_wr_val;
+
+                    for (unsigned short v_id = 0; v_id < half_{{vector_factor_name(arg)}}; v_id++) {
+                        #pragma HLS UNROLL
+                        arg{{arg.id}}_tmp_l_wr_val[v_id] = arg{{arg.id}}_update_val[v_id];
+                    }
+                    for (unsigned short v_id = 0; v_id < half_{{vector_factor_name(arg)}}; v_id++) {
+                        #pragma HLS UNROLL
+                        arg{{arg.id}}_tmp_u_wr_val = arg{{arg.id}}_update_val[half_{{vector_factor_name(arg)}} + v_id];
+                    }
+                    {{hls_stream_name_t2(arg, "l_wr")-}}.write(arg{{arg.id}}_tmp_l_wr_val);
+                    {{hls_stream_name_t2(arg, "u_wr")-}}.write(arg{{arg.id}}_tmp_u_wr_val);
+                    {% endif %}
                 {% else %}
+                    {% if target == "hls" %}
                         {{hls_stream_name_t2(arg, "wr")}} <<  arg{{arg.id}}_update_val;
+                    {% else %}
+                        {{hls_stream_name_t2(arg, "wr")}}.write(arg{{arg.id}}_update_val);
+                    {% endif %}
                 {% endif %}
             {% endif %}
         {% endfor %}
@@ -1251,7 +1412,12 @@ template <unsigned short NUM_SUB_TILE, unsigned short SUB_TILE_ID>
 static void kernel_{{lh.kernel}}_PE(
     const unsigned short& PEId_offset,
     const unsigned short& PEId_i,
+    {% if target == "hls" %}
     const ops::hls::{{"StencilConfigCoreSingleTile" if isTiling else "StencilConfigCore"}}& stencilConfig,
+    {% else %}
+    const unsigned int outer_itr,
+    {{sconf.stencil_config()}},
+    {% endif %}
     {% for arg in lh.args|ops_not_idx %}
         {% if loop.last %}
             {% if consts or lh.args|ops_gbl|length > 0 %}
@@ -1266,27 +1432,27 @@ static void kernel_{{lh.kernel}}_PE(
             //{{lh.dats[arg.dat_id].ptr}}
             {% if (arg is ops_read) %}
                 {% if prog.is_interleave() %}
-            half_{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "l_rd")-}},
-            half_{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "u_rd")-}}{{"," if (not loop.last or not last_check)}}
+            half_{{"in_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "l_rd")-}},
+            half_{{"in_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "u_rd")-}}{{"," if (not loop.last or not last_check)}}
                 {% else %}
-            {{widen_stream_dt_name(arg)}}& {{hls_stream_name(arg)-}}{{"," if (not loop.last or not last_check)}}
+            {{"in_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name(arg)-}}{{"," if (not loop.last or not last_check)}}
                 {% endif %}
             {% elif arg is ops_write %}
                 {% if prog.is_interleave() %}
-            half_{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "l_wr")-}},
-            half_{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "u_wr")-}}{{"," if (not loop.last or not last_check)}}
+            half_{{"out_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "l_wr")-}},
+            half_{{"out_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "u_wr")-}}{{"," if (not loop.last or not last_check)}}
                 {% else %}
-            {{widen_stream_dt_name(arg)}}& {{hls_stream_name(arg)-}}{{"," if (not loop.last or not last_check)}}
+            {{"out_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name(arg)-}}{{"," if (not loop.last or not last_check)}}
                 {% endif %}
             {% else %}
                 {% if prog.is_interleave() %}
-            half_{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "l_rd")-}},
-            half_{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "u_rd")-}},
-            half_{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "l_wr")-}},
-            half_{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "u_wr")-}}{{"," if (not loop.last or not last_check)}}
+            half_{{"in_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "l_rd")-}},
+            half_{{"in_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "u_rd")-}},
+            half_{{"out_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "l_wr")-}},
+            half_{{"out_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "u_wr")-}}{{"," if (not loop.last or not last_check)}}
                 {% else %}
-            {{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "rd")-}},
-            {{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "wr")-}}{{"," if (not loop.last or not last_check)}}
+            {{"in_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "rd")-}},
+            {{"out_" if target == "tapa"}}{{widen_stream_dt_name(arg)}}& {{hls_stream_name_t2(arg, "wr")-}}{{"," if (not loop.last or not last_check)}}
                 {% endif %}
             {% endif %}
         {% endif %}
@@ -1310,6 +1476,11 @@ static void kernel_{{lh.kernel}}_PE(
     {% endfor %}
 )
 {
+    {% if target == "tapa" %}
+    ops::hls::{{"StencilConfigCoreSingleTile" if isTiling else "StencilConfigCore"}} stencilConfig;
+    {{sconf.stencil_config_create("stencilConfig")}}
+    {% endif %}
+
     Stencil_{{lh.kernel}}{% if prog.is_interleave() %}<NUM_SUB_TILE, SUB_TILE_ID>{% endif %} stencil;
 
     {% if is_list_itr_par %}
@@ -1328,6 +1499,9 @@ static void kernel_{{lh.kernel}}_PE(
     printf("[KERNEL_DEBUG][%d{%if prog.is_interleave() %}:%d{% endif %}]|%s| starting stencil kernel PE\n", PEId, {%if prog.is_interleave() %}SUB_TILE_ID, {% endif%}__func__);
 #endif
 
+    {% if target == "tapa" %}
+    for (unsigned int itr = 0; itr < outer_itr; itr++) {
+    {% endif %}
     stencil.stencilRun(
         {% for arg in lh.args|ops_not_idx %}
         {% if loop.last %}
@@ -1372,6 +1546,9 @@ static void kernel_{{lh.kernel}}_PE(
     {% for const in consts %}
             {{const.ptr}}{{"," if not loop.last}}
     {% endfor %});
+    {% if target == "tapa" %}
+    }
+    {% endif %}
     
 
 #ifdef DEBUG_LOG

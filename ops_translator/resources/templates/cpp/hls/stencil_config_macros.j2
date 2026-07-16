@@ -1,0 +1,46 @@
+
+{% macro stencil_config() %}
+    {% for idx in range(prog.ndim)%}
+        const unsigned short stencilConfig_grid_size_{{idx}},
+    {% endfor %}
+        const unsigned short stencilConfig_dim,
+        const unsigned int stencilConfig_total_itr,
+    {% for idx in range(prog.ndim)%}
+        const unsigned short stencilConfig_lower_limit_{{idx}},
+    {% endfor %}
+    {% for idx in range(prog.ndim)%}
+        const unsigned short stencilConfig_upper_limit_{{idx}},
+    {% endfor %}
+        const unsigned short stencilConfig_outer_loop_limit,
+        const unsigned short stencilConfig_batch_size
+{% endmacro %}
+{% macro stencil_config_args() %}
+    {% for idx in range(prog.ndim)%}
+        stencilConfig_grid_size_{{idx}},
+    {% endfor %}
+        stencilConfig_dim,
+        stencilConfig_total_itr,
+    {% for idx in range(prog.ndim)%}
+        stencilConfig_lower_limit_{{idx}},
+    {% endfor %}
+    {% for idx in range(prog.ndim)%}
+        stencilConfig_upper_limit_{{idx}},
+    {% endfor %}
+        stencilConfig_outer_loop_limit,
+        stencilConfig_batch_size
+{% endmacro %}
+{% macro stencil_config_create(stencil_config_name)%}
+        {{stencil_config_name}}.dim = stencilConfig_dim;
+        {% for idx in range(prog.ndim)%}
+        {{stencil_config_name}}.grid_size[{{idx}}] = stencilConfig_grid_size_{{idx}};
+        {% endfor %}
+        {% for idx in range(prog.ndim)%}
+        {{stencil_config_name}}.lower_limit[{{idx}}] = stencilConfig_lower_limit_{{idx}};
+        {% endfor %}
+        {% for idx in range(prog.ndim)%}
+        {{stencil_config_name}}.upper_limit[{{idx}}] = stencilConfig_upper_limit_{{idx}};
+        {% endfor %}
+        {{stencil_config_name}}.total_itr = stencilConfig_total_itr;
+        {{stencil_config_name}}.outer_loop_limit = stencilConfig_outer_loop_limit;
+        {{stencil_config_name}}.batch_size = stencilConfig_batch_size;
+{% endmacro %}
