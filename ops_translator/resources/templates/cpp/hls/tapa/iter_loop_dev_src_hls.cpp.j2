@@ -1,5 +1,6 @@
 {% extends "cpp/hls/tapa/iter_loop_dev_inc_hls.hpp.j2" %}
 {% import "cpp/hls/iter_loop_dev_macros.j2" as lmac with context %}
+{% import "cpp/hls/stencil_config_macros.j2" as sconf with context %}
 
 {% set iter_par_factor_val_tmp = [] %}
 {% if slr_iter_par_fact is defined %}
@@ -15,12 +16,60 @@
 
 
 {% block datamovement %}
+void axis_to_strm(const unsigned int outer_itr, const unsigned int total_itr,const unsigned short bsize,
+        ::tapa::istream<::tapa::vec_t<stencil_type, {{config["vector_factor"]}}>>& axis_in, 
+        ::tapa::ostream<::tapa::vec_t<stencil_type, {{config["vector_factor"]}}>>& hls_out) {
+
+    unsigned int total_outer_itr = outer_itr * bsize;
+#ifdef DEBUG_LOG
+    printf("[KERNEL_DEBUG]|%s| Starting axis_to_stream. outer_iter: %d, bsize: %d, total_outer_itr: %d, total_itr: %d \n",__func__, outer_itr, bsize, total_outer_itr, total_itr);
+#endif
+
+    for (unsigned int i = 0; i < total_outer_itr; i++) {
+        for (unsigned int j = 0; j < total_itr; j++)
+        {
+            auto data = axis_in.read();
+#ifdef DEBUG_LOG
+            printf("[KERNEL_DEBUG]|%s| Read itr: %d, trans_id: %d, in_trans val: (",__func__, i, j);
+            for (int j = 0; j < vector_factor; j++) {
+                printf(" %f,", data[j]);
+            }
+            printf(")\n");
+#endif  
+            hls_out.write(data);
+        }
+    }
+}
+
+void strm_to_axis(const unsigned int outer_itr, const unsigned int total_itr, const unsigned short bsize, 
+        ::tapa::istream<::tapa::vec_t<stencil_type,{{config["vector_factor"]}}>>& hls_in,
+        ::tapa::ostream<::tapa::vec_t<stencil_type,{{config["vector_factor"]}}>>& axis_out) {
+    unsigned int total_outer_itr = outer_itr * bsize;
+
+#ifdef DEBUG_LOG
+    printf("[KERNEL_DEBUG]|%s| Starting axis_to_stream. outer_iter: %d, bsize: %d, total_outer_itr: %d, total_itr: %d \n",__func__, outer_itr, bsize, total_outer_itr, total_itr);
+#endif
+    for (unsigned int i = 0; i < total_outer_itr; i++) {
+        for (unsigned int j = 0; j < total_itr; j++)
+        {
+            auto data = hls_in.read();
+            axis_out.write(data);
+#ifdef DEBUG_LOG
+        printf("[KERNEL_DEBUG]|%s| write itr: %d, trans_id: %d, trans val: (",__func__, i, j);
+        for (int j = 0; j < vector_factor; j++) {
+            printf(" %f,", data[j]);
+        }
+        printf(")\n");
+#endif
+        }
+    }    
+}
 {% endblock %}
 
 {% block joint_PE %}
 void joint_PE_{{ilh.id}}(
         const unsigned short PEId_offset, const unsigned short PEId_i, const unsigned int outer_itr, 
-    {{stencil_config()}},
+    {{sconf.stencil_config()}},
     {% for const_arg in ilh.joint_args|ops_gbl%}
         const {{arg.typ}} {{get_arg_gbl_name(const_arg)}},
     {% endfor %}
@@ -114,8 +163,8 @@ void joint_PE_{{ilh.id}}(
             {% endfor %}
         {% else %}
     kernel_{{lh.kernel}}_PE(
-            PEId_offset, i, outer_itr,
-            {{stencil_config_args()}},
+            PEId_offset, PEId_i, outer_itr,
+            {{sconf.stencil_config_args()}},
             {% set prev_arg_str = [""] %}
             {% for arg_str in ilh.PE_args[loop_idx]%}
                 {% if loop.last %}
