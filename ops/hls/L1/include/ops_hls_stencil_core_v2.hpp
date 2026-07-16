@@ -40,10 +40,10 @@ class StencilCoreV2
     	static constexpr unsigned short s_datatype_bytes = sizeof(T);
     	static constexpr unsigned short s_mask_width = VEC_FACTOR * s_datatype_bytes;
         static constexpr unsigned short s_singe_index_size = size_singleIndex;
-        typedef ap_uint<s_axis_width> widen_dt;
-        typedef ap_uint<s_mask_width> mask_dt;
-        typedef ::hls::stream<widen_dt> widen_stream_dt;
-        typedef ::hls::stream<mask_dt> mask_stream_dt;
+        // typedef ap_uint<s_axis_width> widen_dt;
+        // typedef ap_uint<s_mask_width> mask_dt;
+        // typedef ::hls::stream<widen_dt> widen_stream_dt;
+        // typedef ::hls::stream<mask_dt> mask_stream_dt;
 
         typedef typename TypeSelector<TILED, StencilConfigCoreSingleTile, StencilConfigCore>::Result configType;
 
