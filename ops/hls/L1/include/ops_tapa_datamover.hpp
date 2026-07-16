@@ -488,6 +488,52 @@ void stream2streamStepup(::tapa::istream<::tapa::vec_t<T, STREAM1_VEC_FACTOR>>& 
 #endif
 }
 
+/**
+ * @brief   stream_terminate reads from a TAPA istream and intentionally discards the data.
+ * This acts as a sink to consume stream transactions and prevent upstream deadlocks.
+ * * @tparam T : C++ base element type of the vectorized interfaces
+ * @tparam VEC_FACTOR : Number of vectorized elements of the TAPA stream port
+ * @tparam IN_ITR: II configuration of the read loop (default 1 for maximum throughput)
+ *
+ * @param strm_in : Input TAPA istream
+ * @param num_trans : Number of stream transactions to read and discard
+ */
+template <typename T, unsigned int VEC_FACTOR, unsigned int IN_ITR=1>
+void terminate(::tapa::istream<::tapa::vec_t<T, VEC_FACTOR>>& strm_in,
+                      const unsigned int num_trans)
+{
+#ifdef DEBUG_LOG_PRINT
+#ifndef __SYNTHESIS__
+    printf("|HLS DEBUG_LOG| %s | Starting stream termination. num_transaction: %d\n", 
+            __func__, num_trans);
+    printf("====================================================================================\n");
+#endif
+#endif
+
+    for (unsigned int i = 0; i < num_trans; i++)
+    {
+        #pragma HLS PIPELINE II=IN_ITR
+        auto tmp = strm_in.read();
+
+#ifdef DEBUG_LOG_PRINT
+#ifndef __SYNTHESIS__
+        printf("|HLS DEBUG_LOG| %s | discarding index: %d, val=(\n", __func__, i);
+
+        for (unsigned k = 0; k < VEC_FACTOR; k++)
+        {
+            printf("%f,", static_cast<double>(tmp[k]));
+        }
+        printf(")\n");
+#endif
+#endif
+    }
+
+#ifdef DEBUG_LOG_PRINT
+#ifndef __SYNTHESIS__
+    printf("|HLS DEBUG_LOG|%s| exiting.\n", __func__);
+#endif
+#endif
+}
 
 }
 }
