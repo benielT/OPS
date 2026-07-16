@@ -1,20 +1,6 @@
+{% import "cpp/hls/iter_loop_datamover_macros.j2" as lmac %}
 {% macro maxi_name(arg) -%}
 arg{{arg.id}}_{{"in" if arg is ops_read}}{{"out" if arg is ops_write}}{{"inout" if arg is ops_rw}}
-{%- endmacro -%}
-{% macro axis_name(arg) -%}
-    {%- if arg is not ops_rw -%}
-arg{{arg.id}}_axis_{{"out" if (arg is ops_read) else ("in" if (arg is ops_write))}}
-    {%- endif -%}
-{%- endmacro -%}
-{% macro axis_name_t2(arg, suffix) -%}
-arg{{arg.id}}_axis_{{suffix}}
-{%- endmacro -%}
-{% macro axis_name_t3(arg, infix, suffix=none) -%}
-    {%- if arg is not ops_rw and suffix==none -%}
-arg{{arg.id}}_{{infix}}_axis_{{"out" if (arg is ops_read) else ("in" if (arg is ops_write))}}
-    {%- else -%}
-arg{{arg.id}}_{{infix}}_axis_{{suffix}}
-    {%- endif -%}
 {%- endmacro -%}
 {% macro axis_data_width(arg) -%}
     {%- if ilh.dats[arg.dat_id][0].isMultiDim() -%}
@@ -64,22 +50,22 @@ memconfig
         {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
             {% if prog.is_interleave() %}
                 {% for tile in range(config["tile_banks"])%}
-        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{axis_name_t3(arg, tile)-}}{{"," if not (loop.last and first_loop_last)}}
+        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{lmac.axis_name_t3(arg, tile)-}}{{"," if not (loop.last and first_loop_last)}}
                 {% endfor %}
             {% else %}
-        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{axis_name(arg)-}}{{"," if not loop.last}}
+        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{lmac.axis_name(arg)-}}{{"," if not loop.last}}
             {% endif %}
         {% else %}
             {% if prog.is_interleave() %}
                 {% for tile in range(config["tile_banks"])%}
-        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{axis_name_t3(arg, tile, "out")-}},
+        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{lmac.axis_name_t3(arg, tile, "out")-}},
                 {% endfor %}
                 {% for tile in range(config["tile_banks"])%}
-        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{axis_name_t3(arg, tile, "in")-}}{{"," if not (loop.last and first_loop_last)}}
+        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{lmac.axis_name_t3(arg, tile, "in")-}}{{"," if not (loop.last and first_loop_last)}}
                 {% endfor %}
             {% else %}
-        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{axis_name_t2(arg, "out")-}},
-        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{axis_name_t2(arg, "in")-}}{{"," if not loop.last}}
+        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{lmac.axis_name_t2(arg, "out")-}},
+        hls::stream <ap_axiu<{{axis_data_width(arg)-}},0,0,0>>& {{lmac.axis_name_t2(arg, "in")-}}{{"," if not loop.last}}
             {% endif %}
         {% endif %}
     {% endfor %}
@@ -90,22 +76,22 @@ memconfig
             {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
                 {% if prog.is_interleave() %}
                     {% for tile in range(config["tile_banks"])%}
-                {{axis_name_t3(arg, tile)-}}{{"," if not (loop.last and first_loop_last)}}
+                {{lmac.axis_name_t3(arg, tile)-}}{{"," if not (loop.last and first_loop_last)}}
                     {% endfor %}
                 {% else %}
-                {{axis_name(arg)-}}{{"," if not loop.last}}
+                {{lmac.axis_name(arg)-}}{{"," if not loop.last}}
                 {% endif %}
             {% else %}
                 {% if prog.is_interleave() %}
                     {% for tile in range(config["tile_banks"]) %}
-                {{axis_name_t3(arg, tile, "out")-}},
+                {{lmac.axis_name_t3(arg, tile, "out")-}},
                     {% endfor %}
                     {% for tile in range(config["tile_banks"]) %}
-                {{axis_name_t3(arg, tile, "in")-}}{{"," if not loop.last}}
+                {{lmac.axis_name_t3(arg, tile, "in")-}}{{"," if not loop.last}}
                     {% endfor %}
                 {% else %}
-                {{axis_name_t2(arg, "out")-}},
-                {{axis_name_t2(arg, "in")-}}{{"," if not loop.last}}
+                {{lmac.axis_name_t2(arg, "out")-}},
+                {{lmac.axis_name_t2(arg, "in")-}}{{"," if not loop.last}}
                 {% endif %}
             {% endif %}
         {% endfor %}
