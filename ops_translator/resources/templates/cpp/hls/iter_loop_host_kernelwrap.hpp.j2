@@ -528,7 +528,7 @@ void tapa_kernelwrapper_outerloop_{{ilh.id}}(
     {% endif %}
     {% endfor %}
 
-    tapa::invoke(sim_mega_kernel_{{ilh.id}}, ops::hls::FPGA::getInstance()->getProgramName().c_str(),
+    ::tapa::invoke(sim_mega_kernel_{{ilh.id}}, ops::hls::FPGA::getInstance()->getProgramName().c_str(),
             num_beats, num_of_pkts, adjusted_outer_iter-1, adjusted_outer_iter,
         {% for idx in range(ndim)%}
             read_stencilConfig.grid_size[{{idx}}],
