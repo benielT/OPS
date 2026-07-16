@@ -15,4 +15,5 @@
   #include "../../common/include/ops_hls_utils.hpp"
   #include "../../common/include/ops_hls_common_memconfig.hpp"
   #include "../../L1/include/ops_tapa_datamover.hpp"
+  #include "../../L1/include/ops_hls_stencil_core_v2.hpp"
   #endif
