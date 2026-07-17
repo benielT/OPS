@@ -516,7 +516,7 @@ else
     TAPA_DEVICE_TARGET := ./tapa/build/$(HLS_TARGET_MODE)/$(APP).xclbin
 endif
 
-$(APP)_tapa: Makefile .generated_tapa ./tapa/build/$(HLS_TARGET_MODE)/$(APP)_host ./tapa/build/$(HLS_TARGET_MODE)/$(APP).xclbin
+$(APP)_tapa: Makefile .generated_tapa ./tapa/build/$(HLS_TARGET_MODE)/$(APP)_host $(TAPA_DEVICE_TARGET)
 		@echo ""
 		@echo ""
 		@echo "Building ${APP}_tapa"
