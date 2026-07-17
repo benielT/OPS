@@ -558,11 +558,11 @@ $(APP)_tapa: Makefile .generated_tapa ./tapa/build/$(HLS_TARGET_MODE)/$(APP)_hos
 
 		@if [ -n "$(OPS_HLS_XSA_PLATFORM)" ]; then \
 			echo "Building XSA platform"; \
-			$(VPP) --link -s -O3 $(VPP_LINK_FLAGS) --temp_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link --log_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/logs --config tapa/host/xrt.cfg -o ./tapa/build/$(HLS_TARGET_MODE)/$(APP).xsa  ${patsubst %.cpp, %.xo, ${patsubst ./tapa/device/src/%, ./tapa/build/$(HLS_TARGET_MODE)/%, $(shell ls ./tapa/device/src/*.cpp 2>/dev/null)}}; \
-			$(VPP) --package -s -O3 --target $(HLS_TARGET_MODE) --platform $(PLATFORM) --temp_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link --log_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/logs ./tapa/build/$(HLS_TARGET_MODE)/$(APP).xsa -o "$@"; \
+			$(VPP) --link -s -O3 $(VPP_LINK_FLAGS) --temp_dir tapa/build/$(HLS_TARGET_MODE)/temp_dir/link --log_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/logs --config tapa/host/xrt.cfg -o ./tapa/build/$(HLS_TARGET_MODE)/$(APP).xsa  ${patsubst %.cpp, %.xo, ${patsubst ./tapa/device/src/%, ./tapa/build/$(HLS_TARGET_MODE)/%, $(shell ls ./tapa/device/src/*.cpp 2>/dev/null)}}; \
+			$(VPP) --package -s -O3 --target $(HLS_TARGET_MODE) --platform $(PLATFORM) --temp_dir tapa/build/$(HLS_TARGET_MODE)/temp_dir/link --log_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/logs ./tapa/build/$(HLS_TARGET_MODE)/$(APP).xsa -o "$@"; \
 		else \
 			echo "Building non-XSA platform"; \
-			$(VPP) --link -s -O3 $(VPP_LINK_FLAGS) --temp_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link --log_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/logs --config tapa/host/xrt.cfg -o "$@"  ${patsubst %.cpp, %.xo, ${patsubst ./tapa/device/src/%, ./tapa/build/$(HLS_TARGET_MODE)/%, $(shell ls ./tapa/device/src/*.cpp 2>/dev/null)}}; \
+			$(VPP) --link -s -O3 $(VPP_LINK_FLAGS) --temp_dir tapa/build/$(HLS_TARGET_MODE)/temp_dir/link --log_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/logs --config tapa/host/xrt.cfg -o "$@"  ${patsubst %.cpp, %.xo, ${patsubst ./tapa/device/src/%, ./tapa/build/$(HLS_TARGET_MODE)/%, $(shell ls ./tapa/device/src/*.cpp 2>/dev/null)}}; \
 		fi
 
 .PHONY: build_tapa_host
