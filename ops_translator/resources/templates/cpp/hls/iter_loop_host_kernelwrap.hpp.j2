@@ -17,8 +17,10 @@
 #include "../../common/include/common_config.hpp"
 
 {% if target == "tapa" %}
+#if defined(TAPA_SW_EMU) || defined(TAPA_HW_EMU)
 #include <tapa.h>
 #include "../../sim/sim_mega_kernel_{{ilh.id}}.hpp"
+#endif
 {% endif %}
 {% endblock %}
 
