@@ -693,7 +693,7 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
                 if args.verbose:
                     print(f"Generated iter loop device kernel src {j} of {len(app.uniqueLoops())}: {path}")
     
-        if target_config["max_SLR_count"] == 3 and target_config["SLR_count"] >= 2:
+        if target_config["max_SLR_count"] == 3 and target_config["SLR_count"] >= 2 and scheme.target.name == "hls":
             # Generate reapeater if data-path from SLR2 to SLR0
             # def genIterLoopRepeater(
             #     self,
