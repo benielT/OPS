@@ -4,14 +4,20 @@
 
 {% set iter_par_factor_val_tmp = [] %}
 {% if slr_iter_par_fact is defined %}
-{% set _ = iter_par_factor_val_tmp.append(slr_iter_par_fact) %}
+{% set _ = iter_par_factor_val_tmp.append(config["iter_par_factor"][slr_iter_par_fact]) %}
+{% set strm_id = 'ker' ~ ilh.id ~ '_' ~ slr_iter_par_fact %}
 {% else %}
 {% set _ = iter_par_factor_val_tmp.append(config["iter_par_factor"]) %}
+{% set strm_id = 'ker' ~ ilh.id %}
 {% endif %}
 {% set iter_par_factor_val = iter_par_factor_val_tmp.pop() %}
 
 {% block headers %}
+{% if slr_iter_par_fact is defined %}
+#include <kernel_outerloop_{{ilh.id}}_{{slr_iter_par_fact}}.hpp>
+    {% else %}
 #include <kernel_outerloop_{{ilh.id}}.hpp>
+    {% endif %} 
 {% endblock %}
 
 
@@ -222,29 +228,29 @@ void joint_PE_{{ilh.id}}(
             {% if prog.is_interleave() %}
                 {% for tile in range(config["tile_banks"]) %}
                     {% if arg is ops_read %}
-    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, 8, 4096> arg{{arg.id}}_in_intl_strm_{{tile}}("arg{{arg.id}}_in_intl_strm_{{tile}}");
+    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, 8, 4096> arg{{arg.id}}_in_intl_strm_{{tile}}("{{strm_id}}_arg{{arg.id}}_in_intl_strm_{{tile}}");
                     {% else %}
-    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, 8, 4096> arg{{arg.id}}_out_intl_strm_{{tile}}("arg{{arg.id}}_out_intl_strm_{{tile}}");
+    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, 8, 4096> arg{{arg.id}}_out_intl_strm_{{tile}}("{{strm_id}}_arg{{arg.id}}_out_intl_strm_{{tile}}");
                     {% endif %}
                 {% endfor %}
             {% else %}
                 {% if arg is ops_read %}
-    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, 8, 4096> arg{{arg.id}}_in_intl_strm("arg{{arg.id}}_in_intl_strm");
+    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, 8, 4096> arg{{arg.id}}_in_intl_strm("{{strm_id}}_arg{{arg.id}}_in_intl_strm");
                 {% else %}
-    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, 8, 4096> arg{{arg.id}}_out_intl_strm("arg{{arg.id}}_out_intl_strm");
+    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, 8, 4096> arg{{arg.id}}_out_intl_strm("{{strm_id}}_arg{{arg.id}}_out_intl_strm");
                 {% endif %}
             {% endif %}
         {% else %}
             {% if prog.is_interleave() %}
                 {% for tile in range(config["tile_banks"]) %}
-    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, 8, 4096> arg{{arg.id}}_in_intl_strm_{{tile}}("arg{{arg.id}}_in_intl_strm_{{tile}}");
+    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, 8, 4096> arg{{arg.id}}_in_intl_strm_{{tile}}("{{strm_id}}_arg{{arg.id}}_in_intl_strm_{{tile}}");
                 {% endfor %}
                 {% for tile in range(config["tile_banks"]) %}
-    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, 8, 4096> arg{{arg.id}}_out_intl_strm_{{tile}}("arg{{arg.id}}_out_intl_strm_{{tile}}");
+    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, 8, 4096> arg{{arg.id}}_out_intl_strm_{{tile}}("{{strm_id}}_arg{{arg.id}}_out_intl_strm_{{tile}}");
                 {% endfor %}
             {% else %}
-    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, 8, 4096> arg{{arg.id}}_in_intl_strm("arg{{arg.id}}_in_intl_strm");
-    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, 8, 4096> arg{{arg.id}}_out_intl_strm("arg{{arg.id}}_out_intl_strm);
+    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, 8, 4096> arg{{arg.id}}_in_intl_strm("{{strm_id}}_arg{{arg.id}}_in_intl_strm");
+    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, 8, 4096> arg{{arg.id}}_out_intl_strm("{{strm_id}}_arg{{arg.id}}_out_intl_strm);
             {% endif %}
         {% endif %}
     {% endfor %}
@@ -256,10 +262,10 @@ void joint_PE_{{ilh.id}}(
             {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw %}
                 {% if prog.is_interleave() %}
                     {% for tile in range(config["tile_banks"]) %}
-    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, {{config["hls_interconnect_buff_size"] + 2}}, 4096> arg{{arg.id}}_{{ilh.getSwapArg(arg).id}}_PE_{{iter}}_{{iter+1}}_strm_{{tile}}("arg{{arg.id}}_{{ilh.getSwapArg(arg).id}}_PE_{{iter}}_{{iter+1}}_strm_{{tile}}");
+    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, {{config["hls_interconnect_buff_size"] + 2}}, 4096> arg{{arg.id}}_{{ilh.getSwapArg(arg).id}}_PE_{{iter}}_{{iter+1}}_strm_{{tile}}("{{strm_id}}_arg{{arg.id}}_{{ilh.getSwapArg(arg).id}}_PE_{{iter}}_{{iter+1}}_strm_{{tile}}");
                     {% endfor %}
                 {% else %}
-    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, {{config["hls_interconnect_buff_size"] + 2}}, 4096> arg{{arg.id}}_{{ilh.getSwapArg(arg).id}}_PE_{{iter}}_{{iter+1}}_strm("arg{{arg.id}}_{{ilh.getSwapArg(arg).id}}_PE_{{iter}}_{{iter+1}}_strm");
+    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, {{config["hls_interconnect_buff_size"] + 2}}, 4096> arg{{arg.id}}_{{ilh.getSwapArg(arg).id}}_PE_{{iter}}_{{iter+1}}_strm("{{strm_id}}_arg{{arg.id}}_{{ilh.getSwapArg(arg).id}}_PE_{{iter}}_{{iter+1}}_strm");
                 {% endif %}
             {% endfor %}
         {% endfor %}

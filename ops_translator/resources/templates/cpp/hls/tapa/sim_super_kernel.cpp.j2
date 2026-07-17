@@ -40,9 +40,9 @@
     {% for itr in range(config["SLR_count"] - 1) %}
         {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw %}
             {% if prog.is_interleave() %}
-        ::tapa::streams<::tapa::vec_t<stencil_type, vector_factor>, {{config["tile_banks"]}}, {{config["axis_interconnect_buff_size"]}}> arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_SLR_inter_{{itr}}_{{itr+1}}("arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_SLR_inter_{{itr}}_{{itr+1}}");
+        ::tapa::streams<::tapa::vec_t<stencil_type, vector_factor>, {{config["tile_banks"]}}, {{config["axis_interconnect_buff_size"]}}> arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_SLR_inter_{{itr}}_{{itr+1}}("supper_arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_SLR_inter_{{itr}}_{{itr+1}}");
             {% else %}
-        ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, {{config["axis_interconnect_buff_size"]}}, {{config["maxi_depth"]}}> arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_SLR_inter_{{itr}}_{{itr+1}}("arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_SLR_inter_{{itr}}_{{itr+1}}");
+        ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, {{config["axis_interconnect_buff_size"]}}, {{config["maxi_depth"]}}> arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_SLR_inter_{{itr}}_{{itr+1}}("supper_arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_SLR_inter_{{itr}}_{{itr+1}}");
             {% endif %}
         {% endfor %}
     {% endfor %}

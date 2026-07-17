@@ -570,9 +570,9 @@ build_tapa_host:
 	rm -f ./tapa/build/$(HLS_TARGET_MODE)/$(APP)_host
 	make ./tapa/build/$(HLS_TARGET_MODE)/$(APP)_host
 
-.PHONY: run_tapa_app
-run_tapa_app:
-	bash ./run_script_tapa.sh $(HLS_TARGET_MODE) $(APP) $(PLATFORM) $(CXXFLAGS)
+#.PHONY: run_tapa_app
+#run_tapa_app:
+#	bash ./run_script_tapa.sh $(HLS_TARGET_MODE) $(APP) $(PLATFORM) $(CXXFLAGS)
 
 #=====================================================================================================================================================================
 #

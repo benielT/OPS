@@ -524,7 +524,7 @@ void tapa_kernelwrapper_outerloop_{{ilh.id}}(
     //Initiating split for tiled altHostBuffers
     {% for arg in ilh.joint_args|ops_dat %}
     {% if arg is ops_read_or_rw %}
-    arg{{arg.id}}.set_as_arg();
+    //arg{{arg.id}}.set_as_arg();
     {% endif %}
     {% endfor %}
 
