@@ -542,7 +542,7 @@ $(APP)_tapa: Makefile .generated_tapa ./tapa/build/$(HLS_TARGET_MODE)/$(APP)_hos
 			$(foreach src,$(TOP_MODULE_CPPS),-f $(src)) \
 			$(foreach flag, $(TAPA_HLS_DEVICE_INC) -I./tapa/device/include/ -I./tapa/sim/,--cflags $(flag));
 
-./hls/build/$(HLS_TARGET_MODE)/$(APP).xclbin: 
+./tapa/build/$(HLS_TARGET_MODE)/$(APP).xclbin: 
 		@echo ""
 		@echo ""
 		@echo "Building ${APP}.xclbin"
