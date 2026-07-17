@@ -8,6 +8,131 @@
 {% endblock%}
 
 {% block internel_modules %}
+#ifdef LOOPBACK_DESIGN
+
+// TAPA PARSER BYPASS COMMENT - DO NOT REMOVE THIS
+void task_stepdown_lb(
+        ::tapa::istream<::tapa::vec_t<stencil_type, mem_vector_factor>>& strm_in,
+        ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& strm_out,
+        const unsigned int num_beats) {
+
+        ops::tapa::stream2streamStepdown<stencil_type, mem_vector_factor, vector_factor>(strm_in, strm_out, num_beats);
+}
+
+void task_stepup_lb(
+        ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& strm_in,
+        ::tapa::ostream<::tapa::vec_t<stencil_type, mem_vector_factor>>& strm_out,
+        const unsigned int num_beats) {
+
+        ops::tapa::stream2streamStepup<stencil_type, vector_factor, mem_vector_factor>(strm_in, strm_out, num_beats);
+}
+
+void task_terminate_lb(
+        ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& strm_in,
+        const unsigned int num_axis_trans) {
+    
+        ops::tapa::terminate<stencil_type, vector_factor>(strm_in, num_axis_trans);
+}
+
+void task_mem2stream_lb(
+#ifdef ASYNC_MOVER
+    ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg0,
+#else
+    ::tapa::mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg0,
+#endif
+    ::tapa::ostream<::tapa::vec_t<stencil_type, mem_vector_factor>>& strm_out,
+    const unsigned int num_beats) 
+{
+#ifdef ASYNC_MOVER
+    ops::tapa::mem2stream<stencil_type, mem_vector_factor, 2>(arg0, strm_out, num_beats);
+#else
+    ops::tapa::mem2stream_blocking<stencil_type, mem_vector_factor, 1>(arg0, strm_out, num_beats);
+#endif
+}  
+
+void task_stream2mem_lb(
+#ifdef ASYNC_MOVER
+    ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg1,
+#else 
+    ::tapa::mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg1,
+#endif
+    ::tapa::istream<::tapa::vec_t<stencil_type, mem_vector_factor>>& strm_in,
+    const unsigned int num_beats) 
+{
+#ifdef ASYNC_MOVER
+    ops::tapa::stream2mem<stencil_type, mem_vector_factor, 2>(arg1, strm_in, num_beats);
+#else
+    ops::tapa::stream2mem_blocking<stencil_type, mem_vector_factor, 1>(arg1, strm_in, num_beats);
+#endif
+}
+
+void hybrid_datamover_router(
+        ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& mem_in,
+        ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& axis_in,
+        ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& axis_out,
+        ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& mem_out,
+        const unsigned int num_trans,
+        const unsigned int outerloop_itr
+#ifdef DEBUG_LOG
+        , const char* debg_str = ""
+#endif
+        )
+{
+#ifdef DEBUG_LOG
+    printf("[KERNEL_DEBUG]|%s|%s| num_trans: %d, outerloop_itr: %d\n", __func__, debg_str, num_trans, outerloop_itr);
+#endif
+    for (unsigned int itr = 0; itr < outerloop_itr+1; itr++) {
+        if (itr == 0 ) {
+#ifdef DEBUG_LOG
+            printf("[KERNEL_DEBUG]|%s|%s| Initial read from memory\n", __func__, debg_str);
+#endif
+            for (unsigned int itr = 0; itr < num_trans; itr++) {
+                #pragma HLS PIPELINE II=1
+                auto data = mem_in.read();
+                axis_out.write(data);
+#ifdef DEBUG_LOG
+            printf("[KERNEL_DEBUG]|%s|%s|read_from_mem| forwarding trans: %d, trans val: (",__func__, debg_str, itr);
+                for (int j = 0; j < vector_factor; j++) {
+                    printf(" %f,", data[j]);
+                }
+                printf(")\n");
+#endif
+            }
+        }
+        else if (itr == outerloop_itr) {
+#ifdef DEBUG_LOG
+            printf("[KERNEL_DEBUG]|%s|%s| Final write to memory\n", __func__, debg_str);
+#endif
+            for (unsigned int itr = 0; itr < num_trans; itr++) {
+                #pragma HLS PIPELINE II=1
+                auto data = axis_in.read();
+                mem_out.write(data);
+#ifdef DEBUG_LOG
+            printf("[KERNEL_DEBUG]|%s|%s|write_to_mem| forwarding trans: %d, trans val: (",__func__, debg_str, itr);
+                for (int j = 0; j < mem_vector_factor; j++) {
+                    printf(" %f,", data[j]);
+                }
+                printf(")\n");
+#endif
+            }
+        }
+        else {
+            for (unsigned int itr = 0; itr < num_trans; itr++) {
+                #pragma HLS PIPELINE II=1
+                auto data = axis_in.read();
+                axis_out.write(data);
+#ifdef DEBUG_LOG
+                printf("[KERNEL_DEBUG]|%s|%s|loopback| forwarding iter: %d, trans: %d, trans val: (",__func__, debg_str, itr, itr);
+                for (int j = 0; j < vector_factor; j++) {
+                    printf(" %f,", data[j]);
+                }
+                printf(")\n");
+#endif
+            }
+        }
+    }
+}
+#else
 void task_stepdown(
         ::tapa::istream<::tapa::vec_t<stencil_type, mem_vector_factor>>& strm_in,
         ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& strm_out,
@@ -37,26 +162,6 @@ void task_terminate(
         ops::tapa::terminate<stencil_type, vector_factor>(strm_in, num_axis_trans);
 }
 
-#ifdef LOOPBACK_DESIGN
-    void hybrid_datamover_router(
-    {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw %}
-        ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& arg{{arg.id}}_mem_in,
-    {% endfor %}
-    {% for arg in ilh.joint_args|ops_dat|ops_write_or_rw %}
-        ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& arg{{arg.id}}_axis_in,
-    {% endfor %}
-    {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw %}
-        ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& arg{{arg.id}}_mem_out,
-    {% endfor %}
-    {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw %}
-        ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& arg{{arg.id}}_axis_out,
-    {% endfor %}
-        const unsigned int num_trans,
-        const unsigned int outerloop_itr)
-{
-
-}
-#else
 void task_pingpong_mem2stream(
     #ifdef ASYNC_MOVER
         ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg0,
@@ -144,9 +249,9 @@ void task_pingpong_stream2mem(
     {% for arg in ilh.joint_args|ops_dat %}
         {% if arg is ops_read_or_rw%}
             {% if prog.is_interleave() %}
-    ::tapa::streams<::tapa::vec_t<stencil_type, mem_vector_factor>, {{config["tile_banks"]}}, {{max(config["num_read_outstanding"], config["num_write_outstanding"]) * max(config["maxi_read_burst_length"], config["maxi_write_burst_length"]) + 2}}> arg{{arg.id}}_read_reduced_mem_strm("arg{{arg.id}}_read_reduced_mem_strm");
+    ::tapa::streams<::tapa::vec_t<stencil_type, vector_factor>, {{config["tile_banks"]}}, {{max(config["num_read_outstanding"], config["num_write_outstanding"]) * max(config["maxi_read_burst_length"], config["maxi_write_burst_length"]) + 2}}> arg{{arg.id}}_read_reduced_mem_strm("arg{{arg.id}}_read_reduced_mem_strm");
             {% else %}
-    ::tapa::stream<::tapa::vec_t<stencil_type, mem_vector_factor>, {{max(config["num_read_outstanding"], config["num_write_outstanding"]) * max(config["maxi_read_burst_length"], config["maxi_write_burst_length"]) + 2}}, {{config["maxi_depth"]}}> arg{{arg.id}}_read_reduced_mem_strm("arg{{arg.id}}_read_reduced_mem_strm");
+    ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, {{max(config["num_read_outstanding"], config["num_write_outstanding"]) * max(config["maxi_read_burst_length"], config["maxi_write_burst_length"]) + 2}}, {{config["maxi_depth"]}}> arg{{arg.id}}_read_reduced_mem_strm("arg{{arg.id}}_read_reduced_mem_strm");
             {% endif %}
         {% endif %}
         {% if arg is ops_write_or_rw %}
@@ -161,49 +266,30 @@ void task_pingpong_stream2mem(
     ::tapa::task()
     {% for arg in ilh.joint_args|ops_dat %}
         {% if arg is ops_read_or_rw %}
-            .invoke(task_mem2stream, arg{{arg.id}}, arg{{arg.id}}_read_mem_strm, num_beats)
+            .invoke(task_mem2stream_lb, arg{{arg.id}}, arg{{arg.id}}_read_mem_strm, num_beats)
         {% endif %}
     {% endfor %}
     {% for arg in ilh.joint_args|ops_dat %}
         {% if arg is ops_read_or_rw %}
-            .invoke(task_stepdown, arg{{arg.id}}_read_mem_strm, arg{{arg.id}}_read_reduced_mem_strm, num_beats)
+            .invoke(task_stepdown_lb, arg{{arg.id}}_read_mem_strm, arg{{arg.id}}_read_reduced_mem_strm, num_beats)
         {% endif %}
     {% endfor %}
-            .invoke(hybrid_datamover_router, num_axis_trans, outerloop_itr, 
-    {% for arg in ilh.joint_args|ops_dat %}
-         {% if arg is ops_read_or_rw %}
-                    arg{{arg.id}}_read_reduced_mem_strm,
-         {% endif %}
+    {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw %}
+            .invoke(hybrid_datamover_router, arg{{arg.id}}_read_reduced_mem_strm, arg{{ilh.getSwapArg(arg).id}}_axis_in, arg{{arg.id}}_axis_out, arg{{ilh.getSwapArg(arg).id}}_write_reduced_mem_strm, num_axis_trans, outerloop_itr)
     {% endfor %}
-    {% for arg in ilh.joint_args|ops_dat %}
-         {% if arg is ops_read_or_rw %}
-                    arg{{arg.id}}_axis_out,
-         {% endif %}
-    {% endfor %}
-    {% for arg in ilh.joint_args|ops_dat %}
-         {% if arg is ops_write_or_rw %}
-                    arg{{arg.id}}_axis_in,
-         {% endif %}
-    {% endfor %}
-    {% for arg in ilh.joint_args|ops_dat %}
-         {% if arg is ops_write_or_rw %}
-                    arg{{arg.id}}_write_reduced_mem_strm{{"," if not loop.last}}
-         {% endif %}
-    {% endfor %}
-            )
     {% for arg in ilh.joint_args|ops_dat|ops_write_or_rw %}
         {% if arg is read_only_rw %}
-        {% endif %}
-            .invoke(task_terminate, arg{{arg.id}}_write_reduced_mem_strm, num_axis_trans)
-    {% endfor %}
-    {% for arg in ilh.joint_args|ops_dat %}
-        {% if arg is ops_write_or_rw and arg is not read_only_rw %}
-            .invoke(task_stepup, arg{{arg.id}}_write_reduced_mem_strm, arg{{arg.id}}_write_mem_strm, num_beats)
+            .invoke(task_terminate_lb, arg{{arg.id}}_write_reduced_mem_strm, num_axis_trans)
         {% endif %}
     {% endfor %}
     {% for arg in ilh.joint_args|ops_dat %}
         {% if arg is ops_write_or_rw and arg is not read_only_rw %}
-            .invoke(task_stream2mem, arg{{arg.id}}_write_mem_strm, num_beats)
+            .invoke(task_stepup_lb, arg{{arg.id}}_write_reduced_mem_strm, arg{{arg.id}}_write_mem_strm, num_beats)
+        {% endif %}
+    {% endfor %}
+    {% for arg in ilh.joint_args|ops_dat %}
+        {% if arg is ops_write_or_rw and arg is not read_only_rw %}
+            .invoke(task_stream2mem_lb,  arg{{arg.id}}, arg{{arg.id}}_write_mem_strm, num_beats)
         {% endif %}
     {% endfor %}
     ;
