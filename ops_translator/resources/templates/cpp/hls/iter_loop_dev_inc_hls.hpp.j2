@@ -1,4 +1,4 @@
-{% import "cpp/hls/iter_loop_dev_macros.j2" as lmac %}
+{% import "cpp/hls/iter_loop_dev_macros.j2" as lmac with context %}
 {% block header_block %}
 #pragma once
     {% for df_node in ilh.get_active_df_graph().getAllLoopNodes() %}

@@ -1,4 +1,4 @@
-{% import "cpp/hls/iter_loop_datamover_macros.j2" as lmac %}
+{% import "cpp/hls/iter_loop_datamover_macros.j2" as lmac with context %}
 {% macro maxi_name(arg) -%}
 arg{{arg.id}}_{{"in" if arg is ops_read}}{{"out" if arg is ops_write}}{{"inout" if arg is ops_rw}}
 {%- endmacro -%}

@@ -1,5 +1,5 @@
+{% import "cpp/hls/iter_loop_datamover_macros.j2" as lmac with context %}
 {% extends "cpp/hls/iter_loop_datamover_dev_inc_hls.hpp.j2" %}
-
 {% block header_block %}
 #include <datamover_outerloop_{{ilh.id}}.hpp>
 {% endblock %}
@@ -30,9 +30,9 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_region_read(
     {%- endfor -%}
     {%- for arg in ilh.joint_args|ops_dat -%}
         {%- if arg is ops_read -%}
-        ,{{"\n"}}        hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{axis_name(arg)}}
+        ,{{"\n"}}        hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{lmac.axis_name(arg)}}
         {%- elif arg is ops_rw -%}
-        ,{{"\n"}}        hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{axis_name_t2(arg, "out")}}
+        ,{{"\n"}}        hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{lmac.axis_name_t2(arg, "out")}}
         {%- endif -%}
     {%- endfor -%})
 {
@@ -59,23 +59,23 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_region_read(
     {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw %}
         {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
             {% if arg is ops_read %}
-    ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm, {{axis_name(arg)}}, {{num_pkts(arg)}});
+    ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm, {{lmac.axis_name(arg)}}, {{num_pkts(arg)}});
             {% elif arg is ops_rw %}
-    ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm, {{axis_name_t2(arg, "out")}}, {{num_pkts(arg)}});
+    ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm, {{lmac.axis_name_t2(arg, "out")}}, {{num_pkts(arg)}});
             {% endif %}
         {% else %}
             {% if arg is ops_read %}
-    ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_strm, {{axis_name(arg)}}, {{num_pkts(arg)}});
+    ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_strm, {{lmac.axis_name(arg)}}, {{num_pkts(arg)}});
             {% elif arg is ops_rw %}
-    ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_strm, {{axis_name_t2(arg, "out")}}, {{num_pkts(arg)}});
+    ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_strm, {{lmac.axis_name_t2(arg, "out")}}, {{num_pkts(arg)}});
             {% endif %}
         {% endif %}
     {% endfor %}
     {#{% for arg in ilh.joint_args|ops_dat %}
         {% if arg is ops_read %}
-    ops::hls::memReadGridV2<mem_data_width, {{axis_data_width(arg)-}}, data_width>(arg{{arg.id}}, {{axis_name(arg)}}, arg{{arg.id}}_gridSize, range);
+    ops::hls::memReadGridV2<mem_data_width, {{axis_data_width(arg)-}}, data_width>(arg{{arg.id}}, {{lmac.axis_name(arg)}}, arg{{arg.id}}_gridSize, range);
         {% elif arg is ops_rw %}
-    ops::hls::memReadGridV2<mem_data_width, {{axis_data_width(arg)-}}, data_width>(arg{{arg.id}}, {{axis_name_t2(arg, "out")}}, arg{{arg.id}}_gridSize, range);
+    ops::hls::memReadGridV2<mem_data_width, {{axis_data_width(arg)-}}, data_width>(arg{{arg.id}}, {{lmac.axis_name_t2(arg, "out")}}, arg{{arg.id}}_gridSize, range);
         {% endif %}
     {% endfor %}#}
 }
@@ -106,9 +106,9 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_region_write(
     {%- endfor -%}
     {%- for arg in ilh.joint_args|ops_dat -%}
         {%- if arg is ops_write -%}
-        ,{{"\n"}}        hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{axis_name(arg)}}
+        ,{{"\n"}}        hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{lmac.axis_name(arg)}}
         {%- elif arg is ops_rw -%}
-        ,{{"\n"}}        hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{axis_name_t2(arg, "in")}}
+        ,{{"\n"}}        hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{lmac.axis_name_t2(arg, "in")}}
         {%- endif -%}
     {%- endfor -%}
         )
@@ -128,19 +128,19 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_region_write(
     {% for arg in ilh.joint_args|ops_dat|ops_write_or_rw %}
         {% if arg is ops_write_or_rw %}
             {% if arg is read_only_rw %}
-    ops::hls::axisTerminate<{{axis_data_width(arg)-}}>({{axis_name_t2(arg, "in")}}, {{num_pkts(arg)}});
+    ops::hls::axisTerminate<{{axis_data_width(arg)-}}>({{lmac.axis_name_t2(arg, "in")}}, {{num_pkts(arg)}});
             {% else %}
                 {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
                     {% if arg is ops_write %}
-    ops::hls::axis2stream<{{axis_data_width(arg)-}}>({{axis_name(arg)}}, arg{{arg.id}}_write_reduced_mem_strm, {{num_pkts(arg)}});
+    ops::hls::axis2stream<{{axis_data_width(arg)-}}>({{lmac.axis_name(arg)}}, arg{{arg.id}}_write_reduced_mem_strm, {{num_pkts(arg)}});
                     {% else %}
-    ops::hls::axis2stream<{{axis_data_width(arg)-}}>({{axis_name_t2(arg, "in")}}, arg{{arg.id}}_write_reduced_mem_strm, {{num_pkts(arg)}});
+    ops::hls::axis2stream<{{axis_data_width(arg)-}}>({{lmac.axis_name_t2(arg, "in")}}, arg{{arg.id}}_write_reduced_mem_strm, {{num_pkts(arg)}});
                     {% endif %}
                 {% else %}
                     {% if arg is ops_write %}
-    ops::hls::axis2stream<{{axis_data_width(arg)-}}>({{axis_name(arg)}}, arg{{arg.id}}_write_mem_strm, {{num_pkts(arg)}});
+    ops::hls::axis2stream<{{axis_data_width(arg)-}}>({{lmac.axis_name(arg)}}, arg{{arg.id}}_write_mem_strm, {{num_pkts(arg)}});
                     {% else %}
-    ops::hls::axis2stream<{{axis_data_width(arg)-}}>({{axis_name_t2(arg, "in")}}, arg{{arg.id}}_write_mem_strm, {{num_pkts(arg)}});
+    ops::hls::axis2stream<{{axis_data_width(arg)-}}>({{lmac.axis_name_t2(arg, "in")}}, arg{{arg.id}}_write_mem_strm, {{num_pkts(arg)}});
                     {% endif %}
                 {% endif %}
             {% endif %}
@@ -160,12 +160,12 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_region_write(
     {% endfor %}
     {#{% for arg in ilh.joint_args|ops_dat %}
         {% if arg is ops_write %}
-    ops::hls::memWriteGridSimpleV2<mem_data_width, {{axis_data_width(arg)-}}, data_width>(arg{{arg.id}}, {{axis_name(arg)}}, arg{{arg.id}}_gridSize, range);
+    ops::hls::memWriteGridSimpleV2<mem_data_width, {{axis_data_width(arg)-}}, data_width>(arg{{arg.id}}, {{lmac.axis_name(arg)}}, arg{{arg.id}}_gridSize, range);
         {% elif arg is ops_rw %}
             {% if arg is read_only_rw %}
-    ops::hls::memWriteGridTerminate<mem_data_width, {{axis_data_width(arg)-}}, data_width>({{axis_name_t2(arg, "in")}}, arg{{arg.id}}_gridSize, range);
+    ops::hls::memWriteGridTerminate<mem_data_width, {{axis_data_width(arg)-}}, data_width>({{lmac.axis_name_t2(arg, "in")}}, arg{{arg.id}}_gridSize, range);
             {% else %}
-    ops::hls::memWriteGridSimpleV2<mem_data_width, {{axis_data_width(arg)-}}, data_width>(arg{{arg.id}}, {{axis_name_t2(arg, "in")}}, arg{{arg.id}}_gridSize, range);
+    ops::hls::memWriteGridSimpleV2<mem_data_width, {{axis_data_width(arg)-}}, data_width>(arg{{arg.id}}, {{lmac.axis_name_t2(arg, "in")}}, arg{{arg.id}}_gridSize, range);
             {% endif %}
         {% endif %}
     {% endfor %}#}
@@ -539,20 +539,20 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
             {% if prog.is_interleave() %}
                 {% for i in range(config["tile_banks"]) %}
-        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm[{{i}}], {% if arg is ops_read %}{{axis_name_t3(arg, i)}}{% else %}{{axis_name_t3(arg, i, "out")}}{% endif %}, num_small_trans);
+        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm[{{i}}], {% if arg is ops_read %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "out")}}{% endif %}, num_small_trans);
                 {% endfor %}
             {% else %}
         {#TODO: small tile case - need to be fixed
-        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm, {% if arg is ops_read %}{{axis_name(arg)}}{% else %}{{axis_name_t2(arg, "out")}}{% endif %}, {%if isTiling %}{% if prog.is_interleave() %}is_small_tile ? num_pkts >> 1 : num_pkts{%else%}num_pkts{%endif%}{% else %}{{num_pkts(arg)}}{% endif %});#}
-        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm, {% if arg is ops_read %}{{axis_name(arg)}}{% else %}{{axis_name_t2(arg, "out")}}{% endif %}, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
+        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm, {% if arg is ops_read %}{{lmac.axis_name(arg)}}{% else %}{{lmac.axis_name_t2(arg, "out")}}{% endif %}, {%if isTiling %}{% if prog.is_interleave() %}is_small_tile ? num_pkts >> 1 : num_pkts{%else%}num_pkts{%endif%}{% else %}{{num_pkts(arg)}}{% endif %});#}
+        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm, {% if arg is ops_read %}{{lmac.axis_name(arg)}}{% else %}{{lmac.axis_name_t2(arg, "out")}}{% endif %}, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
             {% endif %}
         {% else %}
             {% if prog.is_interleave() %}
                 {% for i in range(config["tile_banks"]) %}
-        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_redirect_strm[{{i}}], {% if arg is ops_read %}{{axis_name_t3(arg, i)}}{% else %}{{axis_name_t3(arg, i, "out")}}{% endif %}, num_small_trans);
+        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_redirect_strm[{{i}}], {% if arg is ops_read %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "out")}}{% endif %}, num_small_trans);
                 {% endfor %}
             {% else %}
-        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_strm, {% if arg is ops_read %}{{axis_name(arg)}}{% else %}{{axis_name_t2(arg, "out")}}{% endif %}, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
+        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_strm, {% if arg is ops_read %}{{lmac.axis_name(arg)}}{% else %}{{lmac.axis_name_t2(arg, "out")}}{% endif %}, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
             {% endif %}
         {% endif %}
     {% endfor %}
@@ -561,24 +561,24 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         {% if arg is ops_write_or_rw %}
             {% if arg is read_only_rw %}
         {# TODO: small tile case - need to be fixed
-        ops::hls::axisTerminate<{{axis_data_width(arg)-}}>({{axis_name_t2(arg, "in")}}, {%if isTiling %}{% if prog.is_interleave() %}is_small_tile ? num_pkts >> 1 : num_pkts{%else%}num_pkts{%endif%}{% else %}{{num_pkts(arg)}}{% endif %});#}
-        ops::hls::axisTerminate<{{axis_data_width(arg)-}}>({{axis_name_t2(arg, "in")}}, {%if isTiling %}{%if prog.is_interleave() %}num_small_trans{%else%}num_pkts{%endif%}{% else %}{{num_pkts(arg)}}{% endif %});
+        ops::hls::axisTerminate<{{axis_data_width(arg)-}}>({{lmac.axis_name_t2(arg, "in")}}, {%if isTiling %}{% if prog.is_interleave() %}is_small_tile ? num_pkts >> 1 : num_pkts{%else%}num_pkts{%endif%}{% else %}{{num_pkts(arg)}}{% endif %});#}
+        ops::hls::axisTerminate<{{axis_data_width(arg)-}}>({{lmac.axis_name_t2(arg, "in")}}, {%if isTiling %}{%if prog.is_interleave() %}num_small_trans{%else%}num_pkts{%endif%}{% else %}{{num_pkts(arg)}}{% endif %});
             {% else %}
                 {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
                     {% if prog.is_interleave() %}
                         {% for i in range(config["tile_banks"]) %}
-        ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{axis_name_t3(arg, i)}}{% else %}{{axis_name_t3(arg, i, "in")}}{% endif %}, arg{{arg.id}}_write_reduced_mem_strm[{{i}}], num_small_trans);
+        ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "in")}}{% endif %}, arg{{arg.id}}_write_reduced_mem_strm[{{i}}], num_small_trans);
                         {% endfor %}
                     {% else %}
-        ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{axis_name(arg)}}{% else %}{{axis_name_t2(arg, "in")}}{% endif %}, arg{{arg.id}}_write_reduced_mem_strm, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
+        ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{lmac.axis_name(arg)}}{% else %}{{lmac.axis_name_t2(arg, "in")}}{% endif %}, arg{{arg.id}}_write_reduced_mem_strm, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
                     {% endif %}
                 {% else %}
                     {% if prog.is_interleave() %}
                         {% for i in range(config["tile_banks"]) %}
-        ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{axis_name_t3(arg, i)}}{% else %}{{axis_name_t3(arg, i, "in")}}{% endif %}, arg{{arg.id}}_write_mem_redirect_strm[{{i}}], num_small_trans);
+        ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "in")}}{% endif %}, arg{{arg.id}}_write_mem_redirect_strm[{{i}}], num_small_trans);
                         {% endfor %}
                     {% else %}
-        ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{axis_name(arg)}}{% else %}{{axis_name_t2(arg, "in")}}{% endif %}, arg{{arg.id}}_write_mem_strm, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
+        ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{lmac.axis_name(arg)}}{% else %}{{lmac.axis_name_t2(arg, "in")}}{% endif %}, arg{{arg.id}}_write_mem_strm, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
                     {% endif %}
                 {% endif %}
             {% endif %}
@@ -1288,10 +1288,10 @@ static void datamover_outerloop_{{ilh.id}}_loopback_dataflow_region(
     {%- endif -%}#}
     {%- for arg in ilh.joint_args|ops_dat -%}
     {%- if (arg is not ops_rw) and arg is is_arg_swap(ilh) -%}
-        ,{{"\n"}}        hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{axis_name(arg)}}
+        ,{{"\n"}}        hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{lmac.axis_name(arg)}}
         {%- else -%}
-        ,{{"\n"}}        hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{axis_name_t2(arg, "out")}},
-           hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{axis_name_t2(arg, "in")}}
+        ,{{"\n"}}        hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{lmac.axis_name_t2(arg, "out")}},
+           hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{lmac.axis_name_t2(arg, "in")}}
         {%- endif -%}
     {%- endfor -%}
         )
@@ -1330,10 +1330,10 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
     {%- endif -%}#}
     {%- for arg in ilh.joint_args|ops_dat -%}
     {%- if (arg is not ops_rw) and arg is is_arg_swap(ilh) -%}
-        ,{{"\n"}}        hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{axis_name(arg)}}
+        ,{{"\n"}}        hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{lmac.axis_name(arg)}}
         {%- else -%}
-        ,{{"\n"}}        hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{axis_name_t2(arg, "out")}},
-            hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{axis_name_t2(arg, "in")}}
+        ,{{"\n"}}        hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{lmac.axis_name_t2(arg, "out")}},
+            hls::stream<ap_axiu<{{axis_data_width(arg)-}}, 0, 0, 0>>& {{lmac.axis_name_t2(arg, "in")}}
         {%- endif -%}
     {%- endfor -%}
         )
@@ -1352,9 +1352,9 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
         {%- endif -%}#}
         {%- for arg in ilh.joint_args|ops_dat -%}
             {%- if (arg is not ops_rw) and arg is is_arg_swap(ilh) -%}
-                ,{{"\n"}}        {{axis_name(arg)}}
+                ,{{"\n"}}        {{lmac.axis_name(arg)}}
             {%- else -%}
-                ,{{"\n"}}        {{axis_name_t2(arg, "out")}}, {{axis_name_t2(arg, "in")}}
+                ,{{"\n"}}        {{lmac.axis_name_t2(arg, "out")}}, {{lmac.axis_name_t2(arg, "in")}}
             {%- endif -%}
         {%- endfor -%}
         );
@@ -1432,22 +1432,22 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
         {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
             {% if prog.is_interleave() %}
                 {% for tile in range(config["tile_banks"]) %}
-    #pragma HLS INTERFACE mode=axis port={{axis_name_t3(arg, tile)}} register register_mode=both
+    #pragma HLS INTERFACE mode=axis port={{lmac.axis_name_t3(arg, tile)}} register register_mode=both
                 {% endfor %}
             {% else %}
-    #pragma HLS INTERFACE mode=axis port={{axis_name(arg)}} register register_mode=both
+    #pragma HLS INTERFACE mode=axis port={{lmac.axis_name(arg)}} register register_mode=both
             {% endif %}
         {% else %}
             {% if prog.is_interleave() %}
                 {% for tile in range(config["tile_banks"]) %}
-    #pragma HLS INTERFACE mode=axis port={{axis_name_t3(arg, tile, "out")}} register register_mode=both
+    #pragma HLS INTERFACE mode=axis port={{lmac.axis_name_t3(arg, tile, "out")}} register register_mode=both
                 {% endfor %}
                 {% for tile in range(config["tile_banks"]) %}
-    #pragma HLS INTERFACE mode=axis port={{axis_name_t3(arg, tile, "in")}} register register_mode=both
+    #pragma HLS INTERFACE mode=axis port={{lmac.axis_name_t3(arg, tile, "in")}} register register_mode=both
                 {% endfor %}
             {% else %}
-    #pragma HLS INTERFACE mode=axis port={{axis_name_t2(arg, "out")}} register register_mode=both
-    #pragma HLS INTERFACE mode=axis port={{axis_name_t2(arg, "in")}} register register_mode=both
+    #pragma HLS INTERFACE mode=axis port={{lmac.axis_name_t2(arg, "out")}} register register_mode=both
+    #pragma HLS INTERFACE mode=axis port={{lmac.axis_name_t2(arg, "in")}} register register_mode=both
             {% endif %}
         {% endif %}
     {% endfor %}
@@ -1587,9 +1587,9 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
         {%- endfor -%}
         {%- for arg in ilh.joint_args|ops_dat -%}
             {%- if arg is ops_read -%}
-                ,{{"\n"}}                {{axis_name(arg)}}
+                ,{{"\n"}}                {{lmac.axis_name(arg)}}
             {%- elif arg is ops_rw -%}
-                ,{{"\n"}}                {{axis_name_t2(arg, "out")}}
+                ,{{"\n"}}                {{lmac.axis_name_t2(arg, "out")}}
             {%- endif -%}
         {%- endfor -%}
         );
@@ -1602,9 +1602,9 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
         {%- endif -%}#}
         {%- for arg in ilh.joint_args|ops_dat -%}
             {%- if (arg is not ops_rw) and arg is is_arg_swap(ilh) -%}
-                ,{{"\n"}}                {{axis_name(arg)}}
+                ,{{"\n"}}                {{lmac.axis_name(arg)}}
             {%- else -%}
-                ,{{"\n"}}                {{axis_name_t2(arg, "out")}}, {{axis_name_t2(arg, "in")}}
+                ,{{"\n"}}                {{lmac.axis_name_t2(arg, "out")}}, {{lmac.axis_name_t2(arg, "in")}}
             {%- endif -%}
         {%- endfor -%}
         );
@@ -1629,9 +1629,9 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
         {%- endfor -%}
         {%- for arg in ilh.joint_args|ops_dat -%}
             {%- if arg is ops_write -%}
-                ,{{"\n"}}                {{axis_name(arg)}}
+                ,{{"\n"}}                {{lmac.axis_name(arg)}}
             {%- elif arg is  ops_rw -%}
-                ,{{"\n"}}                {{axis_name_t2(arg, "in")}}
+                ,{{"\n"}}                {{lmac.axis_name_t2(arg, "in")}}
             {%- endif -%}
         {%- endfor -%}
         );
