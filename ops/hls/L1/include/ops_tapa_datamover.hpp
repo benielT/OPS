@@ -20,6 +20,9 @@
 #include <tuple>
 // #define DEBUG_LOG
 
+#ifndef __SYNTHESIS__
+#include <thread>
+#endif
 
 #ifdef DEBUG_LOG
 	#ifndef __SYNTHESIS__
@@ -40,7 +43,7 @@ namespace tapa {
  * @tparam T : standard C++ type 
  * @tparam MEM_VEC_FACTOR : Number of elements mem_in and strm_out
  * @tparam IN_ITR: II of the mem read
- * * @param mem_in : Asynchronous TAPA memory mapped interface
+ * @param mem_in : Asynchronous TAPA memory mapped interface
  * @param strm_out : Output TAPA ostream
  * @param num_beats : Number of beats (data words) to read
  */
@@ -62,33 +65,41 @@ void mem2stream(::tapa::async_mmap<::tapa::vec_t<T, MEM_VEC_FACTOR>>& mem_in,
     for (unsigned int i_req = 0, i_resp = 0; i_resp < num_beats; )
     {
     #pragma HLS PIPELINE II=IN_ITR
-        // Asyc read request
-        if (i_req < num_beats && mem_in.read_addr.try_write(i_req))
+        
+        bool made_progress = false;
+
+        // Async read request
+        if ((i_req < num_beats) && !mem_in.read_addr.full()) {
+            mem_in.read_addr.try_write(i_req);
             i_req++;
+            made_progress = true;
+        }
     
         // As soon as available read and write to stream
-        ::tapa::vec_t<T, MEM_VEC_FACTOR> tmp;
-        if (mem_in.read_data.try_read(tmp)) {
-            strm_out.write(tmp); 
+        if (!strm_out.full() && !mem_in.read_data.empty()) {
+            ::tapa::vec_t<T, MEM_VEC_FACTOR> tmp;
+            mem_in.read_data.try_read(tmp);
+            strm_out.try_write(tmp); 
+            i_resp++; 
+            made_progress = true;
             
 #ifdef DEBUG_LOG_PRINT
             printf("|HLS DEBUG_LOG||%s| ===============================================================\n", __func__);
-            printf("|HLS DEBUG_LOG||%s| reading index: %d, val=(\n", __func__, i_resp);
-
-            // for (unsigned k = 0; k < MEM_VEC_FACTOR/(DEBUG_LOG_SIZE_OF * 8); k++){
-            //     DataConv conv;
-            //     conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
-            //     printf("     %f,\n", conv.f); 
-            // }
+            printf("|HLS DEBUG_LOG||%s| reading index: %d, val=(\n", __func__, i_resp - 1);
             for (unsigned k = 0; k < MEM_VEC_FACTOR; k++){
                 printf("     %f,\n", tmp[k]); 
             }
             printf("|HLS DEBUG_LOG||%s| ===============================================================\n\n", __func__);
 #endif
-            i_resp++; 
         }
+
+#ifndef __SYNTHESIS__
+        // Prevent coroutine starvation in software emulation
+        if (!made_progress) {
+            std::this_thread::yield(); 
+        }
+#endif
     }
-    // strm_out.close(); //EoT token this is not necessary as we know exact transactions
 }
 
 
@@ -164,68 +175,41 @@ void stream2mem(::tapa::async_mmap<::tapa::vec_t<T, MEM_VEC_FACTOR>>& mem_out,
             "MEM_VEC_FACTOR failed limit check");
 #endif
 
-#ifdef DEBUG_LOG_PRINT
-#ifndef __SYNTHESIS__
-    printf("|HLS DEBUG_LOG| %s | Starting writing async_memmap. num_beats: %d\n", 
-            __func__, num_beats);
-    printf("====================================================================================\n");
-#endif
-#endif
-
-    // i_req tracks addresses issued
-    // i_data tracks data payload sent
-    // i_resp tracks write acknowledgments received
-    for (unsigned int i_req = 0, i_data = 0, i_resp = 0; i_resp < num_beats; )
+    for (unsigned int i_req = 0, i_resp = 0; i_resp < num_beats; )
     {
         #pragma HLS PIPELINE II=IN_ITR
+        bool made_progress = false;
 
-        // Issuing write address requests asynchronously
-        if (i_req < num_beats && mem_out.write_addr.try_write(i_req)) {
-            i_req++;
-        }
-
-        // Read from stream and push to AXI Write Data channel. Ensuring data is only pushed 
-        // if an address has been requested. This will handle the M_AXI properly
-        if (i_data < i_req && !strm_in.empty() && !mem_out.write_data.full())
-        {
+        // 1. Bundle address issue and data write together
+        // Only proceed if both the source stream has data and the AXI channels can accept it
+        if ((i_req < num_beats) && !strm_in.empty() && 
+            !mem_out.write_addr.full() && !mem_out.write_data.full()) {
+            
+            mem_out.write_addr.try_write(i_req);
+            
             ::tapa::vec_t<T, MEM_VEC_FACTOR> tmp;
             strm_in.try_read(tmp);
             mem_out.write_data.try_write(tmp);
+            
+            ++i_req;
+            made_progress = true;
+        }
 
-#ifdef DEBUG_LOG_PRINT
+        // 2. Consume AXI write responses to track completed transactions
+        // TAPA encodes the burst length minus one in the response token
+        uint8_t n_resp;
+        if (mem_out.write_resp.try_read(n_resp)) {
+            i_resp += int(n_resp) + 1;
+            made_progress = true;
+        }
+
 #ifndef __SYNTHESIS__
-            printf("|HLS DEBUG_LOG| %s | writing index: %d, val=(\n", __func__, i_data);
-
-            // for (unsigned k = 0; k < MEM_VEC_FACTOR/(DEBUG_LOG_SIZE_OF * 8); k++)
-            // {
-            //     DataConv conv;
-            //     conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
-            //     printf("%f,", conv.f);
-            // }
-            for (unsigned k = 0; k < MEM_VEC_FACTOR; k++)
-            {
-                printf("%f,", tmp[k]);
-            }
-            printf(")\n");
-#endif
-#endif
-            i_data++;
+        // Prevent coroutine starvation in software emulation
+        if (!made_progress) {
+            std::this_thread::yield(); 
         }
-
-        // Consume AXI write responses to ensure writes complete and prevent B-channel deadlock
-        if (i_resp < i_data && !mem_out.write_resp.empty())
-        {
-            uint8_t resp; 
-            mem_out.write_resp.try_read(resp);
-            i_resp++;
-        }
+#endif
     }
-
-#ifdef DEBUG_LOG_PRINT
-#ifndef __SYNTHESIS__
-    printf("|HLS DEBUG_LOG|%s| exiting.\n", __func__);
-#endif
-#endif
 }
 
 /**

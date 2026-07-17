@@ -36,7 +36,7 @@ void task_terminate_lb(
 
 void task_mem2stream_lb(
 #ifdef ASYNC_MOVER
-    ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg0,
+    ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>>& arg0,
 #else
     ::tapa::mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg0,
 #endif
@@ -52,7 +52,7 @@ void task_mem2stream_lb(
 
 void task_stream2mem_lb(
 #ifdef ASYNC_MOVER
-    ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg1,
+    ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>>& arg1,
 #else 
     ::tapa::mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg1,
 #endif
@@ -133,6 +133,7 @@ void hybrid_datamover_router(
     }
 }
 #else
+// TAPA PARSER BYPASS COMMENT - DO NOT REMOVE THIS
 void task_stepdown(
         ::tapa::istream<::tapa::vec_t<stencil_type, mem_vector_factor>>& strm_in,
         ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& strm_out,
@@ -164,8 +165,8 @@ void task_terminate(
 
 void task_pingpong_mem2stream(
     #ifdef ASYNC_MOVER
-        ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg0,
-        ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg1,
+        ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>>& arg0,
+        ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>>& arg1,
     #else
         ::tapa::mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg0,
         ::tapa::mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg1,
@@ -194,8 +195,8 @@ void task_pingpong_mem2stream(
 
 void task_pingpong_stream2mem(
     #ifdef ASYNC_MOVER
-        ::tapa::async_mmap<::tapa::vec_t<float, mem_vector_factor>> arg0,
-        ::tapa::async_mmap<::tapa::vec_t<float, mem_vector_factor>> arg1,
+        ::tapa::async_mmap<::tapa::vec_t<float, mem_vector_factor>>& arg0,
+        ::tapa::async_mmap<::tapa::vec_t<float, mem_vector_factor>>& arg1,
     #else
         ::tapa::mmap<::tapa::vec_t<float, mem_vector_factor>> arg0,
         ::tapa::mmap<::tapa::vec_t<float, mem_vector_factor>> arg1,
