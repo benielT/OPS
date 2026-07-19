@@ -69,10 +69,13 @@ widen_stream_{{lh.kernel}}_{{arg.id}}_dt
 #define __LOOP_PE_{{lh.kernel|upper}}__
 {% if target == "hls" %}
 #include <ops_hls_kernel_support.h>
+
+#include "../../common/include/common_config.hpp"
 {% else %}
 #include <ops_tapa_kernel_support.h>
-{% endif %}
+
 #include "../../common/include/common_config.hpp"
+{% endif %}
 
  
 {% set widen_read_stencil = widen_read_stencil_desc.widen_stencil %}
