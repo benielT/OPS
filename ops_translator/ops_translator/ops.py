@@ -1220,11 +1220,11 @@ class IterLoop:
                 if source_id == self.get_active_df_graph().getStartNodeIdx():
                     logging.debug(f"source is start node")
                     search_list = filter(lambda x: x.access_type in [AccessType.OPS_READ, AccessType.OPS_RW] and self.dats[x.dat_id][0].ptr == attr["dat_str"], self.joint_args)
-                    arg_id = next(search_list).id
+                    arg = next(search_list)
                     if attr['sink_arg_id'] in arg_map.keys():
-                        arg_map[attr['sink_arg_id']].append(f"arg{arg_id}_arg{self.getSwapArg(self.getArg(arg_id)).id}_streams")
+                        arg_map[attr['sink_arg_id']].append(f"arg{arg.id}_arg{self.getSwapArg(arg).id}_streams")
                     else:
-                        arg_map[attr['sink_arg_id']] = [f"arg{arg_id}_arg{self.getSwapArg(self.getArg(arg_id)).id}_streams"]
+                        arg_map[attr['sink_arg_id']] = [f"arg{arg.id}_arg{self.getSwapArg(arg).id}_streams"]
                         
                 else:
                     connector_name = f"node{source_id}_{attr['src_arg_id']}_to_node{sink_id}_{attr['sink_arg_id']}"
@@ -1755,6 +1755,8 @@ class Loop:
         return unique_stencil_names
     
     def get_dat_name(self, arg_id: int) -> str:
+        # print(f"Arg_id: {arg_id}")
+        # print(self.args)
         assert isinstance(self.args[arg_id], ArgDat)
         dat_id = self.args[arg_id].dat_id 
         return self.dats[dat_id].ptr

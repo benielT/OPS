@@ -28,6 +28,7 @@ iter_par_factor
     {% endfor %}
 {% endmacro %}
 {% macro joint_PE_body_p2() %}
+    {% set prev_arg_str = {} %}
     {% for df_node in ilh.get_active_df_graph().getAllLoopNodes() %}
         {% set loop_idx = df_node.node_uid %}
         {% set lh = df_node.loop %}
@@ -66,9 +67,8 @@ iter_par_factor
             {% endfor %}
         {% else %}
     kernel_{{lh.kernel}}_PE(
-            PEId_offset, i, 
+            PEId_offset, i,
             stencilConfig,
-            {% set prev_arg_str = [""] %}
             {% for arg_str in ilh.PE_args[loop_idx]%}
                 {% if loop.last %}
                     {% if consts_map[loop_idx] or lh.args|ops_gbl %}
@@ -79,9 +79,10 @@ iter_par_factor
                 {% else %}
                     {% set last_check = False %}
                 {% endif %}
-            {{arg_str}}{% if arg_str != prev_arg_str[0] %}[i]{% else %}[i+1]{% endif %}{{"," if not last_check}}
-            {% set _ = prev_arg_str.pop() %}
-            {% set _ = prev_arg_str.append(arg_str) %}
+            {{arg_str}}{% if arg_str in prev_arg_str %}[i+1]{% else %}[i]{% endif %}{{"," if not last_check}}
+                {%if "arg" in arg_str %}
+                    {% set _ = prev_arg_str.update({arg_str : 1}) %}
+                {% endif %}
             {% endfor %}
             {% for const_arg in lh.args|ops_gbl %}
             {{get_arg_gbl_name(const_arg)}}{{"," if (not loop.last or consts_map[loop_idx])}}
@@ -201,8 +202,19 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region_cascaded(const unsigned 
     {% if prog.is_interleave() %}
         const unsigned int num_pkts,
     {% endif %}
-    {% for swap_pair in ilh.getUniqueDatSwapsIds() %}
+    {#% for swap_pair in ilh.getUniqueDatSwapsIds() %}
     ::hls::stream<ap_uint<{{lmac.axis_data_width_datid(swap_pair[0])}}>> arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams[{{(iter_par_factor())}} + 1]{% if prog.is_interleave() %}[{{config["tile_banks"]}}]{% endif %}{{", " if (not loop.last or consts or ilh.joint_args|ops_gbl)}}
+    {% endfor %#}
+    {#% for arg in ilh.joint_args|ops_dat %}
+        {% if arg is not ops_rw %}
+    ::hls::stream<ap_uint<{{lmac.axis_data_width(arg)}}>> {{lmac.hls_name(arg)-}}[{{(iter_par_factor())}} + 1]{% if prog.is_interleave() %}[{{config["tile_banks"]}}]{% endif %}{{", " if (not loop.last or consts or ilh.joint_args|ops_gbl)}}
+        {% else %}
+    ::hls::stream<ap_uint<{{lmac.axis_data_width(arg)}}>> {{lmac.hls_name_t2(arg, "in")-}}[{{(iter_par_factor())}} + 1]{% if prog.is_interleave() %}[{{config["tile_banks"]}}]{% endif %},
+    ::hls::stream<ap_uint<{{lmac.axis_data_width(arg)}}>> {{lmac.hls_name_t2(arg, "out")-}}[{{(iter_par_factor())}} + 1]{% if prog.is_interleave() %}[{{config["tile_banks"]}}]{% endif %}{{", " if (not loop.last or consts or ilh.joint_args|ops_gbl)}}
+        {% endif %}
+    {% endfor %#}
+    {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw %}
+    ::hls::stream<ap_uint<{{lmac.axis_data_width(arg)}}>> arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_streams[{{(iter_par_factor())}} + 1]{% if prog.is_interleave() %}[{{config["tile_banks"]}}]{% endif %}{{", " if (not loop.last or consts or ilh.joint_args|ops_gbl)}}
     {% endfor %}
     {% for const_arg in ilh.joint_args|ops_gbl%}
     const {{const_arg.typ}}& {{get_arg_gbl_name(const_arg)}}{{", " if (not loop.last or consts)}}
@@ -238,10 +250,10 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& sl
         {% if arg is not ops_rw %}
             {% if prog.is_interleave() %}
                 {% for tile in range(config["tile_banks"]) %}
-        hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t3(arg,tile)-}}{{"," if not (loop.last and first_loop_last)}}
+        hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t3(arg,tile)-}}{{", " if (not loop.last or consts or ilh.joint_args|ops_gbl)}}
                 {% endfor %}
             {% else %}
-        hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name(arg)-}}{{"," if not loop.last-}}
+        hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name(arg)-}}{{", " if (not loop.last or consts or ilh.joint_args|ops_gbl)}}
             {% endif %}
         {% else %}
             {% if prog.is_interleave() %}
@@ -249,11 +261,11 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& sl
        hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t3(arg, tile, "in")}},
                 {% endfor %}
                 {% for tile in range(config["tile_banks"]) %}
-       hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t3(arg, tile, "out")-}}{{"," if not (loop.last and first_loop_last)}}
+       hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t3(arg, tile, "out")-}}{{", " if (not loop.last or consts or ilh.joint_args|ops_gbl)}}
                 {% endfor %}
             {% else %}
         hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t2(arg, "in")-}},
-        hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t2(arg, "out")-}}{{"," if not loop.last}}
+        hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t2(arg, "out")-}}{{", " if (not loop.last or consts or ilh.joint_args|ops_gbl)}}
             {% endif %}
         {% endif %}
     {% endfor %}
@@ -261,14 +273,14 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& sl
     {% for const in consts %}const {{const.typ}}& {{const.ptr}}{{", " if not loop.last}}{% endfor %})
 {
 #pragma HLS DATAFLOW
-    {% for swap_pair in ilh.getUniqueDatSwapsIds() -%}
+    {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw -%}
         {% if prog.is_interleave() %}
-    ::hls::stream<ap_uint<{{lmac.axis_data_width_datid(swap_pair[0])}}>> arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams[{{iter_par_factor()}} + 1][{{config["tile_banks"]}}];
-    #pragma HLS ARRAY_PARTITION variable = arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams dim = 2 complete
+    ::hls::stream<ap_uint<{{lmac.axis_data_width(arg)}}>> {{internal_stream_name(arg)}}[{{iter_par_factor()}} + 1][{{config["tile_banks"]}}];
+    #pragma HLS ARRAY_PARTITION variable = {{internal_stream_name(arg)}} dim = 2 complete
         {% else %}
-    ::hls::stream<ap_uint<{{lmac.axis_data_width_datid(swap_pair[0])}}>> arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams[{{iter_par_factor()}} + 1];
+    ::hls::stream<ap_uint<{{lmac.axis_data_width(arg)}}>> {{internal_stream_name(arg)}}[{{iter_par_factor()}} + 1];
         {% endif %}
-    #pragma HLS STREAM variable = arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams depth = {{config["maxi_read_burst_length"] * config["num_read_outstanding"] + 2}}
+    #pragma HLS STREAM variable = {{internal_stream_name(arg)}} depth = {{config["maxi_read_burst_length"] * config["num_read_outstanding"] + 2}} 
     {% endfor %}
     
     {% for arg in ilh.joint_args|ops_dat -%}
@@ -295,7 +307,7 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& sl
     {% if prog.is_interleave() %}
         num_pkts,
     {% endif %}
-    {%- for swap_pair in ilh.getUniqueDatSwapsIds() -%}
+    {#%- for swap_pair in ilh.getUniqueDatSwapsIds() -%}
         {% if loop.last %}
             {% if consts or ilh.joint_args|ops_gbl %}
                 {% set last_check = False %}
@@ -306,6 +318,18 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short& sl
             {% set last_check = False %}
         {% endif %}
  arg{{swap_pair[0]}}_arg{{swap_pair[1]}}_streams{{"," if not last_check}}
+    {%- endfor -%#}
+    {%- for arg in ilh.joint_args|ops_dat|ops_read_or_rw -%}
+        {% if loop.last %}
+            {% if consts or ilh.joint_args|ops_gbl %}
+                {% set last_check = False %}
+            {% else %}
+                {% set last_check = True %}
+            {% endif %}
+        {% else %}
+            {% set last_check = False %}
+        {% endif %}
+    {{internal_stream_name(arg)}}{{"," if not last_check}}
     {%- endfor -%}
     {%- for const_arg in ilh.joint_args|ops_gbl -%}
 {{get_arg_gbl_name(const_arg)}}{{", " if not loop.last or consts}}
@@ -352,10 +376,10 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short& slr_re
         {% if arg is not ops_rw %}
             {% if prog.is_interleave() %}
                 {% for tile in range(config["tile_banks"]) %}
-        hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t3(arg,tile)-}}{{"," if not (loop.last and first_loop_last)}}
+        hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t3(arg,tile)-}}{{", " if (not loop.last or consts or ilh.joint_args|ops_gbl)}}
                 {% endfor %}
             {% else %}
-        hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name(arg)-}}{{"," if not loop.last}}
+        hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name(arg)-}}{{", " if (not loop.last or consts or ilh.joint_args|ops_gbl)}}
             {% endif %}
         {% else %}
             {% if prog.is_interleave() %}
@@ -363,11 +387,11 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short& slr_re
        hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t3(arg, tile, "in")-}},
                 {% endfor %}
                 {% for tile in range(config["tile_banks"]) %}
-       hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t3(arg, tile, "out")-}}{{"," if not (loop.last and first_loop_last)}}
+       hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t3(arg, tile, "out")-}}{{", " if (not loop.last or consts or ilh.joint_args|ops_gbl)}}
                 {% endfor %}
             {% else %}
         hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t2(arg, "in")-}},
-        hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t2(arg, "out")-}}{{"," if not loop.last}}
+        hls::stream <ap_axiu<{{lmac.axis_data_width(arg)}}, 0, 0, 0>>& {{lmac.axis_name_t2(arg, "out")-}}{{", " if (not loop.last or consts or ilh.joint_args|ops_gbl)}}
             {% endif %}
         {% endif %}
     {% endfor %}
