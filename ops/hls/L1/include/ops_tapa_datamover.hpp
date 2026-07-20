@@ -279,7 +279,8 @@ void stream2mem_blocking(::tapa::mmap<::tapa::vec_t<T, MEM_VEC_FACTOR>>& mem_out
 }
 
 /**
- * @brief stream2streamStepdown Converts from one tapa-stream to another with a smaller size.
+ * @brief stream2streamStepdown Converts from one tapa-stream to another with a smaller size with
+ *          blocking API. 
  *
  * @tparam T : C++ base element type of the vectorized interfaces
  * @tparam STREAM1_VEC_FACTOR : Number of vectorized elements of the input stream
@@ -290,7 +291,7 @@ void stream2mem_blocking(::tapa::mmap<::tapa::vec_t<T, MEM_VEC_FACTOR>>& mem_out
  * @param num_big_pkts : Number of pkts of the wider stream
  */
 template <typename T, unsigned int STREAM1_VEC_FACTOR, unsigned int STREAM2_VEC_FACTOR>
-void stream2streamStepdown(::tapa::istream<::tapa::vec_t<T, STREAM1_VEC_FACTOR>>& strm_in,
+void stream2streamStepdown_blocking(::tapa::istream<::tapa::vec_t<T, STREAM1_VEC_FACTOR>>& strm_in,
                 ::tapa::ostream<::tapa::vec_t<T, STREAM2_VEC_FACTOR>>& strm_out,
                 const unsigned int num_big_pkts)
 {
@@ -373,9 +374,114 @@ void stream2streamStepdown(::tapa::istream<::tapa::vec_t<T, STREAM1_VEC_FACTOR>>
 #endif
 }
 
+/**
+ * @brief stream2streamStepdown Converts from one tapa-stream to another with a smaller size (Non-blocking).
+ * 
+ * @tparam T : C++ base element type of the vectorized interfaces
+ * @tparam STREAM1_VEC_FACTOR : Number of vectorized elements of the input stream
+ * @tparam STREAM2_VEC_FACTOR : Number of vectorized elements of the output stream
+ *
+ * @param strm_in : Input TAPA istream (wider)
+ * @param strm_out : Output TAPA ostream (narrower)
+ * @param num_big_pkts : Number of pkts of the wider stream
+ */
+
+template <typename T, unsigned int STREAM1_VEC_FACTOR, unsigned int STREAM2_VEC_FACTOR>
+void stream2streamStepdown(::tapa::istream<::tapa::vec_t<T, STREAM1_VEC_FACTOR>>& strm_in,
+                ::tapa::ostream<::tapa::vec_t<T, STREAM2_VEC_FACTOR>>& strm_out,
+                const unsigned int num_big_pkts)
+{
+#ifndef __SYNTHESIS__
+    static_assert(STREAM1_VEC_FACTOR > STREAM2_VEC_FACTOR,
+            "STREAM1_VEC_FACTOR has to be bigger than STREAM2_VEC_FACTOR");
+    static_assert(STREAM1_VEC_FACTOR % STREAM2_VEC_FACTOR == 0, 
+            "STREAM1_VEC_FACTOR has to be fully divisible by STREAM2_VEC_FACTOR");
+#endif
+
+    constexpr unsigned short STREAM1_DATA_WIDTH = STREAM1_VEC_FACTOR * ::tapa::widthof<T>();
+    constexpr unsigned short STREAM2_DATA_WIDTH = STREAM2_VEC_FACTOR * ::tapa::widthof<T>();
+
+    constexpr unsigned short FACTOR = STREAM1_VEC_FACTOR / STREAM2_VEC_FACTOR;
+    const unsigned int num_small_pkts = num_big_pkts * FACTOR;
+
+#ifdef DEBUG_LOG_PRINT
+#ifndef __SYNTHESIS__
+    printf("|HLS DEBUG_LOG| %s | Starting. num_big_pkts: %d, num_small_pkts: %d\n"
+            , __func__, num_big_pkts, num_small_pkts);
+    printf("====================================================================================\n");
+#endif
+#endif
+
+    ::tapa::vec_t<T, STREAM1_VEC_FACTOR> shift_reg;
+    ap_uint<STREAM1_DATA_WIDTH> shift_reg_raw;
+    ap_uint<STREAM2_DATA_WIDTH> output_reg_raw;
+    
+    unsigned short n = 0;
+    unsigned int write_cnt = 0;
+    bool data_valid = false;
+    
+    while (write_cnt < num_small_pkts)
+    {
+        #pragma HLS PIPELINE II=1
+
+        // Attempt to read if we need new data
+        if (!data_valid)
+        {
+            if (strm_in.try_read(shift_reg))
+            {
+                shift_reg_raw = ::tapa::bit_cast<ap_uint<STREAM1_DATA_WIDTH>>(shift_reg);
+                data_valid = true;
+
+#ifdef DEBUG_LOG_PRINT
+#ifndef __SYNTHESIS__
+                printf("   |HLS DEBUG_LOG||%s| receiving pkt: %d, val=(", __func__, write_cnt / FACTOR);
+                for (unsigned i = 0; i < STREAM1_VEC_FACTOR; i++) {
+                    printf("%f,", shift_reg[i]);
+                }
+                printf(")\n");
+#endif
+#endif
+            }
+        }
+
+        // Attempt to write if we have valid data in the shift register
+        if (data_valid)
+        {
+            output_reg_raw = shift_reg_raw; // Stores least significant slice
+            ::tapa::vec_t<T, STREAM2_VEC_FACTOR> tmp2 = ::tapa::bit_cast<::tapa::vec_t<T, STREAM2_VEC_FACTOR>>(output_reg_raw); 
+            
+            if (strm_out.try_write(tmp2))
+            {
+#ifdef DEBUG_LOG_PRINT
+#ifndef __SYNTHESIS__
+                printf("   |HLS DEBUG_LOG||%s| writing pkt: %d, val=(", __func__, write_cnt);
+                for (unsigned k = 0; k < STREAM2_VEC_FACTOR; k++) {
+                    printf("%f,", tmp2[k]);
+                }
+                printf(")\n");
+#endif
+#endif
+                shift_reg_raw >>= STREAM2_DATA_WIDTH;
+                write_cnt++;
+
+                if (n == FACTOR - 1) {
+                    n = 0;
+                    data_valid = false; // Trigger new read next cycle
+                } else {
+                    n++;
+                }
+            }
+        }
+    }
+
+#ifdef DEBUG_LOG_PRINT
+    printf("|HLS DEBUG_LOG|%s| exiting.\n"
+            , __func__);
+#endif
+}
 
 /**
- * @brief stream2streamStepup Converts from a narrow TAPA stream to a wider TAPA stream.
+ * @brief stream2streamStepup_blocking Converts from a narrow TAPA stream to a wider TAPA stream (bloking)
  *
  * @tparam T : C++ base element type of the vectorized interfaces
  * @tparam STREAM1_VEC_FACTOR : NUmber of the vector element of the input stream (narrow)
@@ -386,7 +492,7 @@ void stream2streamStepdown(::tapa::istream<::tapa::vec_t<T, STREAM1_VEC_FACTOR>>
  * @param num_big_pkts : Number of pkts of the wider stream
  */
 template <typename T, unsigned int STREAM1_VEC_FACTOR, unsigned int STREAM2_VEC_FACTOR>
-void stream2streamStepup(::tapa::istream<::tapa::vec_t<T, STREAM1_VEC_FACTOR>>& strm_in,
+void stream2streamStepup_blocking(::tapa::istream<::tapa::vec_t<T, STREAM1_VEC_FACTOR>>& strm_in,
                 ::tapa::ostream<::tapa::vec_t<T, STREAM2_VEC_FACTOR>>& strm_out,
                 const unsigned int num_big_pkts)
 {
@@ -473,9 +579,123 @@ void stream2streamStepup(::tapa::istream<::tapa::vec_t<T, STREAM1_VEC_FACTOR>>& 
 }
 
 /**
- * @brief   stream_terminate reads from a TAPA istream and intentionally discards the data.
+ * @brief stream2streamStepup Converts from a narrow TAPA stream to a wider TAPA stream (Non-blocking).
+ * 
+ * @tparam T : C++ base element type of the vectorized interfaces
+ * @tparam STREAM1_VEC_FACTOR : NUmber of the vector element of the input stream (narrow)
+ * @tparam STREAM2_VEC_FACTOR : NUmber of the vector element of the output stream (wide)
+ *
+ * @param strm_in : Input TAPA istream
+ * @param strm_out : Output TAPA ostream
+ * @param num_big_pkts : Number of pkts of the wider stream
+ */
+template <typename T, unsigned int STREAM1_VEC_FACTOR, unsigned int STREAM2_VEC_FACTOR>
+void stream2streamStepup(::tapa::istream<::tapa::vec_t<T, STREAM1_VEC_FACTOR>>& strm_in,
+                ::tapa::ostream<::tapa::vec_t<T, STREAM2_VEC_FACTOR>>& strm_out,
+                const unsigned int num_big_pkts)
+{
+#ifndef __SYNTHESIS__
+    static_assert(STREAM1_VEC_FACTOR < STREAM2_VEC_FACTOR,
+            "STREAM1_VEC_FACTOR has to be smaller than STREAM2_VEC_FACTOR");
+    static_assert(STREAM2_VEC_FACTOR % STREAM1_VEC_FACTOR == 0, 
+            "STREAM2_VEC_FACTOR has to be fully divisible by STREAM1_VEC_FACTOR");
+#endif
+
+    constexpr unsigned short FACTOR = STREAM2_VEC_FACTOR / STREAM1_VEC_FACTOR;
+    constexpr unsigned short STREAM1_DATA_WIDTH = STREAM1_VEC_FACTOR * ::tapa::widthof<T>();
+    constexpr unsigned short STREAM2_DATA_WIDTH = STREAM2_VEC_FACTOR * ::tapa::widthof<T>();
+
+    const unsigned int total_small_pkts = num_big_pkts * FACTOR;
+
+#ifdef DEBUG_LOG_PRINT
+#ifndef __SYNTHESIS__
+    printf("|HLS DEBUG_LOG| %s | num_big_pkts: %d, total_small_pkts: %d\n"
+            , __func__, num_big_pkts, total_small_pkts);
+    printf("====================================================================================\n");
+#endif
+#endif
+
+    ::tapa::vec_t<T, STREAM2_VEC_FACTOR> shift_reg;
+    ap_uint<STREAM2_DATA_WIDTH> shift_reg_raw = 0;
+    ap_uint<STREAM1_DATA_WIDTH> input_reg_raw;
+    
+    unsigned short n = 0;
+    unsigned int read_cnt = 0;
+    bool pending_write = false;
+    
+    while (read_cnt < total_small_pkts || pending_write)
+    {
+        #pragma HLS PIPELINE II=1
+
+        if (pending_write)
+        {
+            // Backpressure recovery: Retrying the blocked write
+            if (strm_out.try_write(shift_reg))
+            {
+                pending_write = false;
+            }
+        }
+        else
+        {
+            ::tapa::vec_t<T, STREAM1_VEC_FACTOR> tmp1;
+            
+            // Standard read and accumulate phase
+            if (strm_in.try_read(tmp1))
+            {
+                input_reg_raw = ::tapa::bit_cast<ap_uint<STREAM1_DATA_WIDTH>>(tmp1);
+
+#ifdef DEBUG_LOG_PRINT
+#ifndef __SYNTHESIS__
+                printf("   |HLS DEBUG_LOG||%s| reading pkt: %d, val=(", __func__, read_cnt);
+                for (unsigned k = 0; k < STREAM1_VEC_FACTOR; k++) {
+                    printf("%f,", tmp1[k]);
+                }
+                printf(")\n");
+#endif
+#endif
+                
+                shift_reg_raw >>= STREAM1_DATA_WIDTH;
+                shift_reg_raw |= (ap_uint<STREAM2_DATA_WIDTH>(input_reg_raw) << (STREAM2_DATA_WIDTH - STREAM1_DATA_WIDTH));
+                read_cnt++;
+
+                if (n == FACTOR - 1)
+                {
+                    shift_reg = ::tapa::bit_cast<::tapa::vec_t<T, STREAM2_VEC_FACTOR>>(shift_reg_raw);
+
+#ifdef DEBUG_LOG_PRINT
+#ifndef __SYNTHESIS__
+                    printf("   |HLS DEBUG_LOG||%s| attempting write pkt: %d, val=(", __func__, (read_cnt-1) / FACTOR);
+                    for (unsigned k = 0; k < STREAM2_VEC_FACTOR; k++) {
+                        printf("%f,", shift_reg[k]);
+                    }
+                    printf(")\n");
+#endif
+#endif
+                    if (!strm_out.try_write(shift_reg)) {
+                        pending_write = true; // Downstream is full, stall and retry next cycle
+                    }
+                    n = 0;
+                }
+                else
+                {
+                    n++;
+                }
+            }
+        }
+    }
+
+#ifdef DEBUG_LOG_PRINT
+#ifndef __SYNTHESIS__
+    printf("|HLS DEBUG_LOG|%s| exiting.\n", __func__);
+#endif
+#endif
+}
+
+/**
+ * @brief   stream_terminate reads from a TAPA istream and intentionally discards the data with blocking API.
  * This acts as a sink to consume stream transactions and prevent upstream deadlocks.
- * * @tparam T : C++ base element type of the vectorized interfaces
+ 
+ * @tparam T : C++ base element type of the vectorized interfaces
  * @tparam VEC_FACTOR : Number of vectorized elements of the TAPA stream port
  * @tparam IN_ITR: II configuration of the read loop (default 1 for maximum throughput)
  *
@@ -483,7 +703,7 @@ void stream2streamStepup(::tapa::istream<::tapa::vec_t<T, STREAM1_VEC_FACTOR>>& 
  * @param num_trans : Number of stream transactions to read and discard
  */
 template <typename T, unsigned int VEC_FACTOR, unsigned int IN_ITR=1>
-void terminate(::tapa::istream<::tapa::vec_t<T, VEC_FACTOR>>& strm_in,
+void terminate_blocking(::tapa::istream<::tapa::vec_t<T, VEC_FACTOR>>& strm_in,
                       const unsigned int num_trans)
 {
 #ifdef DEBUG_LOG_PRINT
@@ -517,6 +737,174 @@ void terminate(::tapa::istream<::tapa::vec_t<T, VEC_FACTOR>>& strm_in,
     printf("|HLS DEBUG_LOG|%s| exiting.\n", __func__);
 #endif
 #endif
+}
+
+/**
+ * @brief stream_terminate reads from a TAPA istream and intentionally discards the data (Non-blocking).
+ * 
+ * @tparam T : C++ base element type of the vectorized interfaces
+ * @tparam STREAM1_VEC_FACTOR : NUmber of the vector element of the input stream (narrow)
+ * @tparam STREAM2_VEC_FACTOR : NUmber of the vector element of the output stream (wide)
+ *
+ * @param strm_in : Input TAPA istream
+ * @param strm_out : Output TAPA ostream
+ * @param num_big_pkts : Number of pkts of the wider stream
+ */
+template <typename T, unsigned int VEC_FACTOR, unsigned int IN_ITR=1>
+void terminate(::tapa::istream<::tapa::vec_t<T, VEC_FACTOR>>& strm_in,
+                      const unsigned int num_trans)
+{
+#ifdef DEBUG_LOG_PRINT
+#ifndef __SYNTHESIS__
+    printf("|HLS DEBUG_LOG| %s | Starting stream termination. num_transaction: %d\n", 
+            __func__, num_trans);
+    printf("====================================================================================\n");
+#endif
+#endif
+
+    unsigned int read_cnt = 0;
+
+    while (read_cnt < num_trans)
+    {
+        #pragma HLS PIPELINE II=IN_ITR
+        
+        ::tapa::vec_t<T, VEC_FACTOR> tmp;
+        
+        if (strm_in.try_read(tmp))
+        {
+#ifdef DEBUG_LOG_PRINT
+#ifndef __SYNTHESIS__
+            printf("|HLS DEBUG_LOG| %s | discarding index: %d, val=(\n", __func__, read_cnt);
+            for (unsigned k = 0; k < VEC_FACTOR; k++) {
+                printf("%f,", static_cast<double>(tmp[k]));
+            }
+            printf(")\n");
+#endif
+#endif
+            read_cnt++;
+        }
+    }
+
+#ifdef DEBUG_LOG_PRINT
+#ifndef __SYNTHESIS__
+    printf("|HLS DEBUG_LOG|%s| exiting.\n", __func__);
+#endif
+#endif
+}
+
+/**
+ * @brief axis_to_strm reads from an AXI-Stream (represented as a TAPA istream) and writes to a TAPA ostream (Non-blocking).
+ *
+ * @tparam T : C++ base element type of the vectorized interfaces
+ * @tparam VEC_FACTOR : Number of vectorized elements of the TAPA stream ports
+ * @tparam IN_ITR : II configuration of the pipeline loop (default 1 for maximum throughput)
+ *
+ * @param outer_itr : Number of outer iterations
+ * @param total_itr : Number of inner iterations per block
+ * @param bsize : Block size multiplier for the outer iterations
+ * @param axis_in : Input TAPA istream (acting as AXI-Stream)
+ * @param hls_out : Output TAPA ostream
+ */
+template <typename T, unsigned int VEC_FACTOR, unsigned int IN_ITR=1>
+void axis_to_strm(const unsigned int outer_itr, const unsigned int total_itr, const unsigned short bsize,
+        ::tapa::istream<::tapa::vec_t<T, VEC_FACTOR>>& axis_in, 
+        ::tapa::ostream<::tapa::vec_t<T, VEC_FACTOR>>& hls_out) {
+
+    const unsigned int total_outer_itr = outer_itr * bsize;
+    const unsigned int total_transactions = total_outer_itr * total_itr;
+
+#ifdef DEBUG_LOG
+    printf("[KERNEL_DEBUG]|%s| Starting axis_to_strm. outer_iter: %d, bsize: %d, total_outer_itr: %d, total_itr: %d, total_transactions: %d\n",
+            __func__, outer_itr, bsize, total_outer_itr, total_itr, total_transactions);
+#endif
+
+    unsigned int trans_cnt = 0;
+    bool data_valid = false;
+    ::tapa::vec_t<T, VEC_FACTOR> buffer;
+
+    while (trans_cnt < total_transactions) {
+        #pragma HLS PIPELINE II=IN_ITR
+
+        // Attempt to read if we don't have valid data
+        if (!data_valid) {
+            if (axis_in.try_read(buffer)) {
+                data_valid = true;
+#ifdef DEBUG_LOG
+                printf("[KERNEL_DEBUG]|%s| Read trans_id: %d, in_trans val: (", __func__, trans_cnt);
+                for (int j = 0; j < VEC_FACTOR; j++) {
+                    // Cast to double for generic printing to avoid format string warnings
+                    printf(" %f,", static_cast<double>(buffer[j])); 
+                }
+                printf(")\n");
+#endif  
+            }
+        }
+
+        // Attempt to write if we have valid data
+        if (data_valid) {
+            if (hls_out.try_write(buffer)) {
+                data_valid = false;
+                trans_cnt++;
+            }
+        }
+    }
+}
+
+/**
+ * @brief strm_to_axis reads from a TAPA istream and writes to an AXI-Stream (represented as a TAPA ostream) (Non-blocking).
+ *
+ * @tparam T : C++ base element type of the vectorized interfaces
+ * @tparam VEC_FACTOR : Number of vectorized elements of the TAPA stream ports
+ * @tparam IN_ITR : II configuration of the pipeline loop (default 1 for maximum throughput)
+ *
+ * @param outer_itr : Number of outer iterations
+ * @param total_itr : Number of inner iterations per block
+ * @param bsize : Block size multiplier for the outer iterations
+ * @param hls_in : Input TAPA istream
+ * @param axis_out : Output TAPA ostream (acting as AXI-Stream)
+ */
+template <typename T, unsigned int VEC_FACTOR, unsigned int IN_ITR=1>
+void strm_to_axis(const unsigned int outer_itr, const unsigned int total_itr, const unsigned short bsize, 
+        ::tapa::istream<::tapa::vec_t<T, VEC_FACTOR>>& hls_in,
+        ::tapa::ostream<::tapa::vec_t<T, VEC_FACTOR>>& axis_out) {
+    
+    const unsigned int total_outer_itr = outer_itr * bsize;
+    const unsigned int total_transactions = total_outer_itr * total_itr;
+
+#ifdef DEBUG_LOG
+    printf("[KERNEL_DEBUG]|%s| Starting strm_to_axis. outer_iter: %d, bsize: %d, total_outer_itr: %d, total_itr: %d, total_transactions: %d\n",
+            __func__, outer_itr, bsize, total_outer_itr, total_itr, total_transactions);
+#endif
+
+    unsigned int trans_cnt = 0;
+    bool data_valid = false;
+    ::tapa::vec_t<T, VEC_FACTOR> buffer;
+
+    while (trans_cnt < total_transactions) {
+        #pragma HLS PIPELINE II=IN_ITR
+
+        // Attempt to read if we don't have valid data
+        if (!data_valid) {
+            if (hls_in.try_read(buffer)) {
+                data_valid = true;
+            }
+        }
+
+        // Attempt to write if we have valid data
+        if (data_valid) {
+            if (axis_out.try_write(buffer)) {
+#ifdef DEBUG_LOG
+                printf("[KERNEL_DEBUG]|%s| write trans_id: %d, trans val: (", __func__, trans_cnt);
+                for (int j = 0; j < VEC_FACTOR; j++) {
+                    printf(" %f,", static_cast<double>(buffer[j]));
+                }
+                printf(")\n");
+#endif
+                data_valid = false;
+                trans_cnt++;
+            }
+        }
+    }    
 }
 
 }
