@@ -585,7 +585,7 @@ public:
             {{widen_dt_name(arg)}} arg{{arg.id}}_update_val;
             {% endif %}
         {% endfor %}
-        {% if config["platform_is_ib_selectable"] %}
+        {% if (config["supported_internal_storage"] | length) > 0 %}
             {% set SIS = true %}
             {% set SIS_type_count = config["supported_internal_storage"] | length %}
         // {{SIS_type_count}}
@@ -635,20 +635,28 @@ public:
                 {% endif %}
                 {% if buffer.is_read_write_aligned %}
                     {% if SIS %}
-                        {% if  buffer.buffer_type == ops.BufferType.LINE_BUFF %}
+                        {% if ndim == 3 %}
+                            {% if  buffer.buffer_type == ops.BufferType.LINE_BUFF %}
             #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_s2p {% if "BRAM" in (config["supported_internal_storage"]) %}impl = BRAM{% endif %} latency=2
-                        {% else %}
+                            {% else %}
             #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_s2p {% if "URAM" in (config["supported_internal_storage"]) %}impl = URAM{% endif %} latency=2  
+                            {% endif %}
+                        {% else %}
+            #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_s2p impl = {{config["supported_internal_storage"][SIS_id[0]]}} latency=2      
                         {% endif %}
                     {% else %}
             #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_s2p latency=2
                     {% endif %}
                 {% else %}
                     {% if SIS %}
-                        {% if  buffer.buffer_type == ops.BufferType.LINE_BUFF %}
+                        {% if ndim == 3 %}
+                            {% if  buffer.buffer_type == ops.BufferType.LINE_BUFF %}
             #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_s2p {% if "BRAM" in (config["supported_internal_storage"]) %}impl = BRAM{% endif %} latency=2
-                        {% else %}
+                            {% else %}
             #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_s2p {% if "URAM" in (config["supported_internal_storage"]) %}impl = URAM{% endif %} latency=2  
+                            {% endif %}
+                        {% else %}
+            #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_s2p impl = {{config["supported_internal_storage"][SIS_id[0]]}} latency=2
                         {% endif %}
                     {% else %}
             #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_s2p latency=2

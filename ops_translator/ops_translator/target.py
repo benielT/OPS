@@ -306,6 +306,7 @@ class HLS(Target):
             "max_SLR_count" : 1,
             "platform_is_multi_slr" : False,
             "platform_is_sb_selectable" : False,
+            "supported_internal_storage" : ["URAM",  "BRAM"],
             "max_global_clock" : 300000000,
             "HBM_tile_racks" : 0
         }
