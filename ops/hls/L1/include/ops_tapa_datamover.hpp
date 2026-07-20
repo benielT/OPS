@@ -792,6 +792,121 @@ void terminate(::tapa::istream<::tapa::vec_t<T, VEC_FACTOR>>& strm_in,
 #endif
 }
 
+/**
+ * @brief axis_to_strm reads from an AXI-Stream (represented as a TAPA istream) and writes to a TAPA ostream (Non-blocking).
+ *
+ * @tparam T : C++ base element type of the vectorized interfaces
+ * @tparam VEC_FACTOR : Number of vectorized elements of the TAPA stream ports
+ * @tparam IN_ITR : II configuration of the pipeline loop (default 1 for maximum throughput)
+ *
+ * @param outer_itr : Number of outer iterations
+ * @param total_itr : Number of inner iterations per block
+ * @param bsize : Block size multiplier for the outer iterations
+ * @param axis_in : Input TAPA istream (acting as AXI-Stream)
+ * @param hls_out : Output TAPA ostream
+ */
+template <typename T, unsigned int VEC_FACTOR, unsigned int IN_ITR=1>
+void axis_to_strm(const unsigned int outer_itr, const unsigned int total_itr, const unsigned short bsize,
+        ::tapa::istream<::tapa::vec_t<T, VEC_FACTOR>>& axis_in, 
+        ::tapa::ostream<::tapa::vec_t<T, VEC_FACTOR>>& hls_out) {
+
+    const unsigned int total_outer_itr = outer_itr * bsize;
+    const unsigned int total_transactions = total_outer_itr * total_itr;
+
+#ifdef DEBUG_LOG
+    printf("[KERNEL_DEBUG]|%s| Starting axis_to_strm. outer_iter: %d, bsize: %d, total_outer_itr: %d, total_itr: %d, total_transactions: %d\n",
+            __func__, outer_itr, bsize, total_outer_itr, total_itr, total_transactions);
+#endif
+
+    unsigned int trans_cnt = 0;
+    bool data_valid = false;
+    ::tapa::vec_t<T, VEC_FACTOR> buffer;
+
+    while (trans_cnt < total_transactions) {
+        #pragma HLS PIPELINE II=IN_ITR
+
+        // Attempt to read if we don't have valid data
+        if (!data_valid) {
+            if (axis_in.try_read(buffer)) {
+                data_valid = true;
+#ifdef DEBUG_LOG
+                printf("[KERNEL_DEBUG]|%s| Read trans_id: %d, in_trans val: (", __func__, trans_cnt);
+                for (int j = 0; j < VEC_FACTOR; j++) {
+                    // Cast to double for generic printing to avoid format string warnings
+                    printf(" %f,", static_cast<double>(buffer[j])); 
+                }
+                printf(")\n");
+#endif  
+            }
+        }
+
+        // Attempt to write if we have valid data
+        if (data_valid) {
+            if (hls_out.try_write(buffer)) {
+                data_valid = false;
+                trans_cnt++;
+            }
+        }
+    }
+}
+
+/**
+ * @brief strm_to_axis reads from a TAPA istream and writes to an AXI-Stream (represented as a TAPA ostream) (Non-blocking).
+ *
+ * @tparam T : C++ base element type of the vectorized interfaces
+ * @tparam VEC_FACTOR : Number of vectorized elements of the TAPA stream ports
+ * @tparam IN_ITR : II configuration of the pipeline loop (default 1 for maximum throughput)
+ *
+ * @param outer_itr : Number of outer iterations
+ * @param total_itr : Number of inner iterations per block
+ * @param bsize : Block size multiplier for the outer iterations
+ * @param hls_in : Input TAPA istream
+ * @param axis_out : Output TAPA ostream (acting as AXI-Stream)
+ */
+template <typename T, unsigned int VEC_FACTOR, unsigned int IN_ITR=1>
+void strm_to_axis(const unsigned int outer_itr, const unsigned int total_itr, const unsigned short bsize, 
+        ::tapa::istream<::tapa::vec_t<T, VEC_FACTOR>>& hls_in,
+        ::tapa::ostream<::tapa::vec_t<T, VEC_FACTOR>>& axis_out) {
+    
+    const unsigned int total_outer_itr = outer_itr * bsize;
+    const unsigned int total_transactions = total_outer_itr * total_itr;
+
+#ifdef DEBUG_LOG
+    printf("[KERNEL_DEBUG]|%s| Starting strm_to_axis. outer_iter: %d, bsize: %d, total_outer_itr: %d, total_itr: %d, total_transactions: %d\n",
+            __func__, outer_itr, bsize, total_outer_itr, total_itr, total_transactions);
+#endif
+
+    unsigned int trans_cnt = 0;
+    bool data_valid = false;
+    ::tapa::vec_t<T, VEC_FACTOR> buffer;
+
+    while (trans_cnt < total_transactions) {
+        #pragma HLS PIPELINE II=IN_ITR
+
+        // Attempt to read if we don't have valid data
+        if (!data_valid) {
+            if (hls_in.try_read(buffer)) {
+                data_valid = true;
+            }
+        }
+
+        // Attempt to write if we have valid data
+        if (data_valid) {
+            if (axis_out.try_write(buffer)) {
+#ifdef DEBUG_LOG
+                printf("[KERNEL_DEBUG]|%s| write trans_id: %d, trans val: (", __func__, trans_cnt);
+                for (int j = 0; j < VEC_FACTOR; j++) {
+                    printf(" %f,", static_cast<double>(buffer[j]));
+                }
+                printf(")\n");
+#endif
+                data_valid = false;
+                trans_cnt++;
+            }
+        }
+    }    
+}
+
 }
 }
 #endif /* DOXYGEN_SHOULD_SKIP_THIS */
