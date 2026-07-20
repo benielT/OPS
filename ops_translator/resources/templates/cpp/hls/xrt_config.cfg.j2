@@ -1,4 +1,5 @@
 [connectivity]
+{% if sim != true %}
 {%set is_slr_iter_par = config["iter_par_factor"] is iterable and (config["iter_par_factor"] is not string and config["iter_par_factor"] is not mapping) %}
 {% for ilh, program in app.uniqueOuterLoops() %}
     {#% if config["SLR_count"] > 1 %#}
@@ -7,98 +8,121 @@ nk=kernel_outerloop_{{ilh.id}}{% if is_slr_iter_par %}_{{slr_id}}{% endif %}:1:k
         {% endfor %}
     {#% endif %#}
 {% endfor %}
-
+{% else %}
 {% for ilh, program in app.uniqueOuterLoops() %}
-    {% for arg in ilh.joint_args|ops_dat %}
-        {% if arg is ops_read or arg is ops_rw %}
-            {% if prog.is_interleave() %}
-                {% for i in range(config["tile_banks"]) %}
-stream_connect=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_out:kernel_outerloop_inst_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_in:{{config["axis_interconnect_buff_size"]}}
-                {% endfor %}
-            {% else %}
-stream_connect=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_out:kernel_outerloop_inst_{{ilh.id}}_1.arg{{arg.id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
-            {% endif %}
-        {% endif %}
-        {% if arg is ops_write or arg is ops_rw %}
-            {% for slr_id in range(config["SLR_count"]) %}
-                {% if loop.last %}
-                    {% if prog.is_interleave() %}
-                        {% for i in range(config["tile_banks"]) %}
-                           {% if config["max_SLR_count"] == 3 and config["SLR_count"] >= 2 and target == "hls" %}
-stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_{{i}}_axis_out:repeater_outerloop_{{ilh.id}}_1.arg{{ilh.getSwapArg(arg).id}}_{{i}}_axis_in
-stream_connect=repeater_outerloop_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_in:{{config["axis_interconnect_buff_size"]}}
-                           {% else %}
-stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_{{i}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_in:{{config["axis_interconnect_buff_size"]}}
-                           {% endif %}
-                        {% endfor %}
-                    {% else %}
-                        {% if config["max_SLR_count"] == 3 and config["SLR_count"] >= 2 and target == "hls" %}
-stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_out:repeater_outerloop_{{ilh.id}}_1.arg{{ilh.getSwapArg(arg).id}}_axis_in
-stream_connect=repeater_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
-                        {% else %}
-stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
-                        {% endif %}
-                    {% endif %}
-                {% else %}
-                    {% if prog.is_interleave() %}
-                        {% for i in range(config["tile_banks"]) %}
-stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_{{i}}_axis_out:kernel_outerloop_inst_{{ilh.id}}_{{slr_id+2}}.arg{{ilh.getSwapArg(arg).id}}_{{i}}_axis_in:{{config["axis_interconnect_buff_size"]}}
-                        {% endfor %}
-                    {% else %}
-stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_out:kernel_outerloop_inst_{{ilh.id}}_{{slr_id+2}}.arg{{ilh.getSwapArg(arg).id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
-                    {% endif %}
-                {% endif %}
-            {% endfor %}
-        {% endif %}
-    {% endfor %}
+nk=sim_mega_kernel_{{ilh.id}}:1:sim_mega_kernel_{{ilh.id}}
 {% endfor %}
-
-{% if config["platform_is_multi_slr"] %}
-    {% for ilh, program in app.uniqueOuterLoops() %}
-        {% if config["max_SLR_count"] - config["SLR_count"] > 1 %}
-            {% for slr_id in range(config["max_SLR_count"] - config["SLR_count"] - 1, config["max_SLR_count"] - 1) %}
-slr=kernel_outerloop_inst_{{ilh.id}}_{{loop.index0+1}}:SLR{{slr_id}}
-            {% endfor %}
-        {% else %}
-            {% for slr_id in range(config["max_SLR_count"] - config["SLR_count"], config["max_SLR_count"]) %}
-slr=kernel_outerloop_inst_{{ilh.id}}_{{loop.index0+1}}:SLR{{slr_id}}
-            {% endfor %}
-        {% endif %}
-        {% if config["max_SLR_count"] == 3 and config["SLR_count"] >= 2 and target == "hls" %}
-slr=repeater_outerloop_{{ilh.id}}_1:SLR1
-        {% endif%}
-    {% endfor %}
 {% endif %}
-
-{% if config["platform_is_sb_selectable"] %}
+{% if sim != true %}
     {% for ilh, program in app.uniqueOuterLoops() %}
         {% for arg in ilh.joint_args|ops_dat %}
-            {% if program.tiling %}
-                {% if config["tile_banks"] > 1 %}
+            {% if arg is ops_read or arg is ops_rw %}
+                {% if prog.is_interleave() %}
                     {% for i in range(config["tile_banks"]) %}
-                        {% if not config["tile_bank_placement_policy"] == 4 %}
-sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b{{i}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
-                        {#{% else %}
-sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b{{i}}:DDR#}
-                        {% endif %}
+stream_connect=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_out:kernel_outerloop_inst_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_in:{{config["axis_interconnect_buff_size"]}}
                     {% endfor %}
-                {% else %} 
-                    {% if not config["tile_bank_placement_policy"] == 4 %}
-sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
-                    {#% else %}
-sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:DDR#}
+                {% else %}
+stream_connect=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_out:kernel_outerloop_inst_{{ilh.id}}_1.arg{{arg.id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                {% endif %}
+            {% endif %}
+            {% if arg is ops_write or arg is ops_rw %}
+                {% for slr_id in range(config["SLR_count"]) %}
+                    {% if loop.last %}
+                        {% if prog.is_interleave() %}
+                            {% for i in range(config["tile_banks"]) %}
+                            {% if config["max_SLR_count"] == 3 and config["SLR_count"] >= 2 and target == "hls" %}
+stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_{{i}}_axis_out:repeater_outerloop_{{ilh.id}}_1.arg{{ilh.getSwapArg(arg).id}}_{{i}}_axis_in
+stream_connect=repeater_outerloop_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                            {% else %}
+stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_{{i}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_{{i}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                            {% endif %}
+                            {% endfor %}
+                        {% else %}
+                            {% if config["max_SLR_count"] == 3 and config["SLR_count"] >= 2 and target == "hls" %}
+stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_out:repeater_outerloop_{{ilh.id}}_1.arg{{ilh.getSwapArg(arg).id}}_axis_in
+stream_connect=repeater_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                            {% else %}
+stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_out:datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                            {% endif %}
+                        {% endif %}
+                    {% else %}
+                        {% if prog.is_interleave() %}
+                            {% for i in range(config["tile_banks"]) %}
+stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_{{i}}_axis_out:kernel_outerloop_inst_{{ilh.id}}_{{slr_id+2}}.arg{{ilh.getSwapArg(arg).id}}_{{i}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                            {% endfor %}
+                        {% else %}
+stream_connect=kernel_outerloop_inst_{{ilh.id}}_{{slr_id+1}}.arg{{arg.id}}_axis_out:kernel_outerloop_inst_{{ilh.id}}_{{slr_id+2}}.arg{{ilh.getSwapArg(arg).id}}_axis_in:{{config["axis_interconnect_buff_size"]}}
+                        {% endif %}
                     {% endif %}
-                {% endif %}
-{#sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b2:HBM[{{arg.id * 2 + 1}}]#}
-            {% else %}
-                {% if not config["tile_bank_placement_policy"] == 4 %}
-sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
-                {#% else %}
-sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:DDR#}
-                {% endif %}
+                {% endfor %}
             {% endif %}
         {% endfor %}
     {% endfor %}
+
+    {% if config["platform_is_multi_slr"] %}
+        {% for ilh, program in app.uniqueOuterLoops() %}
+            {% if config["max_SLR_count"] - config["SLR_count"] > 1 %}
+                {% for slr_id in range(config["max_SLR_count"] - config["SLR_count"] - 1, config["max_SLR_count"] - 1) %}
+slr=kernel_outerloop_inst_{{ilh.id}}_{{loop.index0+1}}:SLR{{slr_id}}
+                {% endfor %}
+            {% else %}
+                {% for slr_id in range(config["max_SLR_count"] - config["SLR_count"], config["max_SLR_count"]) %}
+slr=kernel_outerloop_inst_{{ilh.id}}_{{loop.index0+1}}:SLR{{slr_id}}
+                {% endfor %}
+            {% endif %}
+            {% if config["max_SLR_count"] == 3 and config["SLR_count"] >= 2 and target == "hls" %}
+slr=repeater_outerloop_{{ilh.id}}_1:SLR1
+            {% endif%}
+        {% endfor %}
+    {% endif %}
+
+    {% if config["platform_is_sb_selectable"] %}
+        {% for ilh, program in app.uniqueOuterLoops() %}
+            {% for arg in ilh.joint_args|ops_dat %}
+                {% if program.tiling %}
+                    {% if config["tile_banks"] > 1 %}
+                        {% for i in range(config["tile_banks"]) %}
+                            {% if not config["tile_bank_placement_policy"] == 4 %}
+sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b{{i}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+                            {% endif %}
+                        {% endfor %}
+                    {% else %} 
+                        {% if not config["tile_bank_placement_policy"] == 4 %}
+sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+                        {% endif %}
+                    {% endif %}
+                {% else %}
+                    {% if not config["tile_bank_placement_policy"] == 4 %}
+sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+        {% endfor %}
+    {% endif %}
+{% else %}
+    {% if config["platform_is_sb_selectable"] %}
+        {% for ilh, program in app.uniqueOuterLoops() %}
+            {% for arg in ilh.joint_args|ops_dat %}
+                {% if program.tiling %}
+                    {% if config["tile_banks"] > 1 %}
+                        {% for i in range(config["tile_banks"]) %}
+                            {% if not config["tile_bank_placement_policy"] == 4 %}
+sp=sim_mega_kernel_{{ilh.id}}.arg{{arg.id}}_b{{i}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+                            {% endif %}
+                        {% endfor %}
+                    {% else %} 
+                        {% if not config["tile_bank_placement_policy"] == 4 %}
+sp=sim_mega_kernel_{{ilh.id}}.arg{{arg.id}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+                        {% endif %}
+                    {% endif %}
+                {% else %}
+                    {% if not config["tile_bank_placement_policy"] == 4 %}
+sp=sim_mega_kernel_{{ilh.id}}.arg{{arg.id}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+        {% endfor %}
+    {% endif %}
 {% endif %}
 
 {% if not config["global_clock"] == -1 or not config["datamover_clock"] == -1%}
