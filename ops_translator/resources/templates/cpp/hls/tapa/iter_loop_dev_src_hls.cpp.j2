@@ -166,54 +166,19 @@ void joint_PE_{{ilh.id}}(
 
 {% block datamovement %}
 // TAPA PARSER BYPASS COMMENT - DO NOT REMOVE THIS
-void axis_to_strm(const unsigned int outer_itr, const unsigned int total_itr,const unsigned short bsize,
+void axis_to_strm_wrapper(const unsigned int outer_itr, const unsigned int total_itr,const unsigned short bsize,
         ::tapa::istream<::tapa::vec_t<stencil_type, {{config["vector_factor"]}}>>& axis_in, 
         ::tapa::ostream<::tapa::vec_t<stencil_type, {{config["vector_factor"]}}>>& hls_out) {
 
-    unsigned int total_outer_itr = outer_itr * bsize;
-#ifdef DEBUG_LOG
-    printf("[KERNEL_DEBUG]|%s| Starting axis_to_stream. outer_iter: %d, bsize: %d, total_outer_itr: %d, total_itr: %d \n",__func__, outer_itr, bsize, total_outer_itr, total_itr);
-#endif
-
-    for (unsigned int i = 0; i < total_outer_itr; i++) {
-        for (unsigned int j = 0; j < total_itr; j++)
-        {
-            auto data = axis_in.read();
-#ifdef DEBUG_LOG
-            printf("[KERNEL_DEBUG]|%s| Read itr: %d, trans_id: %d, in_trans val: (",__func__, i, j);
-            for (int j = 0; j < vector_factor; j++) {
-                printf(" %f,", data[j]);
-            }
-            printf(")\n");
-#endif  
-            hls_out.write(data);
-        }
-    }
+    ops::tapa::axis_to_strm<stencil_type, vector_factor>(outer_itr, total_itr, bsize, axis_in, hls_out);
 }
 
 // TAPA PARSER BYPASS COMMENT - DO NOT REMOVE THIS
-void strm_to_axis(const unsigned int outer_itr, const unsigned int total_itr, const unsigned short bsize, 
+void strm_to_axis_wrapper(const unsigned int outer_itr, const unsigned int total_itr, const unsigned short bsize, 
         ::tapa::istream<::tapa::vec_t<stencil_type,{{config["vector_factor"]}}>>& hls_in,
         ::tapa::ostream<::tapa::vec_t<stencil_type,{{config["vector_factor"]}}>>& axis_out) {
-    unsigned int total_outer_itr = outer_itr * bsize;
-
-#ifdef DEBUG_LOG
-    printf("[KERNEL_DEBUG]|%s| Starting axis_to_stream. outer_iter: %d, bsize: %d, total_outer_itr: %d, total_itr: %d \n",__func__, outer_itr, bsize, total_outer_itr, total_itr);
-#endif
-    for (unsigned int i = 0; i < total_outer_itr; i++) {
-        for (unsigned int j = 0; j < total_itr; j++)
-        {
-            auto data = hls_in.read();
-            axis_out.write(data);
-#ifdef DEBUG_LOG
-        printf("[KERNEL_DEBUG]|%s| write itr: %d, trans_id: %d, trans val: (",__func__, i, j);
-        for (int j = 0; j < vector_factor; j++) {
-            printf(" %f,", data[j]);
-        }
-        printf(")\n");
-#endif
-        }
-    }    
+    
+    ops::tapa::strm_to_axis<stencil_type, vector_factor>(outer_itr, total_itr, bsize, hls_in, axis_out);
 }
 {% endblock %}
 
@@ -275,7 +240,7 @@ void strm_to_axis(const unsigned int outer_itr, const unsigned int total_itr, co
 
 
     ::tapa::task()
-        .invoke(axis_to_strm, outer_itr, stencilConfig_total_itr, stencilConfig_batch_size, 
+        .invoke(axis_to_strm_wrapper, outer_itr, stencilConfig_total_itr, stencilConfig_batch_size, 
     {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw %}
         {% set first_loop_last = loop.last %}
         {% if arg is ops_read %}
@@ -404,7 +369,7 @@ void strm_to_axis(const unsigned int outer_itr, const unsigned int total_itr, co
         {% endfor %}
         )
     {% endfor %}
-        .invoke(strm_to_axis, outer_itr, stencilConfig_total_itr, stencilConfig_batch_size,
+        .invoke(strm_to_axis_wrapper, outer_itr, stencilConfig_total_itr, stencilConfig_batch_size,
         {% for arg in ilh.joint_args|ops_dat|ops_write_or_rw %}
             {% set first_loop_last = loop.last %}
             {% if prog.is_interleave() %}
