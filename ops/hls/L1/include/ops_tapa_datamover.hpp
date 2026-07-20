@@ -907,6 +907,117 @@ void strm_to_axis(const unsigned int outer_itr, const unsigned int total_itr, co
     }    
 }
 
+/**
+ * @brief hybrid_datamover_router routes data between memory streams and inter-PE streams (Non-blocking).
+ * It handles the initial memory fetch, intermediate stream loopbacks, and final memory writeback seamlessly.
+ *
+ * @tparam T : C++ base element type of the vectorized interfaces
+ * @tparam VEC_FACTOR : Number of vectorized elements of the TAPA stream ports
+ * @tparam IN_ITR : II configuration of the pipeline loop (default 1 for maximum throughput)
+ *
+ * @param mem_in : Input TAPA istream from memory
+ * @param axis_in : Input TAPA istream from upstream PE (loopback)
+ * @param axis_out : Output TAPA ostream to downstream PE (loopback)
+ * @param mem_out : Output TAPA ostream to memory
+ * @param num_trans : Number of stream transactions per outer loop iteration
+ * @param outerloop_itr : Number of intermediate loopback iterations (total passes = outerloop_itr + 1)
+ */
+template <typename T, unsigned int VEC_FACTOR, unsigned int IN_ITR=1>
+void hybrid_datamover_router(
+        ::tapa::istream<::tapa::vec_t<T, VEC_FACTOR>>& mem_in,
+        ::tapa::istream<::tapa::vec_t<T, VEC_FACTOR>>& axis_in,
+        ::tapa::ostream<::tapa::vec_t<T, VEC_FACTOR>>& axis_out,
+        ::tapa::ostream<::tapa::vec_t<T, VEC_FACTOR>>& mem_out,
+        const unsigned int num_trans,
+        const unsigned int outerloop_itr
+#ifdef DEBUG_LOG
+        , const char* debg_str = ""
+#endif
+        )
+{
+#ifdef DEBUG_LOG
+    printf("[KERNEL_DEBUG]|%s|%s| Starting. num_trans: %d, outerloop_itr: %d\n", 
+            __func__, debg_str, num_trans, outerloop_itr);
+#endif
+
+    unsigned int outer_cnt = 0;
+    unsigned int trans_cnt = 0;
+    bool data_valid = false;
+    ::tapa::vec_t<T, VEC_FACTOR> buffer;
+
+    // Total outer loops = outerloop_itr + 1
+    while (outer_cnt <= outerloop_itr) {
+        #pragma HLS PIPELINE II=IN_ITR
+
+        // 1. Read Phase (Fetch new data if we don't have any pending)
+        if (!data_valid) {
+            if (outer_cnt == 0) {
+                // Initial pass: Fetch from memory
+                if (mem_in.try_read(buffer)) {
+                    data_valid = true;
+#ifdef DEBUG_LOG
+                    printf("[KERNEL_DEBUG]|%s|%s|read_from_mem| forwarding trans: %d, trans val: (",
+                            __func__, debg_str, trans_cnt);
+                    for (int j = 0; j < VEC_FACTOR; j++) {
+                        printf(" %f,", static_cast<double>(buffer[j]));
+                    }
+                    printf(")\n");
+#endif
+                }
+            } else {
+                // Subsequent passes: Read from axis_in (loopback)
+                if (axis_in.try_read(buffer)) {
+                    data_valid = true;
+#ifdef DEBUG_LOG
+                    printf("[KERNEL_DEBUG]|%s|%s|loopback| forwarding iter: %d, trans: %d, trans val: (",
+                            __func__, debg_str, outer_cnt, trans_cnt);
+                    for (int j = 0; j < VEC_FACTOR; j++) {
+                        printf(" %f,", static_cast<double>(buffer[j]));
+                    }
+                    printf(")\n");
+#endif
+                }
+            }
+        }
+
+        // 2. Write Phase (Attempt to dispatch valid data downstream)
+        if (data_valid) {
+            bool write_success = false;
+
+            if (outer_cnt == outerloop_itr) {
+                // Final pass: Write back to memory
+                if (mem_out.try_write(buffer)) {
+                    write_success = true;
+#ifdef DEBUG_LOG
+                    printf("[KERNEL_DEBUG]|%s|%s|write_to_mem| forwarding trans: %d, trans val: (",
+                            __func__, debg_str, trans_cnt);
+                    for (int j = 0; j < VEC_FACTOR; j++) {
+                        printf(" %f,", static_cast<double>(buffer[j]));
+                    }
+                    printf(")\n");
+#endif
+                }
+            } else {
+                // Initial & Intermediate passes: Forward to axis_out (loopback)
+                if (axis_out.try_write(buffer)) {
+                    write_success = true;
+                }
+            }
+
+            // 3. State Update (Advance counters on successful write)
+            if (write_success) {
+                data_valid = false;
+                trans_cnt++;
+
+                if (trans_cnt == num_trans) {
+                    trans_cnt = 0;
+                    outer_cnt++;
+                }
+            }
+        }
+    }
+}
+
 }
 }
 #endif /* DOXYGEN_SHOULD_SKIP_THIS */
