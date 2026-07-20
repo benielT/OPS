@@ -68,7 +68,7 @@ class CppHLS(Scheme):
     loop_kernel_extension = "hpp"
     master_kernel_extension = "hpp"
     common_config_extension = "hpp"
-    host_config_extension = "cfg"
+    link_config_extension = "cfg"
     iterloop_device_inc_extension = "hpp"
     iterloop_device_src_extension = "cpp"
     iterloop_datamover_inc_extension = "hpp"
@@ -506,7 +506,7 @@ class CppHLS(Scheme):
                 prog = prog,
                 target = self.target.name,
                 scripts_path = scripts_path
-            ), self.host_config_extension) 
+            ), self.link_config_extension) 
     
     def genStencilDecl(
         self,
@@ -551,7 +551,7 @@ class CppTapa(CppHLS):
     loop_kernel_extension = "hpp"
     master_kernel_extension = "hpp"
     common_config_extension = "hpp"
-    host_config_extension = "cfg"
+    link_config_extension = "cfg"
     iterloop_device_inc_extension = "hpp"
     iterloop_device_src_extension = "cpp"
     iterloop_datamover_inc_extension = "hpp"
@@ -602,6 +602,33 @@ class CppTapa(CppHLS):
                 is_list_itr_par = isinstance(config["iter_par_factor"],list)
             ), self.sim_super_kernel_src_extension])
     
+    def genSimLinkConfig(
+        self,
+        env: Environment,
+        config: dict,
+        app: Application
+    ) -> Tuple[str, str]:
+        link_config_template = env.get_template(str(self.link_config_template))
+        
+        if (config["HBM_tile_racks"] > 0):
+            placer = FPGABankPlacer(config["tile_bank_placement_policy"], 
+                                                config["HBM_banks"], config["HBM_tile_racks"])
+        else:
+            placer = None
+           
+        ops_install_path = os.getenv("OPS_INSTALL_PATH", None)
+        scripts_path = Path(ops_install_path, "../", "scripts").resolve()
+        
+        return([link_config_template.render(
+                app = app,
+                FPGABankPlacer = placer,
+                sim = True,
+                config = config,
+                target = self.target.name,
+                scripts_path = scripts_path
+            ), self.link_config_extension])
+        
+        
 class CppCuda(Scheme):
     lang = Lang.find("cpp")
     target = Target.find("cuda")
