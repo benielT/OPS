@@ -47,6 +47,7 @@
 {% block headers %}
 #pragma once
 #include <ops_tapa_kernel_support.h>
+
 #include "../../common/include/common_config.hpp"
     {% for df_node in ilh.get_active_df_graph().getAllLoopNodes() %}
 #include "PE_{{df_node.loop.kernel}}.hpp"
