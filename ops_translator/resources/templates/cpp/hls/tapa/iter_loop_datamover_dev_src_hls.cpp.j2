@@ -35,35 +35,19 @@ void task_terminate_lb(
 }
 
 void task_mem2stream_lb(
-#ifdef ASYNC_MOVER
-    ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>>& arg0,
-#else
-    ::tapa::mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg0,
-#endif
+    ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>>& arg,
     ::tapa::ostream<::tapa::vec_t<stencil_type, mem_vector_factor>>& strm_out,
     const unsigned int num_beats) 
 {
-#ifdef ASYNC_MOVER
-    ops::tapa::mem2stream<stencil_type, mem_vector_factor, 2>(arg0, strm_out, num_beats);
-#else
-    ops::tapa::mem2stream_blocking<stencil_type, mem_vector_factor, 1>(arg0, strm_out, num_beats);
-#endif
+    ops::tapa::mem2stream<stencil_type, mem_vector_factor, 2>(arg, strm_out, num_beats);
 }  
 
 void task_stream2mem_lb(
-#ifdef ASYNC_MOVER
-    ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>>& arg1,
-#else 
-    ::tapa::mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg1,
-#endif
+    ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>>& arg,
     ::tapa::istream<::tapa::vec_t<stencil_type, mem_vector_factor>>& strm_in,
     const unsigned int num_beats) 
 {
-#ifdef ASYNC_MOVER
-    ops::tapa::stream2mem<stencil_type, mem_vector_factor, 2>(arg1, strm_in, num_beats);
-#else
-    ops::tapa::stream2mem_blocking<stencil_type, mem_vector_factor, 1>(arg1, strm_in, num_beats);
-#endif
+    ops::tapa::stream2mem<stencil_type, mem_vector_factor, 2>(arg, strm_in, num_beats);
 }
 
 void hybrid_datamover_router(
@@ -78,59 +62,7 @@ void hybrid_datamover_router(
 #endif
         )
 {
-#ifdef DEBUG_LOG
-    printf("[KERNEL_DEBUG]|%s|%s| num_trans: %d, outerloop_itr: %d\n", __func__, debg_str, num_trans, outerloop_itr);
-#endif
-    for (unsigned int itr = 0; itr < outerloop_itr+1; itr++) {
-        if (itr == 0 ) {
-#ifdef DEBUG_LOG
-            printf("[KERNEL_DEBUG]|%s|%s| Initial read from memory\n", __func__, debg_str);
-#endif
-            for (unsigned int itr = 0; itr < num_trans; itr++) {
-                #pragma HLS PIPELINE II=1
-                auto data = mem_in.read();
-                axis_out.write(data);
-#ifdef DEBUG_LOG
-            printf("[KERNEL_DEBUG]|%s|%s|read_from_mem| forwarding trans: %d, trans val: (",__func__, debg_str, itr);
-                for (int j = 0; j < vector_factor; j++) {
-                    printf(" %f,", data[j]);
-                }
-                printf(")\n");
-#endif
-            }
-        }
-        else if (itr == outerloop_itr) {
-#ifdef DEBUG_LOG
-            printf("[KERNEL_DEBUG]|%s|%s| Final write to memory\n", __func__, debg_str);
-#endif
-            for (unsigned int itr = 0; itr < num_trans; itr++) {
-                #pragma HLS PIPELINE II=1
-                auto data = axis_in.read();
-                mem_out.write(data);
-#ifdef DEBUG_LOG
-            printf("[KERNEL_DEBUG]|%s|%s|write_to_mem| forwarding trans: %d, trans val: (",__func__, debg_str, itr);
-                for (int j = 0; j < mem_vector_factor; j++) {
-                    printf(" %f,", data[j]);
-                }
-                printf(")\n");
-#endif
-            }
-        }
-        else {
-            for (unsigned int itr = 0; itr < num_trans; itr++) {
-                #pragma HLS PIPELINE II=1
-                auto data = axis_in.read();
-                axis_out.write(data);
-#ifdef DEBUG_LOG
-                printf("[KERNEL_DEBUG]|%s|%s|loopback| forwarding iter: %d, trans: %d, trans val: (",__func__, debg_str, itr, itr);
-                for (int j = 0; j < vector_factor; j++) {
-                    printf(" %f,", data[j]);
-                }
-                printf(")\n");
-#endif
-            }
-        }
-    }
+    ops::tapa::hybrid_datamover_router<stencil_type, vector_factor, 1>(mem_in, axis_in, axis_out, mem_out, num_trans, outerloop_itr);
 }
 #else
 // TAPA PARSER BYPASS COMMENT - DO NOT REMOVE THIS
@@ -164,13 +96,8 @@ void task_terminate(
 }
 
 void task_pingpong_mem2stream(
-    #ifdef ASYNC_MOVER
         ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>>& arg0,
         ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>>& arg1,
-    #else
-        ::tapa::mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg0,
-        ::tapa::mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg1,
-    #endif 
         ::tapa::ostream<::tapa::vec_t<stencil_type, mem_vector_factor>>& strm_out,
         ::tapa::istream<bool>& sync_in,
         const unsigned int num_beats,
@@ -179,28 +106,16 @@ void task_pingpong_mem2stream(
     auto outerloop_itr_by_2 = outerloop_itr >> 1;
 
     for (unsigned int itr = 0; itr < outerloop_itr_by_2; itr++) {
-    #ifdef ASYNC_MOVER
         ops::tapa::mem2stream<stencil_type, mem_vector_factor,{{(config["mem_vector_factor"]/config["vector_factor"])|int}}>(arg0, strm_out, num_beats);
         sync_in.read();
         ops::tapa::mem2stream<stencil_type, mem_vector_factor,{{(config["mem_vector_factor"]/config["vector_factor"])|int}}>(arg1, strm_out, num_beats);
         sync_in.read(); 
-    #else
-        ops::tapa::mem2stream_blocking<stencil_type, mem_vector_factor, {{(config["mem_vector_factor"]/config["vector_factor"])|int}}>(arg0, strm_out, num_beats);
-        sync_in.read();
-        ops::tapa::mem2stream_blocking<stencil_type, mem_vector_factor, {{(config["mem_vector_factor"]/config["vector_factor"])|int}}>(arg1, strm_out, num_beats);
-        sync_in.read();
-    #endif
     }
 }
 
 void task_pingpong_stream2mem(
-    #ifdef ASYNC_MOVER
         ::tapa::async_mmap<::tapa::vec_t<float, mem_vector_factor>>& arg0,
         ::tapa::async_mmap<::tapa::vec_t<float, mem_vector_factor>>& arg1,
-    #else
-        ::tapa::mmap<::tapa::vec_t<float, mem_vector_factor>> arg0,
-        ::tapa::mmap<::tapa::vec_t<float, mem_vector_factor>> arg1,
-    #endif
         ::tapa::istream<::tapa::vec_t<stencil_type, mem_vector_factor>>& strm_in,
         ::tapa::ostream<bool>& sync_out,
         const unsigned int num_beats,
@@ -208,17 +123,10 @@ void task_pingpong_stream2mem(
     
     auto outerloop_itr_by_2 = outerloop_itr >> 1;
     for (unsigned int itr = 0; itr < outerloop_itr_by_2; itr++) {
-    #ifdef ASYNC_MOVER
         ops::tapa::stream2mem<stencil_type, mem_vector_factor, {{(config["mem_vector_factor"]/config["vector_factor"])|int}}>(arg1, strm_in, num_beats);
         sync_out.write(true);
         ops::tapa::stream2mem<stencil_type, mem_vector_factor, {{(config["mem_vector_factor"]/config["vector_factor"])|int}}>(arg0, strm_in, num_beats);
         sync_out.write(true);
-    #else
-        ops::tapa::stream2mem_blocking<stencil_type, mem_vector_factor, {{(config["mem_vector_factor"]/config["vector_factor"])|int}}>(arg1, strm_in, num_beats);
-        sync_out.write(true);
-        ops::tapa::stream2mem_blocking<stencil_type, mem_vector_factor, {{(config["mem_vector_factor"]/config["vector_factor"])|int}}>(arg0, strm_in, num_beats);
-        sync_out.write(true);
-    #endif
     }
 }
 #endif
