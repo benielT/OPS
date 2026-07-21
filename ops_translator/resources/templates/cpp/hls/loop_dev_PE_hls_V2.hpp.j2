@@ -635,7 +635,7 @@ public:
                 {% endif %}
                 {% if buffer.is_read_write_aligned %}
                     {% if SIS %}
-                        {% if ndim == 3 %}
+                        {% if lh.ndim == 3 %}
                             {% if  buffer.buffer_type == ops.BufferType.LINE_BUFF %}
             #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_s2p {% if "BRAM" in (config["supported_internal_storage"]) %}impl = BRAM{% endif %} latency=2
                             {% else %}
@@ -649,7 +649,7 @@ public:
                     {% endif %}
                 {% else %}
                     {% if SIS %}
-                        {% if ndim == 3 %}
+                        {% if lh.ndim == 3 %}
                             {% if  buffer.buffer_type == ops.BufferType.LINE_BUFF %}
             #pragma HLS BIND_STORAGE variable = arg{{arg.id}}_{{buffer.name}} type = ram_s2p {% if "BRAM" in (config["supported_internal_storage"]) %}impl = BRAM{% endif %} latency=2
                             {% else %}
