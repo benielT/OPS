@@ -65,4 +65,5 @@
 
 
 {% block prototype %}
-void kernel_outerloop_{{ilh.id}}({{prototype_params()}}){% endblock %}{% block implementation %};{% endblock %}
+void kernel_outerloop_{{ilh.id}}{% if slr_iter_par_fact is defined %}_{{slr_iter_par_fact}}{%endif%}(
+    {{prototype_params()-}}){% endblock %}{% block implementation %};{% endblock %}

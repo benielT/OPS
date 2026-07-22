@@ -278,6 +278,43 @@ void stream2mem_blocking(::tapa::mmap<::tapa::vec_t<T, MEM_VEC_FACTOR>>& mem_out
 #endif
 }
 
+template <typename T, unsigned short MEM_VEC_FACTOR, unsigned int IN_ITR = 2>
+void unified_mem_read_write(
+    ::tapa::async_mmap<::tapa::vec_t<T, MEM_VEC_FACTOR>>& mem_in,
+    ::tapa::async_mmap<::tapa::vec_t<T, MEM_VEC_FACTOR>>& mem_out,
+    ::tapa::ostream<::tapa::vec_t<T, MEM_VEC_FACTOR>>& stream_out,
+    ::tapa::istream<::tapa::vec_t<T, MEM_VEC_FACTOR>>& stream_in, 
+    const unsigned int num_beats)
+{
+    #pragma HLS INLINE off
+
+    for (unsigned int k_wr_req = 0, k_wr_resp = 0, k_rd_req = 0, k_rd_resp = 0;
+            k_rd_resp < num_beats || k_wr_resp < num_beats;) {
+        #pragma HLS PIPELINE II=IN_ITR
+
+        // Process Memory Reads -> Output Stream
+        if (k_rd_req < num_beats && mem_in.read_addr.try_write(k_rd_req)) {
+            k_rd_req++;
+        }
+        if (k_rd_resp < num_beats && !mem_in.read_data.empty() && !stream_out.full()) {
+            // Using the template parameters T and MEM_VEC_FACTOR
+            ::tapa::vec_t<T, MEM_VEC_FACTOR> temp = mem_in.read_data.read(nullptr);
+            stream_out.write(temp);
+            k_rd_resp++;
+        }
+
+        // Process Input Stream -> Memory Writes
+        if (k_wr_req < num_beats && !mem_out.write_addr.full() && !mem_out.write_data.full() && !stream_in.empty()) {
+            mem_out.write_addr.write(k_wr_req);
+            mem_out.write_data.write(stream_in.read());
+            k_wr_req++;
+        }
+        if (!mem_out.write_resp.empty()) {
+            k_wr_resp += (unsigned int)(mem_out.write_resp.read()) + 1;
+        }
+    }
+}
+
 /**
  * @brief stream2streamStepdown Converts from one tapa-stream to another with a smaller size with
  *          blocking API. 

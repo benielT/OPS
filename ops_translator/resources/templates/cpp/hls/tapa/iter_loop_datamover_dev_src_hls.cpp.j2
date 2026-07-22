@@ -86,6 +86,14 @@ void task_stepup(
         ops::tapa::stream2streamStepup<stencil_type, vector_factor, mem_vector_factor>(strm_in, strm_out, num_beats);
 }
 
+void task_mem2stream(
+    ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>>& arg,
+    ::tapa::ostream<::tapa::vec_t<stencil_type, mem_vector_factor>>& strm_out,
+    const unsigned int num_beats) 
+{
+    ops::tapa::mem2stream<stencil_type, mem_vector_factor, 2>(arg, strm_out, num_beats);
+}
+
 void task_terminate(
         ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& strm_in,
         const unsigned int num_axis_trans,
@@ -95,38 +103,25 @@ void task_terminate(
         ops::tapa::terminate<stencil_type, vector_factor>(strm_in, num_axis_trans);
 }
 
-void task_pingpong_mem2stream(
+void task_pingpong_datamover(
         ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>>& arg0,
         ::tapa::async_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>>& arg1,
-        ::tapa::ostream<::tapa::vec_t<stencil_type, mem_vector_factor>>& strm_out,
-        ::tapa::istream<bool>& sync_in,
+        ::tapa::ostream<::tapa::vec_t<stencil_type, mem_vector_factor>>& stream_out,
+        ::tapa::istream<::tapa::vec_t<stencil_type, mem_vector_factor>>& stream_in,
         const unsigned int num_beats,
         const unsigned int outerloop_itr) {
     
-    auto outerloop_itr_by_2 = outerloop_itr >> 1;
-
-    for (unsigned int itr = 0; itr < outerloop_itr_by_2; itr++) {
-        ops::tapa::mem2stream<stencil_type, mem_vector_factor,{{(config["mem_vector_factor"]/config["vector_factor"])|int}}>(arg0, strm_out, num_beats);
-        sync_in.read();
-        ops::tapa::mem2stream<stencil_type, mem_vector_factor,{{(config["mem_vector_factor"]/config["vector_factor"])|int}}>(arg1, strm_out, num_beats);
-        sync_in.read(); 
-    }
-}
-
-void task_pingpong_stream2mem(
-        ::tapa::async_mmap<::tapa::vec_t<float, mem_vector_factor>>& arg0,
-        ::tapa::async_mmap<::tapa::vec_t<float, mem_vector_factor>>& arg1,
-        ::tapa::istream<::tapa::vec_t<stencil_type, mem_vector_factor>>& strm_in,
-        ::tapa::ostream<bool>& sync_out,
-        const unsigned int num_beats,
-        const unsigned int outerloop_itr) {
-    
-    auto outerloop_itr_by_2 = outerloop_itr >> 1;
-    for (unsigned int itr = 0; itr < outerloop_itr_by_2; itr++) {
-        ops::tapa::stream2mem<stencil_type, mem_vector_factor, {{(config["mem_vector_factor"]/config["vector_factor"])|int}}>(arg1, strm_in, num_beats);
-        sync_out.write(true);
-        ops::tapa::stream2mem<stencil_type, mem_vector_factor, {{(config["mem_vector_factor"]/config["vector_factor"])|int}}>(arg0, strm_in, num_beats);
-        sync_out.write(true);
+    for (unsigned int i = 0; i < outerloop_itr; i++) {
+        // Swap read/write pointers based on parity iteration to achieve ping-pong behaviour
+        if (i % 2 == 0) {
+            // Read arg0, Write arg1
+            ops::tapa::unified_mem_read_write<stencil_type, mem_vector_factor, 2>(
+                arg0, arg1, stream_out, stream_in, num_beats);
+        } else {
+            // Read arg1, Write arg0
+            ops::tapa::unified_mem_read_write<stencil_type, mem_vector_factor, 2>(
+                arg1, arg0, stream_out, stream_in, num_beats);
+        }
     }
 }
 #endif
@@ -203,25 +198,16 @@ void task_pingpong_stream2mem(
     {% endfor %}
     ;
 #else
-    {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw %}
-        {% if ilh.getSwapArg(arg) is not read_only_rw %}
-            {% if prog.is_interleave() %}
-    ::tapa::streams<bool, {{config["tile_banks"]}}> arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_sync_strm("datmov_arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_sync_strm");
-            {% else %}
-    ::tapa::stream<bool> arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_sync_strm("datmov_arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_sync_strm");
-            {% endif %}
-        {% endif %}
-    {% endfor %}
 
     ::tapa::task()
     {% for arg in ilh.joint_args|ops_dat %}
         {% if arg is ops_read_or_rw and arg is not read_only_rw %}
             {% if prog.is_interleave() %}
                 {% for idx in range(config["tile_banks"])%}
-            .invoke(task_pingpong_mem2stream, arg{{arg.id}}_{{idx}}, arg{{ilh.getSwapArg(arg).id}}_{{idx}}, arg{{arg.id}}_read_mem_strm[{{idx}}], arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_sync_strm[{{idx}}], num_beats, outerloop_itr)
+            .invoke(task_pingpong_datamover, arg{{arg.id}}_{{idx}}, arg{{ilh.getSwapArg(arg).id}}_{{idx}}, arg{{arg.id}}_read_mem_strm[{{idx}}], arg{{ilh.getSwapArg(arg).id}}_write_mem_strm[{{idx}}], num_beats, outerloop_itr)
                 {% endfor %}
             {% else %}
-            .invoke(task_pingpong_mem2stream, arg{{arg.id}}, arg{{ilh.getSwapArg(arg).id}}, arg{{arg.id}}_read_mem_strm, arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_sync_strm, num_beats, outerloop_itr)
+            .invoke(task_pingpong_datamover, arg{{arg.id}}, arg{{ilh.getSwapArg(arg).id}}, arg{{arg.id}}_read_mem_strm, arg{{ilh.getSwapArg(arg).id}}_write_mem_strm, num_beats, outerloop_itr)
             {% endif %}
         {% elif arg is read_only_rw %}
             {% if prog.is_interleave() %}
@@ -260,17 +246,6 @@ void task_pingpong_stream2mem(
             .invoke(task_stepup, arg{{arg.id}}_axis_in, arg{{arg.id}}_write_mem_strm, num_beats, outerloop_itr)
             {% endif %}
         {% endif %}
-    {% endfor %}
-    {% for arg in ilh.joint_args|ops_dat|ops_write_or_rw %}
-        {% if arg is not read_only_rw %}
-            {% if prog.is_interleave() %}
-                {% for idx in range(config["tile_banks"])%}
-            .invoke(task_pingpong_stream2mem, arg{{ilh.getSwapArg(arg).id}}_{{idx}}, arg{{arg.id}}_{{idx}}, arg{{arg.id}}_write_mem_strm[{{idx}}], arg{{ilh.getSwapArg(arg).id}}_arg{{arg.id}}_sync_strm[{{idx}}], num_beats, outerloop_itr)
-                {% endfor %}
-            {% else %}
-            .invoke(task_pingpong_stream2mem, arg{{ilh.getSwapArg(arg).id}}, arg{{arg.id}}, arg{{arg.id}}_write_mem_strm, arg{{ilh.getSwapArg(arg).id}}_arg{{arg.id}}_sync_strm, num_beats, outerloop_itr)
-            {% endif %}
-        {% endif%}
     {% endfor %}
     ;
 #endif

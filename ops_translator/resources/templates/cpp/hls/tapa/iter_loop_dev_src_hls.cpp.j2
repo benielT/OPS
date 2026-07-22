@@ -22,7 +22,7 @@
 
 {% block joint_PE %}
 // TAPA PARSER BYPASS COMMENT - DO NOT REMOVE THIS
-void joint_PE_{{ilh.id}}(
+void joint_PE_{{ilh.id}}{% if slr_iter_par_fact is defined %}_{{slr_iter_par_fact}}{%endif%}(
         const unsigned short PEId_offset, const unsigned short PEId_i, const unsigned int outer_itr, 
     {{sconf.stencil_config()}},
     {% for const_arg in ilh.joint_args|ops_gbl%}
@@ -166,7 +166,7 @@ void joint_PE_{{ilh.id}}(
 
 {% block datamovement %}
 // TAPA PARSER BYPASS COMMENT - DO NOT REMOVE THIS
-void axis_to_strm_wrapper(const unsigned int outer_itr, const unsigned int total_itr,const unsigned short bsize,
+void axis_to_strm_wrapper{% if slr_iter_par_fact is defined %}_{{slr_iter_par_fact}}{%endif%}(const unsigned int outer_itr, const unsigned int total_itr,const unsigned short bsize,
         ::tapa::istream<::tapa::vec_t<stencil_type, {{config["vector_factor"]}}>>& axis_in, 
         ::tapa::ostream<::tapa::vec_t<stencil_type, {{config["vector_factor"]}}>>& hls_out) {
 
@@ -174,7 +174,7 @@ void axis_to_strm_wrapper(const unsigned int outer_itr, const unsigned int total
 }
 
 // TAPA PARSER BYPASS COMMENT - DO NOT REMOVE THIS
-void strm_to_axis_wrapper(const unsigned int outer_itr, const unsigned int total_itr, const unsigned short bsize, 
+void strm_to_axis_wrapper{% if slr_iter_par_fact is defined %}_{{slr_iter_par_fact}}{%endif%}(const unsigned int outer_itr, const unsigned int total_itr, const unsigned short bsize, 
         ::tapa::istream<::tapa::vec_t<stencil_type,{{config["vector_factor"]}}>>& hls_in,
         ::tapa::ostream<::tapa::vec_t<stencil_type,{{config["vector_factor"]}}>>& axis_out) {
     
@@ -240,7 +240,7 @@ void strm_to_axis_wrapper(const unsigned int outer_itr, const unsigned int total
 
 
     ::tapa::task()
-        .invoke(axis_to_strm_wrapper, outer_itr, stencilConfig_total_itr, stencilConfig_batch_size, 
+        .invoke(axis_to_strm_wrapper{% if slr_iter_par_fact is defined %}_{{slr_iter_par_fact}}{%endif%}, outer_itr, stencilConfig_total_itr, stencilConfig_batch_size, 
     {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw %}
         {% set first_loop_last = loop.last %}
         {% if arg is ops_read %}
@@ -275,7 +275,7 @@ void strm_to_axis_wrapper(const unsigned int outer_itr, const unsigned int total
     {% for iter in range(iter_par_factor_val) %}
         {% set iter_loop_first = loop.first %}
         {% set iter_loop_last = loop.last %}
-        .invoke(joint_PE_{{ilh.id}}, slr_region, {{iter}}, outer_itr,
+        .invoke(joint_PE_{{ilh.id}}{% if slr_iter_par_fact is defined %}_{{slr_iter_par_fact}}{%endif%}, slr_region, {{iter}}, outer_itr,
         {% for idx in range(prog.ndim)%}
                 stencilConfig_grid_size_{{idx}},
         {% endfor %}
@@ -369,7 +369,7 @@ void strm_to_axis_wrapper(const unsigned int outer_itr, const unsigned int total
         {% endfor %}
         )
     {% endfor %}
-        .invoke(strm_to_axis_wrapper, outer_itr, stencilConfig_total_itr, stencilConfig_batch_size,
+        .invoke(strm_to_axis_wrapper{% if slr_iter_par_fact is defined %}_{{slr_iter_par_fact}}{%endif%}, outer_itr, stencilConfig_total_itr, stencilConfig_batch_size,
         {% for arg in ilh.joint_args|ops_dat|ops_write_or_rw %}
             {% set first_loop_last = loop.last %}
             {% if prog.is_interleave() %}
