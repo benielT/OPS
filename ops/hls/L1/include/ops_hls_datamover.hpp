@@ -2194,16 +2194,16 @@ static void offsetGenerator(const unsigned short tile_size_y, const unsigned sho
 	// const unsigned short size_x_div_by_banks_floor = size_x >> NUM_BANKS_SHIFT;
 	// const unsigned int size_x_mod_num_banks = size_x & BANK_MASK;
 	unsigned int initial_bank_offsets[NUM_BANKS];
-	#pragma HLS ARRAY_PARTITION variable=initial_bank_offsets complate
+	#pragma HLS ARRAY_PARTITION variable=initial_bank_offsets complete
 
 	unsigned short grid_size_x_banks[NUM_BANKS]; //equivalent to stride_y
-	#pragma HLS ARRAY_PARTITION variable=grid_size_x_banks complate
+	#pragma HLS ARRAY_PARTITION variable=grid_size_x_banks complete
 
 	unsigned short bank_stride_z[NUM_BANKS]; 
-	#pragma HLS ARRAY_PARTITION variable=bank_stride_z complate
+	#pragma HLS ARRAY_PARTITION variable=bank_stride_z complete
 
 	unsigned short bank_tile_size_x[NUM_BANKS];
-	#pragma HLS ARRAY_PARTITION variable=bank_tile_size_x complate
+	#pragma HLS ARRAY_PARTITION variable=bank_tile_size_x complete
 
 	for (ap_uint<NUM_BANKS_SHIFT+1> b_id = 0; b_id < NUM_BANKS; b_id++)
 	{
