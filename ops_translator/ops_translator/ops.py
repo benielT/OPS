@@ -1328,7 +1328,7 @@ class IterLoop:
             outer_loop_str += f" {key} - {self.get_active_df_graph().getGlobalDatsSwapMap()[key]}\n"
         
         outer_loop_str += f" |\n"
-        outer_loop_str += f" └─ ITERLOOP NODES: \n |  ------ \n"
+        outer_loop_str += f" └─ PARLOOP NODES: \n |  ------ \n"
         for i,arg in enumerate(self.itrloop_args):
             if not i == len(self.itrloop_args) - 1:
                 outer_loop_str += " |   ├─"
