@@ -81,15 +81,21 @@ extern "C" void repeater_outerloop_{{ilh.id}}(
     
     #pragma HLS PIPELINE II=1 style=flp
     {% for arg in ilh.joint_args|ops_dat %}
-        {% if arg is ops_read_or_rw %}    
+        {% if arg is ops_read_or_rw and arg is not ops_rw %}    
             {% if prog.is_interleave() %}
                 {% for tile in range(config["tile_banks"]) %}
-    auto data = {{axis_name_t3(arg, tile)}}.read();
-    {{axis_name_t3(ilh.getSwapArg(arg), tile)}}.write(data);
+    {{axis_name_t3(ilh.getSwapArg(arg), tile)}}.write({{axis_name_t3(arg, tile)}}.read());
                 {% endfor %}
             {% else %}
-    auto data = {{axis_name(arg)}}.read();
-    {{axis_name(ilh.getSwapArg(arg))}}.write(data);
+    {{axis_name(ilh.getSwapArg(arg))}}.write({{axis_name(arg)}}.read());
+            {% endif %}
+        {% elif arg is ops_rw %}
+            {% if prog.is_interleave() %}
+                {% for tile in range(config["tile_banks"]) %}
+    {{axis_name_t3(ilh.getSwapArg(arg), tile, "_out")}}.write({{axis_name_t3(arg, tile, "in")}}.read());
+                {% endfor %}
+            {% else %}
+    {{axis_name_t2(arg, "out")}}.write({{axis_name_t2(arg, "in")}}.read());
             {% endif %}
         {% endif %}
     {% endfor %}
