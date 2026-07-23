@@ -1,7 +1,11 @@
 {% extends "cpp/hls/iter_loop_dev_inc_hls.hpp.j2" %}
 
 {% macro internal_stream_name(arg) -%}
-arg{{ilh.getOrderedSwapPairIds(arg.dat_id)[0]}}_arg{{ilh.getOrderedSwapPairIds(arg.dat_id)[1]}}_streams
+{%- if arg is ops_read -%}
+arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_streams
+{%- else -%}
+arg{{ilh.getSwapArg(arg).id}}_arg{{arg.id}}_streams
+{%- endif -%}
 {%- endmacro -%}
 
 {% macro iter_par_factor() -%}
