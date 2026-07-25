@@ -7,7 +7,11 @@ arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_streams
 arg{{ilh.getSwapArg(arg).id}}_arg{{arg.id}}_streams
 {%- endif -%}
 {%- endmacro -%}
-
+{% if slr_iter_par_fact is defined %}
+{% set iter_par_factor_internal = config["iter_par_factor"][slr_iter_par_fact]%}
+{% else %}
+{% set iter_par_factor_internal = config["iter_par_factor"]%}
+{% endif %}
 {% macro iter_par_factor() -%}
 {%- if slr_iter_par_fact is defined -%}
 iter_par_factor_{{slr_iter_par_fact}}
@@ -18,7 +22,9 @@ iter_par_factor
 {% macro joint_PE_body_p1() %}
     {% for stream_interconnector, dat_id in ilh.interconnectors %}
     ::hls::stream<ap_uint<{{lmac.axis_data_width_datid(dat_id)}}>> {{stream_interconnector}}[{{iter_par_factor()}}]{% if prog.is_interleave() %}[{{config["tile_banks"]}}]{% endif %};
-    #pragma HLS STREAM variable = {{stream_interconnector}} depth = {{config["hls_interconnect_buff_size"]}}
+    #pragma HLS STREAM variable = {{stream_interconnector}}   {#depth = {{config["hls_interconnect_buff_size"]}}#}
+    
+    #pragma HLS ARRAY_PARTITION variable = {{stream_interconnector}}
     {% endfor %}
     {% for df_node in ilh.get_active_df_graph().getAllLoopNodes() %}
         {% set loop_idx = df_node.node_uid %}
@@ -26,7 +32,9 @@ iter_par_factor
         {% if prog.is_interleave() %}
             {% for arg_str in ilh.PE_args[loop_idx]%}
     ::hls::stream<ap_uint<half_axis_data_width_{{lh.kernel}}_{{loop.index0}}>> arg{{loop.index0}}_{{lh.kernel}}_subtile_stream[{{iter_par_factor()}}][{{config["tile_banks"]}}];
-    #pragma HLS STREAM variable = arg{{loop.index0}}_{{lh.kernel}}_subtile_stream depth = {{config["hls_interconnect_buff_size"]}}
+    #pragma HLS STREAM variable = arg{{loop.index0}}_{{lh.kernel}}_subtile_stream {#depth = {{config["hls_interconnect_buff_size"]}}#}
+    
+    #pragma HLS ARRAY_PARTITION variable = arg{{loop.index0}}_{{lh.kernel}}_subtile_stream
             {% endfor %}
         {% endif %}
     {% endfor %}
@@ -78,7 +86,7 @@ iter_par_factor
     kernel_{{lh.kernel}}_PE(
             {{PEID_offset}}, {{i}},
             stencilConfig,
-            {% for arg_str in ilh.PE_args[loop_idx]%}
+            {% for (arg_str, direction) in ilh.PE_args[loop_idx]%}
                 {% if loop.last %}
                     {% if consts_map[loop_idx] or lh.args|ops_gbl %}
                         {% set last_check = False %}
@@ -88,7 +96,7 @@ iter_par_factor
                 {% else %}
                     {% set last_check = False %}
                 {% endif %}
-            {{arg_str}}{% if arg_str in prev_arg_str %}[{{i}}+1]{% else %}[{{i}}]{% endif %}{{"," if not last_check}}
+            {{arg_str}}{% if direction == 0 %}[{{i}}]{% elif direction == 1 %}[{{i}}+1]{% endif %}{{"," if not last_check}}
                 {%if "arg" in arg_str %}
                     {% set _ = prev_arg_str.update({arg_str : 1}) %}
                 {% endif %}
@@ -299,11 +307,12 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short slr
     {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw -%}
         {% if prog.is_interleave() %}
     ::hls::stream<ap_uint<{{lmac.axis_data_width(arg)}}>> {{internal_stream_name(arg)}}[{{iter_par_factor()}} + 1][{{config["tile_banks"]}}];
-    #pragma HLS ARRAY_PARTITION variable = {{internal_stream_name(arg)}} dim = 2 complete
         {% else %}
     ::hls::stream<ap_uint<{{lmac.axis_data_width(arg)}}>> {{internal_stream_name(arg)}}[{{iter_par_factor()}} + 1];
         {% endif %}
-    #pragma HLS STREAM variable = {{internal_stream_name(arg)}} depth = {{config["hls_interconnect_buff_size"]}} 
+    #pragma HLS ARRAY_PARTITION variable = {{internal_stream_name(arg)}} complete
+
+    #pragma HLS STREAM variable = {{internal_stream_name(arg)}} depth = {{config["hls_interconnect_buff_size"]}}
     {% endfor %}
     
     {{joint_PE_body_p1()}}
@@ -613,8 +622,10 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short slr_reg
 {
     #pragma HLS INTERFACE s_axilite port = slr_region bundle = control
     #pragma HLS INTERFACE s_axilite port = outer_itr bundle = control
+    
     {% for i in range(ndim)%}
     #pragma HLS INTERFACE s_axilite port = stencilConfig_grid_size_{{i}} bundle = control
+
     {% endfor %}
     {#{% for i in range(ndim)%}
     #pragma HLS INTERFACE s_axilite port = gridProp_actual_size_{{i}} bundle = control
@@ -624,18 +635,22 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short slr_reg
     {% endfor %}#}
     #pragma HLS INTERFACE s_axilite port = stencilConfig_dim bundle = control
     #pragma HLS INTERFACE s_axilite port = stencilConfig_total_itr bundle = control
+
 #ifndef OPS_TILING
     {% for i in range(ndim)%}
     #pragma HLS INTERFACE s_axilite port = stencilConfig_lower_limit_{{i}} bundle = control
+
     {% endfor %}
     {% for i in range(ndim)%}
     #pragma HLS INTERFACE s_axilite port = stencilConfig_upper_limit_{{i}} bundle = control
+
     {% endfor %}
 #endif
     #pragma HLS INTERFACE s_axilite port = stencilConfig_outer_loop_limit bundle = control
 #ifndef OPS_TILING
     #pragma HLS INTERFACE s_axilite port = stencilConfig_batch_size bundle = control
 #else
+
     {% if ndim == 3 %}
     #pragma HLS INTERFACE s_axilite port = tile_size_x bundle = control
     #pragma HLS INTERFACE s_axilite port = tile_size_y bundle = control
@@ -645,41 +660,47 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short slr_reg
     #pragma HLS INTERFACE s_axilite port = tile_count_y bundle = control
     #pragma HLS INTERFACE s_axilite port = total_xblocks bundle = control
     #pragma HLS INTERFACE s_axilite port = last_tile_upper_limit_x bundle = control
+
     {% else %}
     #pragma HLS INTERFACE s_axilite port = tile_size_x bundle = control
     #pragma HLS INTERFACE s_axilite port = last_tile_size_x bundle = control
     #pragma HLS INTERFACE s_axilite port = tile_count_x bundle = control
     #pragma HLS INTERFACE s_axilite port = total_xblocks bundle = control
     #pragma HLS INTERFACE s_axilite port = last_tile_upper_limit_x bundle = control
+
     {% endif %}
 #endif
     {% for const_arg in ilh.joint_args|ops_gbl%}
     #pragma HLS INTERFACE s_axilite port = {{get_arg_gbl_name(const_arg)}} bundle = control
+
     {% endfor %}    
     {% for const in consts %}
     #pragma HLS INTERFACE s_axilite port = {{const.ptr}} bundle = control
+
     {% endfor %}
 
     {% for arg in ilh.joint_args|ops_dat %}
         {% if arg is not ops_rw %}
             {% if prog.is_interleave() %}
                 {% for tile in range(config["tile_banks"]) %}
-    #pragma HLS INTERFACE axis port = {{lmac.axis_name_t3(arg, tile)}} register register_mode=both
+    #pragma HLS INTERFACE axis port = {{lmac.axis_name_t3(arg, tile)}} register {#register_mode=both#}
+
                 {% endfor %}
             {% else %}
-    #pragma HLS INTERFACE axis port = {{lmac.axis_name(arg)}} register register_mode=both
+    #pragma HLS INTERFACE axis port = {{lmac.axis_name(arg)}} register {#register_mode=both#}
+
             {% endif %}
         {% else %}
             {% if prog.is_interleave() %}
                 {% for tile in range["tile_banks"] %}
-    #pragma HLS INTERFACE axis port = {{lmac.axis_name_t3(arg, tile, "in")}} register register_mode=both
+    #pragma HLS INTERFACE axis port = {{lmac.axis_name_t3(arg, tile, "in")}} register {#register_mode=both#}
                 {% endfor %}
                 {% for tile in range["tile_banks"] %}
-    #pragma HLS INTERFACE axis port = {{lmac.axis_name_t3(arg, tile, "out")}} register register_mode=both
+    #pragma HLS INTERFACE axis port = {{lmac.axis_name_t3(arg, tile, "out")}} register {#register_mode=both#}
                 {% endfor %}
             {% else %}
-    #pragma HLS INTERFACE axis port = {{lmac.axis_name_t2(arg, "in")}} register register_mode=both
-    #pragma HLS INTERFACE axis port = {{lmac.axis_name_t2(arg, "out")}} register register_mode=both
+    #pragma HLS INTERFACE axis port = {{lmac.axis_name_t2(arg, "in")}} register {#register_mode=both#}
+    #pragma HLS INTERFACE axis port = {{lmac.axis_name_t2(arg, "out")}} register {#register_mode=both#}
             {% endif %}
         {% endif %}
     {% endfor %}
@@ -721,9 +742,10 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short slr_reg
     {% endif %}
     {% if not isTiling %}
     //constexpr unsigned short num_of_pkts_per_beat = mem_data_width / axis_data_width;
-    unsigned int tmp1 = stencilConfig_batch_size;
-    unsigned int tmp2 = stencilConfig_total_itr;
-    unsigned int num_pkts = tmp1 * tmp2;
+    // unsigned int tmp1 = stencilConfig_batch_size; //this cause 2 DSP! 
+    // unsigned int tmp2 = stencilConfig_total_itr;
+    // unsigned int num_pkts = tmp1 * tmp2;
+    unsigned int num_pkts = stencilConfig_batch_size * stencilConfig_total_itr;
         {#% if ilh.isMultiDim() %}
             {% for m_dim in ilh.getMultidimList() %}
     unsigned int num_pkts_d{{m_dim}} = num_pkts * {{m_dim}};

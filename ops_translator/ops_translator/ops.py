@@ -1222,9 +1222,9 @@ class IterLoop:
                     search_list = filter(lambda x: x.access_type in [AccessType.OPS_READ, AccessType.OPS_RW] and self.dats[x.dat_id][0].ptr == attr["dat_str"], self.joint_args)
                     arg = next(search_list)
                     if attr['sink_arg_id'] in arg_map.keys():
-                        arg_map[attr['sink_arg_id']].append(f"arg{arg.id}_arg{self.getSwapArg(arg).id}_streams")
+                        arg_map[attr['sink_arg_id']].append((f"arg{arg.id}_arg{self.getSwapArg(arg).id}_streams",0))
                     else:
-                        arg_map[attr['sink_arg_id']] = [f"arg{arg.id}_arg{self.getSwapArg(arg).id}_streams"]
+                        arg_map[attr['sink_arg_id']] = [(f"arg{arg.id}_arg{self.getSwapArg(arg).id}_streams",0)]
                         
                 else:
                     connector_name = f"node{source_id}_{attr['src_arg_id']}_to_node{sink_id}_{attr['sink_arg_id']}"
@@ -1237,9 +1237,9 @@ class IterLoop:
                             raise OpsError(f"{function_name()}: Cannot find dat {attr['dat_str']} in iterloop: {self.id}")
                         self.interconnectors.append([connector_name, dat_id])
                     if attr['sink_arg_id'] in arg_map.keys():
-                        arg_map[attr['sink_arg_id']].append(connector_name)
+                        arg_map[attr['sink_arg_id']].append((connector_name, -1))
                     else:
-                        arg_map[attr['sink_arg_id']] = [connector_name]
+                        arg_map[attr['sink_arg_id']] = [(connector_name, -1)]
         
         #second sweep to write
         for source_id, sink_id, attr in self.get_active_df_graph().getEdges():           
@@ -1250,9 +1250,9 @@ class IterLoop:
                     if idx is None:
                         OpsError(f"{function_name()} Error finding joint_arg writing {attr['dat_str']}")
                     if attr['src_arg_id'] in arg_map.keys():
-                        arg_map[attr['src_arg_id']].append(f"arg{self.getSwapArg(self.joint_args[idx]).id}_arg{self.joint_args[idx].id}_streams")
+                        arg_map[attr['src_arg_id']].append((f"arg{self.getSwapArg(self.joint_args[idx]).id}_arg{self.joint_args[idx].id}_streams", 1))
                     else:
-                        arg_map[attr['src_arg_id']] = [f"arg{self.getSwapArg(self.joint_args[idx]).id}_arg{self.joint_args[idx].id}_streams"]
+                        arg_map[attr['src_arg_id']] = [(f"arg{self.getSwapArg(self.joint_args[idx]).id}_arg{self.joint_args[idx].id}_streams", 1)]
                 else:
                     connector_name = f"node{source_id}_{attr['src_arg_id']}_to_node{sink_id}_{attr['sink_arg_id']}"
                     idx = findIdx(self.interconnectors, lambda interconector_disc: interconector_disc[0] == connector_name)
@@ -1262,9 +1262,9 @@ class IterLoop:
                             raise OpsError(f"{function_name()}: Cannot find dat {attr['dat_str']} in iterloop: {self.id}")
                         self.interconnectors.append([connector_name, dat_id])
                     if attr['src_arg_id'] in arg_map.keys():
-                        arg_map[attr['src_arg_id']].append(connector_name)
+                        arg_map[attr['src_arg_id']].append((connector_name, -1))
                     else:
-                        arg_map[attr['src_arg_id']] = [connector_name]
+                        arg_map[attr['src_arg_id']] = [(connector_name, -1)]
         # #second sweep to write
         # for source_id, sink_id, attr in self.get_active_df_graph().getEdges():
         #     #print(f"{function_name()}, source_id:  {source_id}, sink_id: {sink_id}, attr: {attr}")
