@@ -57,22 +57,22 @@ extern "C" void repeater_outerloop_{{ilh.id}}(
         {% if arg is not ops_rw %}
             {% if prog.is_interleave() %}
                 {% for tile in range(config["tile_banks"]) %}
-    #pragma HLS INTERFACE axis port = {{axis_name_t3(arg, tile)}} register register_mode=both
+    #pragma HLS INTERFACE axis port = {{axis_name_t3(arg, tile)}} register {# register_mode=both #}
                 {% endfor %}
             {% else %}
-    #pragma HLS INTERFACE axis port = {{axis_name(arg)}} register register_mode=both
+    #pragma HLS INTERFACE axis port = {{axis_name(arg)}} register {# register_mode=both #}
             {% endif %}
         {% else %}
             {% if prog.is_interleave() %}
                 {% for tile in range["tile_banks"] %}
-    #pragma HLS INTERFACE axis port = {{axis_name_t3(arg, tile, "in")}} register register_mode=both
+    #pragma HLS INTERFACE axis port = {{axis_name_t3(arg, tile, "in")}} register {# register_mode=both #}
                 {% endfor %}
                 {% for tile in range["tile_banks"] %}
-    #pragma HLS INTERFACE axis port = {{axis_name_t3(arg, tile, "out")}} register register_mode=both
+    #pragma HLS INTERFACE axis port = {{axis_name_t3(arg, tile, "out")}} register {# register_mode=both #}
                 {% endfor %}
             {% else %}
-    #pragma HLS INTERFACE axis port = {{axis_name_t2(arg, "in")}} register register_mode=both
-    #pragma HLS INTERFACE axis port = {{axis_name_t2(arg, "out")}} register register_mode=both
+    #pragma HLS INTERFACE axis port = {{axis_name_t2(arg, "in")}} register {# register_mode=both #}
+    #pragma HLS INTERFACE axis port = {{axis_name_t2(arg, "out")}} register {# register_mode=both #}
             {% endif %}
         {% endif %}
     {% endfor %}

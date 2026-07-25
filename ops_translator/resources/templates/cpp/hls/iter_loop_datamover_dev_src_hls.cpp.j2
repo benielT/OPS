@@ -1453,22 +1453,22 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
         {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
             {% if prog.is_interleave() %}
                 {% for tile in range(config["tile_banks"]) %}
-    #pragma HLS INTERFACE mode=axis port={{lmac.axis_name_t3(arg, tile)}} register register_mode=both
+    #pragma HLS INTERFACE mode=axis port={{lmac.axis_name_t3(arg, tile)}} register {# register_mode=both #}
                 {% endfor %}
             {% else %}
-    #pragma HLS INTERFACE mode=axis port={{lmac.axis_name(arg)}} register register_mode=both
+    #pragma HLS INTERFACE mode=axis port={{lmac.axis_name(arg)}} register {# register_mode=both #}
             {% endif %}
         {% else %}
             {% if prog.is_interleave() %}
                 {% for tile in range(config["tile_banks"]) %}
-    #pragma HLS INTERFACE mode=axis port={{lmac.axis_name_t3(arg, tile, "out")}} register register_mode=both
+    #pragma HLS INTERFACE mode=axis port={{lmac.axis_name_t3(arg, tile, "out")}} register {# register_mode=both #}
                 {% endfor %}
                 {% for tile in range(config["tile_banks"]) %}
-    #pragma HLS INTERFACE mode=axis port={{lmac.axis_name_t3(arg, tile, "in")}} register register_mode=both
+    #pragma HLS INTERFACE mode=axis port={{lmac.axis_name_t3(arg, tile, "in")}} register {# register_mode=both #}
                 {% endfor %}
             {% else %}
-    #pragma HLS INTERFACE mode=axis port={{lmac.axis_name_t2(arg, "out")}} register register_mode=both
-    #pragma HLS INTERFACE mode=axis port={{lmac.axis_name_t2(arg, "in")}} register register_mode=both
+    #pragma HLS INTERFACE mode=axis port={{lmac.axis_name_t2(arg, "out")}} register {# register_mode=both #}
+    #pragma HLS INTERFACE mode=axis port={{lmac.axis_name_t2(arg, "in")}} register {# register_mode=both #}
             {% endif %}
         {% endif %}
     {% endfor %}
