@@ -353,13 +353,13 @@ public:
         //---------------------------------------------------------------
             {% endif %}
 
-        // const unsigned short adj_half_span_x = m_stencilConfig.tile_count[0] == 1? half_span_x : half_span_x * (peId + 1);
-        const unsigned short adj_half_span_x_lower = is_first_x? half_span_x : half_span_x * (peId + 1);
-        const unsigned short adj_half_span_x_upper = is_last_x? half_span_x : half_span_x * (peId + 1);
+        // const unsigned short adj_half_span_x = m_stencilConfig.tile_count[0] == 1? half_span_x : half_span_x * (m_PEId + 1);
+        const unsigned short adj_half_span_x_lower = is_first_x? half_span_x : half_span_x * (m_PEId + 1);
+        const unsigned short adj_half_span_x_upper = is_last_x? half_span_x : half_span_x * (m_PEId + 1);
             {% if lh.ndim == 3 %}
-        //const unsigned short adj_half_span_y = m_stencilConfig.tile_count[1] == 1? half_span_x : half_span_x * (peId + 1);
-        const unsigned short adj_half_span_y_lower = m_stencilConfig.is_first[1]? half_span_x : half_span_x * (peId + 1);
-        const unsigned short adj_half_span_y_upper = m_stencilConfig.is_last[1]? half_span_x : half_span_x * (peId + 1);
+        //const unsigned short adj_half_span_y = m_stencilConfig.tile_count[1] == 1? half_span_x : half_span_x * (m_PEId + 1);
+        const unsigned short adj_half_span_y_lower = m_stencilConfig.is_first[1]? half_span_x : half_span_x * (m_PEId + 1);
+        const unsigned short adj_half_span_y_upper = m_stencilConfig.is_last[1]? half_span_x : half_span_x * (m_PEId + 1);
             {% endif %}
         {% endif %}
 
@@ -782,6 +782,7 @@ public:
         {% for stencil_name in lh.get_unique_read_stencil_names() %}
             {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
                         "{{stencil_name}}_{{buffer_read_idx(buffer)}}: %d, "\
+                        "{{stencil_name}}_{{buffer_write_idx(buffer)}}: %d, "\
             {% endfor %}
             {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
                         "{{stencil_name}}_{{buffer_read_idx(buffer)}}_cont_buf_len: %d, "\
@@ -797,6 +798,7 @@ public:
         {% for stencil_name in lh.get_unique_read_stencil_names() %}
             {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
                         {{stencil_name}}_{{buffer_read_idx(buffer)}}, 
+                        {{stencil_name}}_{{buffer_write_idx(buffer)}}, 
             {% endfor %}
             {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
                         ({{"m_stencilConfig.tile_size[0]" if isTiling else "m_stencilConfig.grid_size[0]"}} - 1), 
@@ -911,6 +913,7 @@ public:
                     {% for stencil_name in lh.get_unique_read_stencil_names() %}
                         {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
                                     "{{stencil_name}}_{{buffer_read_idx(buffer)}}(%d), "\
+                                    "{{stencil_name}}_{{buffer_write_idx(buffer)}}(%d), "\
                         {% endfor %}
                         {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
                                     "({{"m_stencilConfig.tile_size[0]" if isTiling else "m_stencilConfig.grid_size[0]"}} - 1): %d, "\
@@ -925,7 +928,8 @@ public:
                     {% endif %}
                     {% for stencil_name in lh.get_unique_read_stencil_names() %}
                         {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
-                                    {{stencil_name}}_{{buffer_read_idx(buffer)}},  
+                                    {{stencil_name}}_{{buffer_read_idx(buffer)}}, 
+                                    {{stencil_name}}_{{buffer_write_idx(buffer)}},  
                         {% endfor %}
                         {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
                                     ({{"m_stencilConfig.tile_size[0]" if isTiling else "m_stencilConfig.grid_size[0]"}} - 1),  
@@ -1073,7 +1077,7 @@ public:
             {% endif %}
         {% if lh.ndim > 1 %}
             {% if isTiling %}
-                            (j < lower_limit_y)
+                            || (j < lower_limit_y)
                             || (j > upper_limit_y)
             {% else %}
                             || (j < m_stencilConfig.lower_limit[1]) 
@@ -1082,7 +1086,7 @@ public:
         {% endif %}
         {% if lh.ndim > 2 %}
             {% if isTiling %}
-                            (k < lower_limit_z)
+                            || (k < lower_limit_z)
                             || (k > upper_limit_z)
             {% else %}
                             || (k < m_stencilConfig.lower_limit[2]) 
