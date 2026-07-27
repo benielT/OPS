@@ -142,6 +142,8 @@ struct StencilConfigCore
     unsigned short outer_loop_limit;
     unsigned int total_itr;
     unsigned short batch_size;
+    unsigned short line_diff;
+    unsigned int plane_diff;
 };
 
 struct StencilConfigCoreSingleTile
@@ -153,6 +155,8 @@ struct StencilConfigCoreSingleTile
     // BoolType2d is_tiled;
     BoolType2d is_first;
     BoolType2d is_last;
+    unsigned short line_diff;
+    unsigned int plane_diff;
 };
 
 struct StencilConfigCoreTiled // : public StencilConfigCore

@@ -1445,6 +1445,121 @@ void interleave2stream(::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_S
 	}
 }
 
+/**
+ * @brief 	updateInterleaveBoundaries directly updates the boundary overlap values of an interleaved stream.
+ *
+ * @details This function replaces the sequence of interleave2stream -> stream2interleave. 
+ * It reads data from NUM_STREAMS of interleaved input streams and produces NUM_STREAMS 
+ * of interleaved output streams. It passes the core standard data straight through 
+ * while extracting the new boundary values from adjacent streams (data_back, data, data_front)
+ * to reconstruct the valid overlaps for the next temporal PE.
+ *
+ * @tparam MEM_DATA_WIDTH The bit-width of the standard memory access (e.g., 64, 128, 256)
+ * @tparam DATA_WIDTH Element datawidth
+ * @tparam OVERLAP_SIZE Overlap size of the low level tiles
+ * @tparam NUM_STREAMS Number of input, output streams
+ *
+ * @param[in] in_stream - Input streams array of size MEM_DATA_WIDTH + DATA_WIDTH * OVERLAP_SIZE
+ * @param[out] out_stream - Output streams array of size MEM_DATA_WIDTH + DATA_WIDTH * OVERLAP_SIZE
+ * @param[in] num_pkts - Number of stream packets
+ */
+template <unsigned short MEM_DATA_WIDTH, unsigned short DATA_WIDTH, unsigned short NUM_STREAMS, unsigned short OVERLAP_SIZE = 1>
+void updateInterleaveBoundaries(::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_SIZE>> in_stream[NUM_STREAMS], ::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_SIZE>> out_stream[NUM_STREAMS], const unsigned int num_pkts) 
+{
+#ifndef __SYNTHESIS__
+	static_assert(NUM_STREAMS % 2 == 0,
+			" NUM_STREAMS has to be divisible by 2");
+#endif
+
+	constexpr unsigned short REALISED_OVERLAP_SIZE = DATA_WIDTH * OVERLAP_SIZE;
+	constexpr unsigned short REALISED_OVERLAP_SIZE_MIN_1 = REALISED_OVERLAP_SIZE - 1;
+	
+	// Original non-interleaved dimensions
+	constexpr unsigned short MSB_IN = MEM_DATA_WIDTH - 1;
+	constexpr unsigned short LSB_LAST_OVERLAP_IN = MEM_DATA_WIDTH - REALISED_OVERLAP_SIZE;
+	
+	// Interleaved dimensions
+	constexpr unsigned short MEM_DATA_WIDTH_OUT = MEM_DATA_WIDTH + REALISED_OVERLAP_SIZE;
+	constexpr unsigned short MSB_OUT = MEM_DATA_WIDTH_OUT - 1;
+	constexpr unsigned short LSB_LAST_OVERLAP_OUT = MEM_DATA_WIDTH_OUT - REALISED_OVERLAP_SIZE;
+	
+	constexpr unsigned short NUM_STREAMS_BY_2 = NUM_STREAMS >> 1;
+	constexpr unsigned short NUM_STREAMS_MIN_1 = NUM_STREAMS - 1;
+
+	const unsigned int num_pkts_plus_1 = register_it(num_pkts + 1);
+
+	// 3-step shift registers mapped to interleaved width
+	ap_uint<MEM_DATA_WIDTH_OUT> data_front[NUM_STREAMS], data[NUM_STREAMS], data_back[NUM_STREAMS];
+	#pragma HLS ARRAY_PARTITION variable=data_front dim=0 complete
+	#pragma HLS ARRAY_PARTITION variable=data dim=0 complete
+	#pragma HLS ARRAY_PARTITION variable=data_back dim=0 complete
+
+	for (unsigned int itr = 0; itr < num_pkts_plus_1; itr++) 
+	{
+		#pragma HLS PIPELINE II=1
+		bool read_cond = register_it(itr < num_pkts);
+		ap_uint<MEM_DATA_WIDTH_OUT> tmp[NUM_STREAMS];
+		#pragma HLS ARRAY_PARTITION variable=tmp dim=0 complete
+
+		if (read_cond) {
+			for (unsigned int n = 0; n < NUM_STREAMS; n++)
+			{
+				#pragma HLS UNROLL
+				tmp[n] = in_stream[n].read();	
+			}
+		}
+
+		for (unsigned int n = 0; n < NUM_STREAMS; n++)
+		{
+			#pragma HLS UNROLL
+			data_back[n] = data[n];
+			data[n] = data_front[n];
+			data_front[n] =  register_it(tmp[n]);	
+		}
+
+		ap_uint<MEM_DATA_WIDTH_OUT> tmp_out[NUM_STREAMS];
+		#pragma HLS ARRAY_PARTITION variable=tmp_out dim=0 complete
+
+		if (itr > 0)
+		{
+			for (unsigned int n = 0; n < NUM_STREAMS_BY_2; n++)
+			{
+				#pragma HLS UNROLL
+				
+				// 1. Pass the standard part of the EVEN stream directly through
+				tmp_out[2*n].range(MSB_OUT, REALISED_OVERLAP_SIZE) = data[2*n].range(MSB_OUT, REALISED_OVERLAP_SIZE);
+				
+				// 2. Update the bottom overlap for the EVEN stream
+				if (n == 0) {
+					// Borrow from the top of the previous iteration's last ODD stream
+					tmp_out[2*n].range(REALISED_OVERLAP_SIZE_MIN_1, 0) = data_back[NUM_STREAMS_MIN_1].range(MSB_IN, LSB_LAST_OVERLAP_IN);
+				} else {
+					// Borrow from the top of the adjacent ODD stream
+					tmp_out[2*n].range(REALISED_OVERLAP_SIZE_MIN_1, 0) = data[2*n-1].range(MSB_IN, LSB_LAST_OVERLAP_IN);
+				}
+				
+				// 3. Pass the standard part of the ODD stream directly through
+				tmp_out[2*n+1].range(MSB_IN, 0) = data[2*n+1].range(MSB_IN, 0);
+				
+				// 4. Update the top overlap for the ODD stream
+				if (n == NUM_STREAMS_BY_2 - 1) {
+					// Borrow from the bottom of the next iteration's first EVEN stream
+					tmp_out[2*n+1].range(MSB_OUT, LSB_LAST_OVERLAP_OUT) = data_front[0].range(2 * REALISED_OVERLAP_SIZE - 1, REALISED_OVERLAP_SIZE);
+				} else {
+					// Borrow from the bottom of the adjacent EVEN stream
+					tmp_out[2*n+1].range(MSB_OUT, LSB_LAST_OVERLAP_OUT) = data[2*n+2].range(2 * REALISED_OVERLAP_SIZE - 1, REALISED_OVERLAP_SIZE);
+				}
+			}
+
+			for (unsigned int n = 0; n < NUM_STREAMS; n++)
+			{
+				#pragma HLS UNROLL
+				out_stream[n].write(tmp_out[n]);
+			}
+		}
+	}
+}
+
 static ap_uint<144> commandGen2D(const ap_uint<64>& offset, const ap_uint<16>& stride_x, const ap_uint<16>& size_x,
                 const ap_uint<16>& stride_y, const ap_uint<16>& size_y, const ap_uint<16>& avoid_x)
 {

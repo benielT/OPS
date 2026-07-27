@@ -427,16 +427,23 @@ public:
         {% elif lh.ndim == 2 %}
             short i = {{ (-read_origin_wide_diff_x) - 1}};
             short j = -{{read_origin_wide_diff.y}}; 
+            {#% if not isTiling %}
+            unsigned short line_diff = m_stencilConfig.grid_size[0] - 1;
+            {% else %}
+            unsigned short line_diff = m_stencilConfig.tile_size[0] - 1;
+            {% endif %#}
         {% elif lh.ndim == 3 %}
             short i = {{ (-read_origin_wide_diff_x) - 1}};
             short j = {{(-read_origin_wide_diff.y)}}; 
             short k = {{(-read_origin_wide_diff.z)}};
-            {% if not isTiling %}
+            {#% if not isTiling %}
+            unsigned short line_diff = m_stencilConfig.grid_size[0] - 1;
             unsigned short plane_diff = m_stencilConfig.grid_size[0] * m_stencilConfig.grid_size[1] - 1;
             {% else %}
             //unsigned short plane_diff = tile_size_x * tile_size_y - 1;
+            unsigned short line_diff = m_stencilConfig.tile_size[0] - 1;
             unsigned short plane_diff = m_stencilConfig.tile_size[0] * m_stencilConfig.tile_size[1] - 1;
-            {% endif %}
+            {% endif %#}
         {% endif %}
 
         //  *** stencil description and read & write point definitions  ****
@@ -877,14 +884,14 @@ public:
             {% for buffer in widen_stencil_disc_map[stencil_name].window_buffers %}
                 {% if buffer.buffer_type == ops.BufferType.LINE_BUFF %}
                     
-                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_read_idx(buffer)}} = {{stencil_name}}_{{buffer_read_idx(buffer)}} >= ({{"m_stencilConfig.tile_size[0]" if isTiling else "m_stencilConfig.grid_size[0]"}} - 1);
+                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_read_idx(buffer)}} = {{stencil_name}}_{{buffer_read_idx(buffer)}} >= m_stencilConfig.line_diff;
                     {% if not buffer.is_read_write_aligned %}
-                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_write_idx(buffer)}} = {{stencil_name}}_{{buffer_write_idx(buffer)}} >= ({{"m_stencilConfig.tile_size[0]" if isTiling else "m_stencilConfig.grid_size[0]"}} - 1);
+                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_write_idx(buffer)}} = {{stencil_name}}_{{buffer_write_idx(buffer)}} >= m_stencilConfig.line_diff;
                     {% endif %}
                 {% else %}
-                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_read_idx(buffer)}} = {{stencil_name}}_{{buffer_read_idx(buffer)}} >= ({{"m_stencilConfig.tile_size[0]" if isTiling else "m_stencilConfig.grid_size[0]"}} - 1);
+                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_read_idx(buffer)}} = {{stencil_name}}_{{buffer_read_idx(buffer)}} >= m_stencilConfig.plane_diff;
                     {% if not buffer.is_read_write_aligned %}
-                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_write_idx(buffer)}} = {{stencil_name}}_{{buffer_write_idx(buffer)}} >= (plane_diff);
+                    bool cond_end_of_line_buff_{{stencil_name}}_{{buffer_write_idx(buffer)}} = {{stencil_name}}_{{buffer_write_idx(buffer)}} >= m_stencilConfig.plane_diff;
                     {% endif %}
                 {% endif %}
 
@@ -1078,7 +1085,7 @@ public:
         {% if lh.ndim > 1 %}
             {% if isTiling %}
                             || (j < lower_limit_y)
-                            || (j > upper_limit_y)
+                            || (j >= upper_limit_y)
             {% else %}
                             || (j < m_stencilConfig.lower_limit[1]) 
                             || (j >= m_stencilConfig.upper_limit[1])
@@ -1087,7 +1094,7 @@ public:
         {% if lh.ndim > 2 %}
             {% if isTiling %}
                             || (k < lower_limit_z)
-                            || (k > upper_limit_z)
+                            || (k >= upper_limit_z)
             {% else %}
                             || (k < m_stencilConfig.lower_limit[2]) 
                             || (k >= m_stencilConfig.upper_limit[2])
