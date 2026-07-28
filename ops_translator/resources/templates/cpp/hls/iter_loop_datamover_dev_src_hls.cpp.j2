@@ -383,16 +383,24 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         const ap_uint<8> big_bank_tile_size_x_mask,
         const unsigned short tile_offset_x_floor,
         const ap_uint<3> big_tile_offset_x_banks_upper,
+        {% if ndim == 3 %}
         const unsigned short tile_offset_y,
         const unsigned short tile_size_y,
+        {% endif %}
         const unsigned int total_rows, 
         const unsigned short bank_avoid_x_floor,
         const ap_uint<8> big_bank_avoid_x_mask,
+        {% if ndim == 3 %}
         const unsigned short avoid_y,
+        {% endif %}
         const unsigned short bank_grid_size_x_floor,
         const ap_uint<3> big_grid_size_x_banks_upper,
+        {% if ndim == 3 %}
         const unsigned short grid_size_y,
-        const unsigned short tile_size_z,
+        const unsigned short grid_size_z,
+        {% else %}
+        const unsigned short the_grid_size_y, //TODO: change this to grid_size_y
+        {% endif %}
         {#const unsigned int num_big_trans, 
         const unsigned int num_small_trans,
         const unsigned short bank_tile_size_x_floor,
@@ -406,7 +414,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         const unsigned short tile_offset_y,
         const unsigned short tile_size_y,
             {% if ndim == 3 %}
-        const unsigned short tile_size_z,
+        const unsigned short grid_size_z,
             {% endif %}
         const unsigned int total_rows,
         const unsigned short bank_avoid_x_floor,
@@ -511,8 +519,13 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         //ops::hls::combineSteams<mem_data_width, {{II(arg)}}>(arg{{arg.id}}_read_mem_strm_b1, arg{{arg.id}}_read_mem_strm_b2, arg{{arg.id}}_read_mem_strm, memconfig);
             {% if config["datamover_lib"] == 1 %}
                 {% if prog.is_interleave() %}
-        ops::hls::offsetGenerator<{{config["tile_banks"]}}, {{II(arg)}}>(tile_size_y, {% if ndim == 3 %}tile_size_z{%else%}1{%endif%}, bank_grid_size_x_floor, big_grid_size_x_banks_upper, grid_size_y, 
+                    {% if ndim == 3 %}
+        ops::hls::offsetGenerator<{{config["tile_banks"]}}, {{II(arg)}}>(tile_size_y, grid_size_z, bank_grid_size_x_floor, big_grid_size_x_banks_upper, grid_size_y, 
                 tile_offset_x_floor, big_tile_offset_x_banks_upper, tile_offset_y, bank_tile_size_x_floor, big_bank_tile_size_x_mask, arg{{arg.id}}_read_offset_strm);
+                    {% else %}
+        ops::hls::offsetGenerator<{{config["tile_banks"]}}, {{II(arg)}}>(the_grid_size_y, bank_grid_size_x_floor, big_grid_size_x_banks_upper,
+                tile_offset_x_floor, big_tile_offset_x_banks_upper, bank_tile_size_x_floor, big_bank_tile_size_x_mask, arg{{arg.id}}_read_offset_strm);
+                    {% endif %}
                     {% for i in range(config["tile_banks"]) %}
         ops::hls::stridedTileMem2streamV4<mem_data_width, {{config["tile_banks"]}}, {{i}}, {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_b{{i}}, arg{{arg.id}}_read_mem_strm[{{i}}],  arg{{arg.id}}_read_offset_strm[{{i}}], bank_tile_size_x_floor, big_bank_tile_size_x_mask, total_rows
 #ifdef DEBUG_LOG 
@@ -621,11 +634,21 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
                     {% if prog.is_interleave() %}
         ops::hls::reverseRedirectV2<mem_data_width, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_redirect_strm, arg{{arg.id}}_write_mem_strm, bank_tile_size_x_floor, bank_tile_size_x_ceil, big_bank_tile_size_x_mask, big_tile_offset_x_banks_upper, total_rows);
         //ops::hls::writeConfigStreamGenerator<{{config["tile_banks"]}}, {{II(arg)}}>(offset, size_x, stride_y, size_y, stride_z, size_z, avoid_x, avoid_y, arg{{arg.id}}_write_command_strm);
-        ops::hls::offsetGenerator<{{config["tile_banks"]}}, {{II(arg)}}>(tile_size_y, {% if ndim == 3 %}tile_size_z{%else%}1{%endif%}, bank_grid_size_x_floor, big_grid_size_x_banks_upper, grid_size_y, 
+       {#ops::hls::offsetGenerator<{{config["tile_banks"]}}, {{II(arg)}}>(tile_size_y, {% if ndim == 3 %}grid_size_z{%else%}1{%endif%}, bank_grid_size_x_floor, big_grid_size_x_banks_upper, grid_size_y, 
+                tile_offset_x_floor, big_tile_offset_x_banks_upper, tile_offset_y, bank_tile_size_x_floor, big_bank_tile_size_x_mask, arg{{arg.id}}_write_offset_strm);#}
+                    {% if ndim == 3 %}
+        ops::hls::offsetGenerator<{{config["tile_banks"]}}, {{II(arg)}}>(tile_size_y, grid_size_z, bank_grid_size_x_floor, big_grid_size_x_banks_upper, grid_size_y, 
                 tile_offset_x_floor, big_tile_offset_x_banks_upper, tile_offset_y, bank_tile_size_x_floor, big_bank_tile_size_x_mask, arg{{arg.id}}_write_offset_strm);
+                    {% else %}
+        ops::hls::offsetGenerator<{{config["tile_banks"]}}, {{II(arg)}}>(the_grid_size_y, bank_grid_size_x_floor, big_grid_size_x_banks_upper,
+                tile_offset_x_floor, big_tile_offset_x_banks_upper, bank_tile_size_x_floor, big_bank_tile_size_x_mask, arg{{arg.id}}_write_offset_strm);
+                    {% endif %}
                         {% for i in range(config["tile_banks"]) %}
-        ops::hls::stridedTileStream2memWithAvoidV4<mem_data_width, {{config["tile_banks"]}}, {{i}}, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm[{{i}}], arg{{arg.id}}_b{{i}}, arg{{arg.id}}_write_offset_strm[{{i}}], bank_tile_size_x_floor, big_bank_tile_size_x_mask, bank_avoid_x_floor, big_bank_avoid_x_mask, avoid_y, tile_size_y{% if ndim == 3 %}, tile_size_z{% endif %}
-        
+                            {% if ndim == 3 %}
+        ops::hls::stridedTileStream2memWithAvoidV4<mem_data_width, {{config["tile_banks"]}}, {{i}}, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm[{{i}}], arg{{arg.id}}_b{{i}}, arg{{arg.id}}_write_offset_strm[{{i}}], bank_tile_size_x_floor, big_bank_tile_size_x_mask, bank_avoid_x_floor, big_bank_avoid_x_mask, avoid_y, tile_size_y, grid_size_z
+                            {% else %}
+        ops::hls::stridedTileStream2memWithAvoidV4<mem_data_width, {{config["tile_banks"]}}, {{i}}, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm[{{i}}], arg{{arg.id}}_b{{i}}, arg{{arg.id}}_write_offset_strm[{{i}}], bank_tile_size_x_floor, big_bank_tile_size_x_mask, bank_avoid_x_floor, big_bank_avoid_x_mask, the_grid_size_y
+                            {% endif %}
 #ifdef DEBUG_LOG 
         , "bank_{{i}}"
 #endif
@@ -1064,16 +1087,24 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
                     interleaveTileConfig.big_bank_tile_size_x_mask,
                     interleaveTileConfig.tile_offset_x_floor,
                     interleaveTileConfig.big_tile_offset_x_banks_upper,
+            {% if ndim == 3 %}
                     interleaveTileConfig.tile_offset_y,
                     interleaveTileConfig.tile_size_y,
+            {% endif %}
                     interleaveTileConfig.total_rows,
                     interleaveTileConfig.bank_avoid_x_floor,
                     interleaveTileConfig.big_bank_avoid_x_mask,
+            {% if ndim == 3%}
                     interleaveTileConfig.avoid_y,
+            {% endif %}
                     staticConfig.bank_grid_size_x_floor,
                     staticConfig.big_grid_size_x_banks_upper,
+            {% if ndim == 3 %}
                     staticConfig.grid_size_y,
                     staticConfig.tile_size_z,
+            {% else %}
+                    staticConfig.grid_size_y,
+            {% endif %}
         {% endif %}
             {#        total_pkts,
                     total_beats,
@@ -1222,16 +1253,24 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
                     interleaveTileConfig.big_bank_tile_size_x_mask,
                     interleaveTileConfig.tile_offset_x_floor,
                     interleaveTileConfig.big_tile_offset_x_banks_upper,
+            {% if ndim == 3 %}
                     interleaveTileConfig.tile_offset_y,
                     interleaveTileConfig.tile_size_y,
+            {% endif %}
                     interleaveTileConfig.total_rows,
                     interleaveTileConfig.bank_avoid_x_floor,
                     interleaveTileConfig.big_bank_avoid_x_mask,
+            {% if ndim == 3%}
                     interleaveTileConfig.avoid_y,
+            {% endif %}
                     staticConfig.bank_grid_size_x_floor,
                     staticConfig.big_grid_size_x_banks_upper,
+            {% if ndim == 3 %}
                     staticConfig.grid_size_y,
                     staticConfig.tile_size_z,
+            {% else %}
+                    staticConfig.grid_size_y,
+            {% endif %}
         {% endif %}
         {#
                     total_pkts,
