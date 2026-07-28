@@ -526,7 +526,7 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short slr_reg
             {% endif %}
         {% else %}
             {% if prog.is_interleave() %}
-            bool small_tile = tile_size_x =< {{(config["tile_banks"]/2)|int}}; 
+            bool small_tile = tile_size_x <= {{(config["tile_banks"]/2)|int}}; 
             {% if config["vector_factor"] < config["mem_vector_factor"] %}
             const unsigned int mem_tile_size_x = tile_size_x >> {{log2(config["mem_vector_factor"]/config["vector_factor"])|int}};
             const unsigned int widen_tile_size_x = ((mem_tile_size_x + {{(config["tile_banks"]) - 1}}) >> {{log2(config["tile_banks"])|int}}) << {{log2(config["mem_vector_factor"]/config["vector_factor"])|int}};
