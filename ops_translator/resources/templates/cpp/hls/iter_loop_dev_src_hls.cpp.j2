@@ -587,9 +587,9 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short slr_reg
             tileConfig.is_last[1] = true;
             {% endif %}
             tileConfig.last_tile_upper_limit_x = stencilConfig.last_tile_upper_limit_x;
-            tileConfig.line_diff = widen_tile_size_x - 1;
+            tileConfig.line_diff = {%if prog.is_interleave() %}widen_tile_size_x{% else %}tile_size_x{% endif %} - 1;
             {% if ndim == 3 %}
-            tileConfig.plane_diff = widen_tile_size_x * tile_size_y - 1;
+            tileConfig.plane_diff = {%if prog.is_interleave() %}widen_tile_size_x{% else %}tile_size_x{% endif %} * tile_size_y - 1;
             {% else %}
             tileConfig.plane_diff = 0;
             {% endif %}

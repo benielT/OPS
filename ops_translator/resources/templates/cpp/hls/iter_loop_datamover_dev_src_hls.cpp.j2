@@ -383,24 +383,24 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         const ap_uint<8> big_bank_tile_size_x_mask,
         const unsigned short tile_offset_x_floor,
         const ap_uint<3> big_tile_offset_x_banks_upper,
-        {% if ndim == 3 %}
+            {% if ndim == 3 %}
         const unsigned short tile_offset_y,
         const unsigned short tile_size_y,
-        {% endif %}
+            {% endif %}
         const unsigned int total_rows, 
         const unsigned short bank_avoid_x_floor,
         const ap_uint<8> big_bank_avoid_x_mask,
-        {% if ndim == 3 %}
+            {% if ndim == 3 %}
         const unsigned short avoid_y,
-        {% endif %}
+            {% endif %}
         const unsigned short bank_grid_size_x_floor,
         const ap_uint<3> big_grid_size_x_banks_upper,
-        {% if ndim == 3 %}
+            {% if ndim == 3 %}
         const unsigned short grid_size_y,
         const unsigned short grid_size_z,
-        {% else %}
+            {% else %}
         const unsigned short the_grid_size_y, //TODO: change this to grid_size_y
-        {% endif %}
+            {% endif %}
         {#const unsigned int num_big_trans, 
         const unsigned int num_small_trans,
         const unsigned short bank_tile_size_x_floor,
@@ -441,6 +441,9 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         //unsigned int abs_row_offset,
             {% endif %}
         //unsigned int z_row_stride,#}
+        {% else %}
+        const unsigned int num_pkts,
+        const ops::hls::MemConfigTile& memconfig,
         {% endif %}
     {% else %}
         const unsigned int num_pkts,
@@ -470,20 +473,24 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
     {% for arg in ilh.joint_args|ops_dat %}
         {% if arg is ops_read_or_rw%}
             {% if prog.is_interleave() %}
-    static ::hls::stream<ap_uint<32>> arg{{arg.id}}_read_offset_strm[{{config["tile_banks"]}}];
+    ::hls::stream<ap_uint<32>> arg{{arg.id}}_read_offset_strm[{{config["tile_banks"]}}];
     #pragma HLS STREAM variable = arg{{arg.id}}_read_offset_strm depth = 32
 
-    static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_redirect_strm[{{config["tile_banks"]}}];
+    ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_redirect_strm[{{config["tile_banks"]}}];
     #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_redirect_strm 
     {#depth = {{(config["maxi_read_burst_length"]  * config["num_read_outstanding"])|int + 6}}#}  
 
             {% endif %}
-    static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_strm{%if prog.is_interleave()%}[{{config["tile_banks"]}}]{%endif%};
+    ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_strm{%if isTiling %}[{{config["tile_banks"]}}]{%endif%};
     #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm 
     {#depth = {{(config["maxi_read_burst_length"] * config["num_read_outstanding"])|int + 6}}#}
 
             {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
-    static ::hls::stream<ap_uint<{{axis_data_width(arg)-}}>> arg{{arg.id}}_read_reduced_mem_strm{%if prog.is_interleave()%}[{{config["tile_banks"]}}]{%endif%};
+                {% if isTiling and not prog.is_interleave() %}
+    ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_combined_read_mem_strm;
+    #pragma HLS STREAM variable = arg{{arg.id}}_combined_read_mem_strm
+                {% endif %}
+    ::hls::stream<ap_uint<{{axis_data_width(arg)-}}>> arg{{arg.id}}_read_reduced_mem_strm{%if prog.is_interleave()%}[{{config["tile_banks"]}}]{%endif%};
     #pragma HLS STREAM variable = arg{{arg.id}}_read_reduced_mem_strm 
     {#depth = {{(config["maxi_read_burst_length"] * config["num_read_outstanding"] *  config["mem_vector_factor"] / config["vector_factor"])|int + 6}}#}
 
@@ -491,22 +498,25 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         {% endif %}
         {% if arg is ops_write_or_rw and arg is not read_only_rw %}
             {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
-    static ::hls::stream<ap_uint<{{axis_data_width(arg)-}}>> arg{{arg.id}}_write_reduced_mem_strm{%if prog.is_interleave()%}[{{config["tile_banks"]}}]{%endif%};
+    ::hls::stream<ap_uint<{{axis_data_width(arg)-}}>> arg{{arg.id}}_write_reduced_mem_strm{%if prog.is_interleave()%}[{{config["tile_banks"]}}]{%endif%};
     #pragma HLS STREAM variable = arg{{arg.id}}_write_reduced_mem_strm 
     {#depth = {{(config["maxi_write_burst_length"] * config["num_write_outstanding"] *  config["mem_vector_factor"] / config["vector_factor"])|int + 6}}#}
-
+                {% if isTiling and not prog.is_interleave() %}
+    ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_combined_write_mem_strm;
+    #pragma HLS STREAM variable = arg{{arg.id}}_combined_write_mem_strm
+                {% endif %}
             {% endif %}
-    static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_strm{%if prog.is_interleave()%}[{{config["tile_banks"]}}]{%endif%};
+    ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_strm{%if isTiling %}[{{config["tile_banks"]}}]{%endif%};
     #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm 
     {#depth = {{(config["maxi_write_burst_length"] * config["num_write_outstanding"])|int + 6}}#}
 
         {% endif %}
         {% if prog.is_interleave() %}
-    static ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_redirect_strm[{{config["tile_banks"]}}];
+    ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_redirect_strm[{{config["tile_banks"]}}];
     #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_redirect_strm 
     
     {#depth = {{(config["maxi_write_burst_length"] * config["num_write_outstanding"])|int + 6}}#}
-    static ::hls::stream<ap_uint<32>> arg{{arg.id}}_write_offset_strm[{{config["tile_banks"]}}];
+    ::hls::stream<ap_uint<32>> arg{{arg.id}}_write_offset_strm[{{config["tile_banks"]}}];
     #pragma HLS STREAM variable = arg{{arg.id}}_write_offset_strm depth = 32    
         {% endif %}
     {% endfor %}
@@ -535,18 +545,17 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
                     {% endfor %}
         ops::hls::redirectV2<mem_data_width, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_read_mem_strm, arg{{arg.id}}_read_mem_redirect_strm, bank_tile_size_x_floor, bank_tile_size_x_ceil, big_bank_tile_size_x_mask, big_tile_offset_x_banks_upper, total_rows);          
                 {% else %}
-                    {% if config["tile_banks"] > 1 %}
-        stridedTileMem2stream<mem_data_width, {{config["tile_banks"]}}, {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(
-                        {% for i in range(config["tile_banks"]) %}
-                arg{{arg.id}}_b{{i}},
-                        {% endfor %}
+                    {% for i in range(config["tile_banks"]) %}
                         {% if ndim == 3 %}
-                abs_row_offset,
+        ops::hls::stridedTileMem2stream3D<mem_data_width,  {{config["tile_banks"]}}, {{i}}, {{config["maxi_read_burst_length"]}}, 1>(arg{{arg.id}}_b{{i}}, arg{{arg.id}}_read_mem_strm[{{i}}], memconfig);
+                        {% else %}
+        ops::hls::stridedTileMem2stream2D<mem_data_width,  {{config["tile_banks"]}}, {{i}}, {{config["maxi_read_burst_length"]}}, 1>(arg{{arg.id}}_b{{i}}, arg{{arg.id}}_read_mem_strm[{{i}}], memconfig);
                         {% endif %}
-                z_row_stride,
-                arg{{arg.id}}_read_mem_strm, short_command);
+                    {% endfor %}
+                    {% if ndim == 3 %}
+        ops::hls::combineStreams2D<mem_data_width, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_read_mem_strm, arg{{arg.id}}_combined_read_mem_strm, memconfig);
                     {% else %}
-        ops::hls::tileMem2stream<mem_data_width, {{config["maxi_read_burst_length"]}}, 1>(arg{{arg.id}}, arg{{arg.id}}_read_mem_strm, short_command);
+        ops::hls::combineStreams2D<mem_data_width, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_read_mem_strm, arg{{arg.id}}_combined_read_mem_strm, memconfig);
                     {% endif %}
                 {% endif %}
             {% else %}
@@ -565,7 +574,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         ops::hls::aggregatedStream2streamStepdown<mem_data_width, {{axis_data_width(arg)-}}, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_read_mem_redirect_strm, arg{{arg.id}}_read_reduced_mem_strm, num_big_trans);  
         {% else %}
             {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
-        ops::hls::stream2streamStepdown<mem_data_width, {{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_strm, arg{{arg.id}}_read_reduced_mem_strm, {%if isTiling %}num_beats{% else %}{{num_beats(arg)}}{% endif %});
+        ops::hls::stream2streamStepdown<mem_data_width, {{axis_data_width(arg)-}}>(arg{{arg.id}}_{{"combined_" if isTiling}}read_mem_strm, arg{{arg.id}}_read_reduced_mem_strm, {%if prog.is_interleave() %}num_beats{% else %}{{num_beats(arg)}}{% endif %});
             {% endif %}
         {% endif %}
     {% endfor %}
@@ -623,7 +632,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         ops::hls::aggregatedStream2streamStepup<{{axis_data_width(arg)-}}, mem_data_width, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_write_reduced_mem_strm, arg{{arg.id}}_write_mem_redirect_strm, num_big_trans);
         {% else %}
             {% if (config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"]) and (arg is not read_only_rw) %}
-        ops::hls::stream2streamStepup<{{axis_data_width(arg)-}}, mem_data_width>(arg{{arg.id}}_write_reduced_mem_strm, arg{{arg.id}}_write_mem_strm, {%if isTiling %}num_beats{% else %}{{num_beats(arg)}}{% endif %});
+        ops::hls::stream2streamStepup<{{axis_data_width(arg)-}}, mem_data_width>(arg{{arg.id}}_write_reduced_mem_strm, arg{{arg.id}}_{{"combined_" if isTiling }}write_mem_strm, {%if prog.is_interleave() %}num_beats{% else %}{{num_beats(arg)}}{% endif %});
             {% endif %}
         {% endif %}
     {% endfor %}
@@ -636,13 +645,13 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         //ops::hls::writeConfigStreamGenerator<{{config["tile_banks"]}}, {{II(arg)}}>(offset, size_x, stride_y, size_y, stride_z, size_z, avoid_x, avoid_y, arg{{arg.id}}_write_command_strm);
        {#ops::hls::offsetGenerator<{{config["tile_banks"]}}, {{II(arg)}}>(tile_size_y, {% if ndim == 3 %}grid_size_z{%else%}1{%endif%}, bank_grid_size_x_floor, big_grid_size_x_banks_upper, grid_size_y, 
                 tile_offset_x_floor, big_tile_offset_x_banks_upper, tile_offset_y, bank_tile_size_x_floor, big_bank_tile_size_x_mask, arg{{arg.id}}_write_offset_strm);#}
-                    {% if ndim == 3 %}
+                        {% if ndim == 3 %}
         ops::hls::offsetGenerator<{{config["tile_banks"]}}, {{II(arg)}}>(tile_size_y, grid_size_z, bank_grid_size_x_floor, big_grid_size_x_banks_upper, grid_size_y, 
                 tile_offset_x_floor, big_tile_offset_x_banks_upper, tile_offset_y, bank_tile_size_x_floor, big_bank_tile_size_x_mask, arg{{arg.id}}_write_offset_strm);
-                    {% else %}
+                        {% else %}
         ops::hls::offsetGenerator<{{config["tile_banks"]}}, {{II(arg)}}>(the_grid_size_y, bank_grid_size_x_floor, big_grid_size_x_banks_upper,
                 tile_offset_x_floor, big_tile_offset_x_banks_upper, bank_tile_size_x_floor, big_bank_tile_size_x_mask, arg{{arg.id}}_write_offset_strm);
-                    {% endif %}
+                        {% endif %}
                         {% for i in range(config["tile_banks"]) %}
                             {% if ndim == 3 %}
         ops::hls::stridedTileStream2memWithAvoidV4<mem_data_width, {{config["tile_banks"]}}, {{i}}, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm[{{i}}], arg{{arg.id}}_b{{i}}, arg{{arg.id}}_write_offset_strm[{{i}}], bank_tile_size_x_floor, big_bank_tile_size_x_mask, bank_avoid_x_floor, big_bank_avoid_x_mask, avoid_y, tile_size_y, grid_size_z
@@ -655,19 +664,18 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         );
                         {% endfor %}
                     {% else %}
-                        {% if config["tile_banks"] > 1 %}
-        stridedTileStream2memWithAvoid<mem_data_width, {{config["tile_banks"]}}, {{config["maxi_read_burst_length"]}}, {{II(arg)}}>(
-                            {% for i in range(config["tile_banks"]) %}
-                arg{{arg.id}}_b{{i}},
-                            {% endfor %}
-                            {% if ndim == 3 %}
-                abs_row_offset,
-                            {% endif %}
-                z_row_stride,
-                arg{{arg.id}}_write_mem_strm, command);
+                        {% if ndim == 3 %}
+        ops::hls::splitStream3D<mem_data_width, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_combined_write_mem_strm, arg{{arg.id}}_write_mem_strm, memconfig);
                         {% else %}
-        ops::hls::tileStream2memWithAvoid<mem_data_width, {{config["maxi_write_burst_length"]}}, 1>(arg{{arg.id}}, arg{{arg.id}}_write_mem_strm, command);
+        ops::hls::splitStream2D<mem_data_width, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_combined_write_mem_strm, arg{{arg.id}}_write_mem_strm, memconfig);
                         {% endif %}
+                        {% for i in range(config["tile_banks"]) %}
+                            {% if ndim == 3 %}
+        ops::hls::stridedTileStream2mem3D<mem_data_width, {{config["tile_banks"]}}, {{config["maxi_write_burst_length"]}}, {{II(arg)}}> (arg{{arg.id}}_write_mem_strm[{{i}}], arg{{arg.id}}_b{{i}}, memconfig, {{i}});
+                            {% else %}
+        ops::hls::stridedTileStream2mem2D<mem_data_width, {{config["tile_banks"]}}, {{i}}, {{config["maxi_write_burst_length"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm[{{i}}], arg{{arg.id}}_b{{i}}, memconfig);
+                            {% endif %}
+                        {% endfor %}
                     {% endif %}
                 {% else %}
                     {% if prog.is_interleave() %}
@@ -703,6 +711,14 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         if(!arg{{arg.id}}_read_mem_strm[i].empty())
             printf("[SIM WARNING] arg{{arg.id}}_read_mem_strm[%d] has %zu leftover elements!\n", i, arg{{arg.id}}_read_mem_strm[i].size());
     }
+            {% elif isTiling%}
+        if(!arg{{arg.id}}_combined_read_mem_strm.empty())
+            printf("[SIM WARNING] arg{{arg.id}}_combined_read_mem_strm.empty() has %zu leftover elements!\n", arg{{arg.id}}_combined_read_mem_strm.empty());
+
+    for (int i = 0; i < {{config["tile_banks"]}}; i++) {
+        if(!arg{{arg.id}}_read_mem_strm[i].empty())
+            printf("[SIM WARNING] arg{{arg.id}}_read_mem_strm[%d] has %zu leftover elements!\n", i, arg{{arg.id}}_read_mem_strm[i].size());
+    }        
             {% else %}
     if(!arg{{arg.id}}_read_mem_strm.empty())
         printf("[SIM WARNING] arg{{arg.id}}_read_mem_strm has %zu leftover elements!\n", arg{{arg.id}}_read_mem_strm.size());
@@ -731,7 +747,11 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         printf("[SIM WARNING] arg{{arg.id}}_write_reduced_mem_strm has %zu leftover elements!\n", arg{{arg.id}}_write_reduced_mem_strm.size());
                 {% endif %}
             {% endif %}
-            {% if prog.is_interleave() %}
+            {% if isTiling %}
+                {% if not prog.is_interleave() %}
+    if(!arg{{arg.id}}_combined_write_mem_strm.empty())
+        printf("[SIM WARNING] arg{{arg.id}}_combined_write_mem_strm has %zu leftover elements!\n", arg{{arg.id}}_combined_write_mem_strm.size());
+                {% endif %}
     for (int i = 0; i < {{config["tile_banks"]}}; i++) {
         if(!arg{{arg.id}}_write_mem_strm[i].empty())
             printf("[SIM WARNING] arg{{arg.id}}_write_mem_strm[%d] has %zu leftover elements!\n", i, arg{{arg.id}}_write_mem_strm[i].size());
@@ -757,7 +777,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
 #endif
 }
 
-{% if isTiling %}
+{% if isTiling and prog.is_interleave() %}
 /*static void datamover_outerloop_{{ilh.id}}_tile_config_wrapper(const ops::hls::MemConfigTile& memconfig,
     const unsigned short& tile_x_id,
     {% if ndim == 3 %}
@@ -862,12 +882,12 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
 
 static void datamover_outerloop_{{ilh.id}}_tile_config_wrapper(const ops::hls::MemConfigTile& memconfig,
         const unsigned short& tile_x_id,
-{% if ndim == 3 %}
+    {% if ndim == 3 %}
         const unsigned short& tile_y_id,
         const unsigned short& tile_size_z,
-{% else %}
+    {% else %}
         const unsigned short& tile_size_y,
-{% endif %}
+    {% endif %}
         InterleaveTileConfig& tile_config) {
     #pragma HLS INLINE
     constexpr unsigned short BANK_SHIFT = {{log2(config["tile_banks"])|int}};
@@ -940,7 +960,7 @@ static void datamover_outerloop_{{ilh.id}}_static_tile_config_wrapper(const ops:
 
 static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
         const unsigned int iter,
-    {% if not isTiling%}
+    {% if not prog.is_interleave() %}
         const unsigned int num_pkts,
         {#% if ilh.isMultiDim() %}
             {% for m_dim in ilh.getMultidimList() %}
@@ -976,7 +996,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
 {
     //TODO: memconfig.start_offset need to be handled for multibank tiling if start_offset != 0. In all our cased start_offset == 0 for now
     const unsigned int iter_by_2 = iter >> 1;
-    {% if isTiling %}
+    {% if prog.is_interleave() %}
         {%if ndim == 3 %}
     const unsigned short total_tiles = memconfig.tile_count_x * memconfig.tile_count_y;
     //const unsigned short z_diff = memconfig.end_z - memconfig.start_z;
@@ -988,8 +1008,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
         {% endif %}
 	unsigned short tile_x = 0;
 	const unsigned short stride_y = memconfig.grid_xblocks;
-    {% endif %}
-    {% if prog.is_interleave() %}
+
     InterleaveStaticTileConfig staticConfig;
     datamover_outerloop_{{ilh.id}}_static_tile_config_wrapper(memconfig, staticConfig);
     {% endif %}
@@ -998,7 +1017,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
     #ifdef DEBUG_LOG
         printf("[KERNEL_DEBUG]|%s| Calling datamover. i:%d\n", __func__, i);
     #endif
-    {% if isTiling %}
+    {% if prog.is_interleave() %}
         for (unsigned short tile_id = 0; tile_id < total_tiles; tile_id++)
 		{
             if (tile_id > 0) {
@@ -1105,6 +1124,9 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
             {% else %}
                     staticConfig.grid_size_y,
             {% endif %}
+        {% else %}
+                    num_pkts,
+                    memconfig,
         {% endif %}
             {#        total_pkts,
                     total_beats,
@@ -1160,7 +1182,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
     {% endfor %}
     {{axis_argument_set()}}
             );
-    {% if isTiling %}
+    {% if prog.is_interleave() %}
         }
 
         tile_x = 0;
@@ -1271,6 +1293,9 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
             {% else %}
                     staticConfig.grid_size_y,
             {% endif %}
+        {% else %}
+                    num_pkts,
+                    memconfig,
         {% endif %}
         {#
                     total_pkts,
@@ -1327,7 +1352,7 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write(
     {% endfor %}
     {{axis_argument_set()}}
             );
-    {% if isTiling %}
+    {% if prog.is_interleave() %}
         }
 
         tile_x = 0;
@@ -1605,7 +1630,7 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
             {% endfor %}
         {% endif %}
     {% endif %}
-    {% if not isTiling %}
+    {% if not prog.is_interleave() %}
     const unsigned int num_beats = config.total_xblocks;
     const unsigned int num_pkts = num_of_pkts_per_beat * num_beats;
     {% endif %}
@@ -1704,7 +1729,7 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
     {% if config["datamover_mode"] == 3 or config["datamover_mode"] == 2 %}
         datamover_outerloop_{{ilh.id}}_dataflow_read_write(
                 outer_itr,
-        {% if not isTiling %}
+        {% if not prog.is_interleave() %}
                 num_pkts,
             {#% if ilh.isMultiDim() %}
                 {% for m_dim in ilh.getMultidimList() %}
