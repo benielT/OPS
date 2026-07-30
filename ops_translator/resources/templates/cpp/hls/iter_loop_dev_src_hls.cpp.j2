@@ -125,7 +125,7 @@ iter_par_factor
                 {% else %}
                     {% set last_check = False %}
                 {% endif %}
-            {{arg_str}}{% if direction == 0 %}[{{i}}]{% elif direction == 1 %}[{{i}}+1]{% endif %}{{"," if not last_check}}
+            {{arg_str}}{% if direction == 0 %}[{{i}}]{% elif direction == 1 %}[{{i}}+1]{% else %}[{{i}}]{% endif %}{{"," if not last_check}}
                 {%if "arg" in arg_str %}
                     {% set _ = prev_arg_str.update({arg_str : 1}) %}
                 {% endif %}
@@ -611,8 +611,7 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short slr_reg
                 num_pkts_div_by_banks,
                 {% else %}
                 num_pkts,
-                {% endif %} 
-                {#%if ilh.isMultiDim() -%}{% for m_dim in ilh.getMultidimList() -%}num_pkts_d{{m_dim}}, {% endfor -%} {% endif -%#}
+                {% endif %} {#%if ilh.isMultiDim() -%}{% for m_dim in ilh.getMultidimList() -%}num_pkts_d{{m_dim}}, {% endfor -%} {% endif -%#}
                 {% for arg in ilh.joint_args|ops_dat -%}
                 {% set first_loop_last = loop.last %}
                     {% if arg is not ops_rw %}
@@ -632,7 +631,7 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short slr_reg
                 {{lmac.axis_name_t3(arg,tile,"out")-}}{{", " if not (loop.last and first_loop_last) or consts or ilh.joint_args|ops_gbl -}}
                             {% endfor %}
                         {% else %}
-                {{lmac.axis_name_t2(arg, "in")-}}, 
+                {{lmac.axis_name_t2(arg, "in")-}},
                 {{lmac.axis_name_t2(arg, "out")-}}{{", " if not loop.last or consts or ilh.joint_args|ops_gbl-}}
                         {% endif %}
                     {% endif %}
@@ -729,13 +728,17 @@ static void kernel_outerloop_{{ilh.id}}_main_region(const unsigned short slr_reg
             {% if prog.is_interleave() %}
                 {% for tile in range["tile_banks"] %}
     #pragma HLS INTERFACE axis port = {{lmac.axis_name_t3(arg, tile, "in")}} register {#register_mode=both#}
+
                 {% endfor %}
                 {% for tile in range["tile_banks"] %}
     #pragma HLS INTERFACE axis port = {{lmac.axis_name_t3(arg, tile, "out")}} register {#register_mode=both#}
+
                 {% endfor %}
             {% else %}
     #pragma HLS INTERFACE axis port = {{lmac.axis_name_t2(arg, "in")}} register {#register_mode=both#}
+
     #pragma HLS INTERFACE axis port = {{lmac.axis_name_t2(arg, "out")}} register {#register_mode=both#}
+    
             {% endif %}
         {% endif %}
     {% endfor %}
