@@ -482,14 +482,15 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
 
             {% endif %}
     ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_strm{%if isTiling %}[{{config["tile_banks"]}}]{%endif%};
-    #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm 
+    #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm depth={{config["maxi_read_burst_length"]}}
     {#depth = {{(config["maxi_read_burst_length"] * config["num_read_outstanding"])|int + 6}}#}
 
-            {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
-                {% if isTiling and not prog.is_interleave() %}
+            {% if isTiling and not prog.is_interleave() %}
     ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_combined_read_mem_strm;
     #pragma HLS STREAM variable = arg{{arg.id}}_combined_read_mem_strm
-                {% endif %}
+            {% endif %}
+
+            {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
     ::hls::stream<ap_uint<{{axis_data_width(arg)-}}>> arg{{arg.id}}_read_reduced_mem_strm{%if prog.is_interleave()%}[{{config["tile_banks"]}}]{%endif%};
     #pragma HLS STREAM variable = arg{{arg.id}}_read_reduced_mem_strm 
     {#depth = {{(config["maxi_read_burst_length"] * config["num_read_outstanding"] *  config["mem_vector_factor"] / config["vector_factor"])|int + 6}}#}
@@ -501,13 +502,15 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
     ::hls::stream<ap_uint<{{axis_data_width(arg)-}}>> arg{{arg.id}}_write_reduced_mem_strm{%if prog.is_interleave()%}[{{config["tile_banks"]}}]{%endif%};
     #pragma HLS STREAM variable = arg{{arg.id}}_write_reduced_mem_strm 
     {#depth = {{(config["maxi_write_burst_length"] * config["num_write_outstanding"] *  config["mem_vector_factor"] / config["vector_factor"])|int + 6}}#}
-                {% if isTiling and not prog.is_interleave() %}
+            {% endif %}
+    
+            {% if isTiling and not prog.is_interleave() %}
     ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_combined_write_mem_strm;
     #pragma HLS STREAM variable = arg{{arg.id}}_combined_write_mem_strm
-                {% endif %}
             {% endif %}
+
     ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_strm{%if isTiling %}[{{config["tile_banks"]}}]{%endif%};
-    #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm 
+    #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm depth={{config["maxi_write_burst_length"]}}
     {#depth = {{(config["maxi_write_burst_length"] * config["num_write_outstanding"])|int + 6}}#}
 
         {% endif %}
@@ -594,6 +597,8 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
                 {% for i in range(config["tile_banks"]) %}
         ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_redirect_strm[{{i}}], {% if arg is ops_read %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "out")}}{% endif %}, num_small_trans);
                 {% endfor %}
+            {% elif isTiling %}
+        ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_combined_read_mem_strm, {% if arg is ops_read %}{{lmac.axis_name(arg)}}{% else %}{{lmac.axis_name_t2(arg, "out")}}{% endif %}, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
             {% else %}
         ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_strm, {% if arg is ops_read %}{{lmac.axis_name(arg)}}{% else %}{{lmac.axis_name_t2(arg, "out")}}{% endif %}, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
             {% endif %}
@@ -620,6 +625,8 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
                         {% for i in range(config["tile_banks"]) %}
         ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "in")}}{% endif %}, arg{{arg.id}}_write_mem_redirect_strm[{{i}}], num_small_trans);
                         {% endfor %}
+                    {% elif isTiling %}
+        ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{lmac.axis_name(arg)}}{% else %}{{lmac.axis_name_t2(arg, "in")}}{% endif %}, arg{{arg.id}}_combined_write_mem_strm, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
                     {% else %}
         ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{lmac.axis_name(arg)}}{% else %}{{lmac.axis_name_t2(arg, "in")}}{% endif %}, arg{{arg.id}}_write_mem_strm, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
                     {% endif %}
