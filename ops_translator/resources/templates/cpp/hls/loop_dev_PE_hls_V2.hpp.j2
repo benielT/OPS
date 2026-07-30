@@ -76,7 +76,9 @@ widen_stream_{{lh.kernel}}_{{arg.id}}_dt
 
 #include "../../common/include/common_config.hpp"
 {% endif %}
-
+#ifndef __SYNTHESIS__
+#include <vector> 
+#endif
  
 {% set widen_read_stencil = widen_read_stencil_desc.widen_stencil %}
 {% if widen_read_stencil is not none %}
@@ -607,8 +609,13 @@ public:
         {% for arg in lh.args|ops_dat|ops_read_or_rw %}
 
             // arg{{arg.id}}({{lh.dats[arg.dat_id].ptr}})
+#ifdef __SYNTHESIS__
             {{widen_dt_name(arg)}} arg{{arg.id}}_widenStencilValues[read_num_points_{{lh.kernel}}];
             #pragma HLS ARRAY_PARTITION variable = arg{{arg.id}}_widenStencilValues dim = 1 complete
+#else
+            std::vector<{{widen_dt_name(arg)}}> arg{{arg.id}}_widenStencilValues_vec(read_num_points_{{lh.kernel}});  
+            {{widen_dt_name(arg)}}* arg{{arg.id}}_widenStencilValues = arg{{arg.id}}_widenStencilValues_vec.data();      
+#endif
             {% if isTiling %}
                 {% if lh.ndim == 2 %}
             // Max grid_size: ({{tiles[0]|int}}, {{config["max_grid_size"][1]|int}})
@@ -627,6 +634,27 @@ public:
             {% else %}
                 {% set interleave_div = 1 %}
             {% endif %}
+
+#ifndef __SYNTHESIS__
+            {% for buffer in widen_stencil_disc_map[arg.stencil_ptr].window_buffers %}
+                {% if buffer.buffer_type == ops.BufferType.LINE_BUFF %}
+                    {% if isTiling %}
+            //tile_size_x = {{tiles[0]|int}}, half_span_x: 0, vector_factor: {{vector_factor(arg)|int}}, interleave_div: {{interleave_div}}
+            std::vector<{{widen_dt_name(arg)}}> arg{{arg.id}}_{{buffer.name}}_vec({{get_line_buff_size(tiles[0]|int, 0, vector_factor(arg)|int, interleave_div)}});
+                    {% else %}
+            std::vector<{{widen_dt_name(arg)}}> arg{{arg.id}}_{{buffer.name}}_vec({{get_line_buff_size(config["max_grid_size"][0]|int, half_span_x|int, vector_factor(arg)|int, interleave_div)}});
+                    {% endif %}
+                {% else %}
+                    {% if isTiling %}
+            //tile_size_x = {{tiles[0]|int}}, tile_size_y: {{tiles[1]|int}}, half_span_x: 0, vector_factor: {{vector_factor(arg)|int}}, interleave_div: {{interleave_div}}
+            std::vector<{{widen_dt_name(arg)}}> arg{{arg.id}}_{{buffer.name}}_vec({{get_plane_buff_size(tiles[0]|int, tiles[1]|int, 0, vector_factor(arg)|int, interleave_div)}});
+                    {% else %}
+            std::vector<{{widen_dt_name(arg)}}> arg{{arg.id}}_{{buffer.name}}_vec({{get_plane_buff_size(config["max_grid_size"][0]|int, config["max_grid_size"][1]|int, half_span_x|int, vector_factor(arg)|int, interleave_div)}});
+                    {% endif %}
+                {% endif %}
+            {{widen_dt_name(arg)}}* arg{{arg.id}}_{{buffer.name}} = arg{{arg.id}}_{{buffer.name}}_vec.data();
+            {% endfor %}
+#else
             {% for buffer in widen_stencil_disc_map[arg.stencil_ptr].window_buffers %}
                 {% if buffer.buffer_type == ops.BufferType.LINE_BUFF %}
                     {% if isTiling %}
@@ -684,7 +712,7 @@ public:
                     // next SIS_id = {{SIS_id[0]}}
                 {% endif %}
             {% endfor %}
-
+#endif
             {% for row_discriptor in prog.findStencil(arg.stencil_ptr).row_discriptors %}
                 {% if lh.dats[arg.dat_id].isMultiDim() %}
                     {% for m_dim in range(lh.dats[arg.dat_id].dim) %}
