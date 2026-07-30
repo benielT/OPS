@@ -534,7 +534,7 @@ void mem2streamV2(ap_uint<MEM_DATA_WIDTH>* mem_in,
         strm_out << tmp;
 #ifdef DEBUG_LOG_PRINT
 		print("====================================================================================\n");
-        print("|HLS DEBUG_LOG| mem2stream | reading burst index: %d, val=(\n", index);
+        print("|HLS DEBUG_LOG| mem2stream | reading burst index: %d, val=(\n", beat);
 
         for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
         {
