@@ -327,6 +327,11 @@ def translateProgramHLS(source: str, program: Program, app_consts: List[Const], 
         else:
             buffer.update(index, f'\tops_init_backend(argc, argv, {device_id});\n')
             
+        buffer.insert(index-1, "#if defined(TAPA_SW_EMU) || defined(TAPA_HW_EMU)")
+        buffer.insert(index-1, '    std::cout << "Running TAPA host mode" << std::endl;')
+        buffer.insert(index-1, '#else')
+        buffer.insert(index+1, "#endif")
+        
     # 6. Update ops_exit
     if buffer.search(r'\s*ops_exit\s*\('):
         index = buffer.search(r'\s*ops_exit\s*\(')
@@ -401,7 +406,16 @@ def translateProgramHLS(source: str, program: Program, app_consts: List[Const], 
     if (buffer.search(r'#include\s+("|<)\s*ops_seq(_v2)?\.h\s*("|>)')):
         index = buffer.search(r'#include\s+("|<)\s*ops_seq(_v2)?\.h\s*("|>)')
         buffer.insert(index+1, "#include <ops_hls_rt_support.h>")
+        buffer.insert(index+1,"")
+        buffer.insert(index+1, "#if defined(TAPA_SW_EMU)")
+        buffer.insert(index+1, "#include <tapa.h>")
+        buffer.insert(index+1, "#endif")
+        buffer.insert(index+1,"")
+        buffer.insert(index+1, "#ifdef OPS_TAPA")
+        buffer.insert(index+1, "#include <tapa_kernels.hpp>")
+        buffer.insert(index+1, "#else")
         buffer.insert(index+1, "#include <hls_kernels.hpp>")
+        buffer.insert(index+1, "#endif")
     else:
         raise OpsError(f"OPS program failed to include core header file, ops_seq.h or ops_seq_V2.h")
 

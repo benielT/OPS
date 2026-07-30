@@ -1,0 +1,94 @@
+{% import "cpp/hls/iter_loop_datamover_macros.j2" as lmac %}
+
+{% macro axis_parameter_set() %}
+    {% for arg in ilh.joint_args|ops_dat %}
+    //{{ilh.dats[arg.dat_id][0].ptr}}
+        {% set first_loop_last = loop.last %}
+        {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
+            {% if prog.is_interleave() %}
+                {% for tile in range(config["tile_banks"])%}
+                    {% if arg is ops_read %}
+        ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& {{lmac.axis_name_t3(arg, tile)-}}{{"," if not (loop.last and first_loop_last)}}
+                    {% else %}
+        ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& {{lmac.axis_name_t3(arg, tile)-}}{{"," if not (loop.last and first_loop_last)}}
+                    {% endif %}
+                {% endfor %}
+            {% else %}
+                {% if arg is ops_read %}
+        ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& {{lmac.axis_name(arg)-}}{{"," if not loop.last}}
+                {% else %}
+        ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& {{lmac.axis_name(arg)-}}{{"," if not loop.last}}
+                {% endif %}
+            {% endif %}
+        {% else %}
+            {% if prog.is_interleave() %}
+                {% for tile in range(config["tile_banks"])%}
+        ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& {{lmac.axis_name_t3(arg, tile, "out")-}},
+                {% endfor %}
+                {% for tile in range(config["tile_banks"])%}
+        ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& {{lmac.axis_name_t3(arg, tile, "in")-}}{{"," if not (loop.last and first_loop_last)}}
+                {% endfor %}
+            {% else %}
+        ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& {{lmac.axis_name_t2(arg, "out")-}},
+        ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& {{lmac.axis_name_t2(arg, "in")-}}{{"," if not loop.last}}
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+{% endmacro %}
+{% macro axis_argument_set() %}
+        {% for arg in ilh.joint_args|ops_dat %}
+            {% set first_loop_last = loop.last %}
+            {% if (arg is not ops_rw) and arg is is_arg_swap(ilh) %}
+                {% if prog.is_interleave() %}
+                    {% for tile in range(config["tile_banks"])%}
+                {{lmac.axis_name_t3(arg, tile)-}}{{"," if not (loop.last and first_loop_last)}}
+                    {% endfor %}
+                {% else %}
+                {{lmac.axis_name(arg)-}}{{"," if not loop.last}}
+                {% endif %}
+            {% else %}
+                {% if prog.is_interleave() %}
+                    {% for tile in range(config["tile_banks"]) %}
+                {{lmac.axis_name_t3(arg, tile, "out")-}},
+                    {% endfor %}
+                    {% for tile in range(config["tile_banks"]) %}
+                {{lmac.axis_name_t3(arg, tile, "in")-}}{{"," if not loop.last}}
+                    {% endfor %}
+                {% else %}
+                {{lmac.axis_name_t2(arg, "out")-}},
+                {{lmac.axis_name_t2(arg, "in")-}}{{"," if not loop.last}}
+                {% endif %}
+            {% endif %}
+        {% endfor %}
+{% endmacro %}
+
+{% block headers %}
+#pragma once
+#include <ops_tapa_kernel_support.h>
+#include "../../common/include/common_config.hpp"
+{% endblock %}
+
+{% block internel_modules %}
+{% endblock %}
+
+{% block prototype %}
+void datamover_outerloop_{{ilh.id}}(
+    {% if config["datamover_mode"] == 3 %}
+        const bool is_loopback,
+    {% endif %}
+        const unsigned int num_beats,
+        const unsigned int num_axis_trans,
+        const unsigned int outerloop_itr,
+    {% for arg in ilh.joint_args|ops_dat %}
+    //{{ilh.dats[arg.dat_id][0].ptr}}
+        {% if config["tile_banks"] > 1 %}
+            {% for i in range(config["tile_banks"]) %}
+        ::tapa::mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg{{(arg.id)}}_b{{i}},
+            {% endfor %}
+        {% else %}
+         ::tapa::mmap<::tapa::vec_t<stencil_type, mem_vector_factor>> arg{{(arg.id)}},
+        {% endif %}
+    {% endfor %}
+    {{axis_parameter_set()}}
+)
+{% endblock %}{% block body %};{% endblock %}

@@ -1,0 +1,184 @@
+{% extends "cpp/hls/tapa/sim_super_kernel.hpp.j2" %}
+{% import "cpp/hls/stencil_config_macros.j2" as sconf with context %}
+
+{% block headers %}
+#include <sim_mega_kernel_{{ilh.id}}.hpp>
+{% endblock %}
+
+{% block prototype %}
+{{super()}}
+{% endblock %}
+{% block implementation %}
+{
+    {% for arg in ilh.joint_args|ops_dat %}
+    //{{ilh.dats[arg.dat_id][0].ptr}}
+        {% set first_loop_last = loop.last %}
+        {% if arg is not ops_rw %}
+            {% if prog.is_interleave() %}
+                {% if arg is ops_read %}
+        ::tapa::streams<::tapa::vec_t<stencil_type, vector_factor>, {{config["tile_banks"]}}, {{config["axis_interconnect_buff_size"]}}> arg{{arg.id}}_axis_in_strm("supper_arg{{arg.id}}_axis_in_strm");
+                {% else %}
+        ::tapa::streams<::tapa::vec_t<stencil_type, vector_factor>, {{config["tile_banks"]}}, {{config["axis_interconnect_buff_size"]}}> arg{{arg.id}}_axis_out_strm("supper_arg{{arg.id}}_axis_out_strm");
+                {% endif %}
+            {% else %}
+                {% if arg is ops_read %}
+        ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, {{config["axis_interconnect_buff_size"]}}, {{config["maxi_depth"]}}> arg{{arg.id}}_axis_in_strm("supper_arg{{arg.id}}_axis_in_strm");
+                {% else %}
+        ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, {{config["axis_interconnect_buff_size"]}}, {{config["maxi_depth"]}}> arg{{arg.id}}_axis_out_strm("supper_arg{{arg.id}}_axis_out_strm");
+                {% endif %}
+            {% endif %}
+        {% else %}
+            {% if prog.is_interleave() %}
+        ::tapa::streams<::tapa::vec_t<stencil_type, vector_factor>, {{config["tile_banks"]}}, {{config["axis_interconnect_buff_size"]}}> arg{{arg.id}}_axis_in_strm("supper_arg{{arg.id}}_axis_in_strm");
+        ::tapa::streams<::tapa::vec_t<stencil_type, vector_factor>, {{config["tile_banks"]}}, {{config["axis_interconnect_buff_size"]}}> arg{{arg.id}}_axis_out_strm("supper_arg{{arg.id}}_axis_out_strm");
+            {% else %}
+        ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, {{config["axis_interconnect_buff_size"]}}, {{config["maxi_depth"]}}> arg{{arg.id}}_axis_in_strm("supper_arg{{arg.id}}_axis_in_strm");
+        ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, {{config["axis_interconnect_buff_size"]}}, {{config["maxi_depth"]}}> arg{{arg.id}}_axis_out_strm("supper_arg{{arg.id}}_axis_out_strm");
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+    {% for itr in range(config["SLR_count"] - 1) %}
+        {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw %}
+            {% if prog.is_interleave() %}
+        ::tapa::streams<::tapa::vec_t<stencil_type, vector_factor>, {{config["tile_banks"]}}, {{config["axis_interconnect_buff_size"]}}> arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_SLR_inter_{{itr}}_{{itr+1}}("supper_arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_SLR_inter_{{itr}}_{{itr+1}}");
+            {% else %}
+        ::tapa::stream<::tapa::vec_t<stencil_type, vector_factor>, {{config["axis_interconnect_buff_size"]}}, {{config["maxi_depth"]}}> arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_SLR_inter_{{itr}}_{{itr+1}}("supper_arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_SLR_inter_{{itr}}_{{itr+1}}");
+            {% endif %}
+        {% endfor %}
+    {% endfor %}
+
+        ::tapa::task()
+    {% for slr_id in range(config["SLR_count"]) %}
+        {% set slr_loop_first = loop.first %}
+        {% set slr_loop_last = loop.last %}
+            .invoke(
+        {% if islist(config["iter_par_factor"]) %}
+                    kernel_outerloop_{{ilh.id}}_{{slr_id}},
+        {% else %}
+                    kernel_outerloop_{{ilh.id}},
+        {% endif %}
+                    {{slr_id}},
+                    outer_itr,
+                    {{sconf.stencil_config_args()}},
+        {% for arg in ilh.joint_args|ops_gbl%}
+                    {{get_arg_gbl_name(arg)}},
+        {% endfor %}
+        {% for const in consts %}
+                    {{const.ptr}}{{"," if not loop.last}}
+        {% endfor %}
+        {% for arg in ilh.joint_args|ops_dat %}
+                //{{ilh.dats[arg.dat_id][0].ptr}}
+            {% set first_loop_last = loop.last %}
+            {% if arg is not ops_rw %}
+                {% if prog.is_interleave() %}
+                    {% for tile in range(config["tile_banks"]) %}
+                        {% if arg is ops_read %}
+                            {% if slr_loop_first %}
+                    arg{{arg.id}}_axis_in_strm[{{tile}}]{{"," if not (loop.last and first_loop_last)}}
+                            {% else %}
+                    arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_SLR_inter_{{slr_id-1}}_{{slr_id}}[{{tile}}]{{"," if not (loop.last and first_loop_last)}}
+                            {% endif %}
+                        {% else %}
+                            {% if slr_loop_last %}
+                    arg{{arg.id}}_axis_out_strm[{{tile}}]{{"," if not (loop.last and first_loop_last)}}
+                            {% else %}
+                    arg{{ilh.getSwapArg(arg).id}}_arg{{arg.id}}_SLR_inter_{{slr_id}}_{{slr_id+1}}[{{tile}}]{{"," if not (loop.last and first_loop_last)}}
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    {% if arg is ops_read %}
+                        {% if slr_loop_first %}
+                    arg{{arg.id}}_axis_in_strm{{"," if not (loop.last and first_loop_last)}}
+                        {% else %}
+                    arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_SLR_inter_{{slr_id-1}}_{{slr_id}}{{"," if not (loop.last and first_loop_last)}}
+                        {% endif %}
+                    {% else %}
+                        {% if slr_loop_last %}
+                    arg{{arg.id}}_axis_out_strm{{"," if not loop.last}}
+                        {% else %}
+                    arg{{ilh.getSwapArg(arg).id}}_arg{{arg.id}}_SLR_inter_{{slr_id}}_{{slr_id+1}}{{"," if not (loop.last and first_loop_last)}}
+                        {% endif %}
+                    {% endif %}
+                {% endif %}
+            {% else %}
+                {% if prog.is_interleave() %}
+                    {% for tile in range(config["tile_banks"]) %}
+                        {% if slr_loop_first %}
+                    arg{{arg.id}}_axis_in_strm[{{tile}}],
+                        {% else %}
+                    arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_SLR_inter_{{slr_id-1}}_{{slr_id}}[{{tile}}],
+                        {% endif %}
+                    {% endfor %}
+                    {% for tile in range(config["tile_banks"]) %}
+                        {% if slr_loop_last %}
+                    arg{{arg.id}}_axis_out_strm[{{tile}}]{{"," if not (loop.last and first_loop_last)}}
+                        {% else %}
+                    arg{{ilh.getSwapArg(arg).id}}_arg{{arg.id}}_SLR_inter_{{slr_id}}_{{slr_id+1}}[{{tile}}]{{"," if not (loop.last and first_loop_last)}}
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    {% if slr_loop_first %}
+                    arg{{arg.id}}_axis_in_strm,
+                    {% else %}
+                    arg{{arg.id}}_arg{{ilh.getSwapArg(arg).id}}_SLR_inter_{{slr_id-1}}_{{slr_id}},
+                    {% endif %}
+                    {% if slr_loop_last %}
+                    arg{{arg.id}}_axis_out_strm{{"," if not loop.last}}
+                    {% else %}
+                    arg{{ilh.getSwapArg(arg).id}}_arg{{arg.id}}_SLR_inter_{{slr_id}}_{{slr_id+1}}{{"," if not (loop.last and first_loop_last)}}
+                    {% endif %}
+                {% endif %}
+            {% endif %}
+        {% endfor %}
+            )
+    {% endfor %}
+        .invoke(datamover_outerloop_{{ilh.id}}, num_beats, num_of_axis_trans, outer_itr,
+    {% for arg in ilh.joint_args|ops_dat %}
+        //{{ilh.dats[arg.dat_id][0].ptr}}
+        {% if config["tile_banks"] > 1 %}
+            {% for i in range(config["tile_banks"]) %}
+            arg{{(arg.id)}}_b{{i}},
+            {% endfor %}
+        {% else %}
+            arg{{(arg.id)}},
+        {% endif %}
+    {% endfor %}
+    {% for arg in ilh.joint_args|ops_dat %}
+        //{{ilh.dats[arg.dat_id][0].ptr}}
+        {% set first_loop_last = loop.last %}
+        {% if arg is not ops_rw %}
+            {% if prog.is_interleave() %}
+                {% if arg is ops_read %}
+                    {% for tile in range(config["tile_banks"])%}
+            arg{{arg.id}}_axis_in_strm[{{tile}}]{{"," if not (loop.last and first_loop_last)}}
+                    {% endfor %}
+                {% else %}
+                    {% for tile in range(config["tile_banks"])%}
+            arg{{arg.id}}_axis_out_strm[{{tile}}]{{"," if not (loop.last and first_loop_last)}}
+                    {% endfor %}
+                {% endif %}
+            {% else %}
+                {% if arg is ops_read %}
+            arg{{arg.id}}_axis_in_strm{{"," if not loop.last}}
+                {% else %}
+            arg{{arg.id}}_axis_out_strm{{"," if not loop.last}}
+                {% endif %}
+            {% endif %}
+        {% else %}
+            {% if prog.is_interleave() %}
+                {% for tile in range(config["tile_banks"])%}
+            arg{{arg.id}}_axis_in_strm[{{tile}}],
+                {% endfor %}
+                {% for tile in range(config["tile_banks"])%}
+            arg{{arg.id}}_axis_out_strm[{{tile}}]{{"," if not (loop.last and first_loop_last)}}
+                {% endfor %}
+            {% else %}
+            arg{{arg.id}}_axis_in_strm,
+            arg{{arg.id}}_axis_out_strm{{"," if not loop.last}}
+            {% endif %}
+        {% endif %}
+    {% endfor %}    
+        );
+}
+{% endblock %}
