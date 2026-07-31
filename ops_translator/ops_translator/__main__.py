@@ -24,6 +24,7 @@ from store import Application, ParseError
 from target import Target
 from util import getVersion, safeFind, isFilePath, isDirPath, jsonReadFile
 from util import create_cpp_main, replace_fortran_program_with_subroutine
+from util import format_cpp_code
 
 def main(argv=None) -> None:
     #Build arg parser
@@ -50,7 +51,8 @@ def main(argv=None) -> None:
     target_names = [target.name for target in Target.all()]
     parser.add_argument("-t", "--target", help="Code-gereration target", type=str, action="append", nargs=1, choices=target_names, default=[])
 
-    parser.add_argument("-fpga", "--fpga", help="Generate program for FPGA vitis HLS", action="store_true")
+    parser.add_argument("-hls", "--hls", help="Generate program for FPGA vitis HLS", action="store_true")
+    parser.add_argument("-tapa", "--tapa", help="Generate program for FPGA vitis HLS TAPA", action="store_true")
     parser.add_argument("-dff","--df_img_format", help="Dataflow IR Image Dump Format", type=str, default="png")
     
     #invoking arg parser
@@ -113,11 +115,15 @@ def main(argv=None) -> None:
     Type.set_formatter(lang.formatType)
 
     if len(args.target) == 0:
-        if not args.fpga:
+        if not args.hls and not args.tapa:
             args.target = [[target_name] for target_name in target_names]
             args.target.remove(["hls"])
-        else:
+            args.target.remove(["tapa"])
+        elif args.hls:
             args.target = [["hls"]]
+        else:
+            args.target = [["tapa"]]
+
 
     print(f"Targets: {args.target}")
     try:
@@ -214,7 +220,7 @@ def main(argv=None) -> None:
         target.verify_config(app)
         
         #Calling Optimizer for FPGA
-        if target.name == "hls": 
+        if target.name == "hls" or target.name == "tapa": 
             logging.info("Code-gen : Starting optimization phase for target: " + target.name)
             for program in app.programs:
                 logging.info("Optimizing program: %s", str(program.path))
@@ -224,7 +230,7 @@ def main(argv=None) -> None:
         logging.info("Code-gen : Generating target specific template, scheme - " + scheme.target.name)
         codegen(args, scheme, app, target.config, args.force_soa)
         
-        if target.name == "hls":
+        if target.name == "hls" or target.name == "tapa":
             codegenHLSDevice(args, scheme, app, target.config, args.force_soa)
 
         if args.verbose:
@@ -236,7 +242,7 @@ def main(argv=None) -> None:
         include_dirs = set([Path(dir) for [dir] in args.I])
         defines = [define for [define] in args.D]
 
-        if (args.fpga):
+        if (args.hls or args.tapa):
             logging.warning("only FPGA vitis HLS mode selected")
             source = lang.translateProgram(program, include_dirs, defines, app_consts, target.config, args.force_soa, True)
         else:   
@@ -248,7 +254,7 @@ def main(argv=None) -> None:
         new_file = os.path.splitext(os.path.basename(program.path))[0]
         ext = os.path.splitext(os.path.basename(program.path))[1]
         
-        if (args.fpga):
+        if (args.hls or args.tapa):
             new_path = Path(args.out, f"{new_file}{args.suffix}_hls{ext}")
         else:
             new_path = Path(args.out, f"{new_file}{args.suffix}{ext}")
@@ -355,7 +361,7 @@ def codegen(args: Namespace, scheme: Scheme, app: Application, target_config: di
         path = None
         if scheme.lang.kernel_dir:
             
-            if scheme.target.name == "hls":
+            if scheme.target.name in ["hls", "tapa"]:
                 Path(args.out, scheme.target.name, "host", "kernel_wrappers").mkdir(parents=True, exist_ok=True)
                 path = Path(args.out, scheme.target.name, "host", "kernel_wrappers", f"{loop.kernel}_kernel.hpp")                
             else:
@@ -367,13 +373,13 @@ def codegen(args: Namespace, scheme: Scheme, app: Application, target_config: di
                     path = Path(args.out, scheme.target.name, f"{loop.kernel}_{scheme.target.suffix}_kernel.{extension}")
         else:
             
-            if scheme.target.name == "hls":
+            if scheme.target.name in ["hls", "tapa"]:
                 path = Path(args.out,f"{loop.kernel}_{scheme.target.name}_kernel_wrapper.hpp")
             else:
                 path = Path(args.out,f"{loop.kernel}_{scheme.target.name}_kernel.{extension}")
 
         # Write the gernerated source file
-        if not scheme.target.name == "hls" or loop.iterativeLoopId == -1:
+        if not scheme.target.name in ["hls", "tapa"] or loop.iterativeLoopId == -1:
             with open(path, "w") as file:
 
                 file.write(f"{scheme.lang.com_delim} Auto-generated at {datetime.now()} by ops-translator\n")
@@ -407,7 +413,7 @@ def codegen(args: Namespace, scheme: Scheme, app: Application, target_config: di
                 print(f"Skipping loop host {i} of {len(app.uniqueLoops())}: {path}")
 
     # # Generate iterativeLoop Host
-    if scheme.target.name == "hls":
+    if scheme.target.name in ["hls", "tapa"]:
         translatedIterUIDs = []
         for i, (iterloop, program) in enumerate(app.uniqueOuterLoops()):
             if iterloop.unique_id in translatedIterUIDs:
@@ -442,7 +448,7 @@ def codegen(args: Namespace, scheme: Scheme, app: Application, target_config: di
         user_types_candidates = [Path(dir, user_types_name) for dir in include_dirs]
         user_types_file = safeFind(user_types_candidates, lambda p: p.is_file())
 
-        if not scheme.target.name == "hls": 
+        if not scheme.target.name in ["hls", "tapa"]: 
             source, name = scheme.genMasterKernel(env, app, user_types_file, target_config, force_soa)
         else:
             source, name = scheme.genMasterKernel(env, app, user_types_file, target_config, force_soa, outerloop_enbl=True)
@@ -451,7 +457,7 @@ def codegen(args: Namespace, scheme: Scheme, app: Application, target_config: di
         path = None
 
         if scheme.lang.kernel_dir:
-            if scheme.target.name == "hls":
+            if scheme.target.name in ["hls", "tapa"]:
                 Path(args.out, scheme.target.name, "host", "kernel_wrappers").mkdir(parents=True, exist_ok=True)
                 path = Path(args.out, scheme.target.name, "host", "kernel_wrappers", name)
             else:
@@ -498,7 +504,7 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
             print(f"Generated Device common_config.hpp")
 
     #Generate host linking config cfg file
-    source, extension = scheme.genConfigHost(env, target_config, app, app.programs[0])
+    source, extension = scheme.genConfigLink(env, target_config, app, app.programs[0])
     new_source = re.sub(r'\n\s*\n', '\n\n', source)
     
     # From output files path
@@ -530,7 +536,9 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
             [(loop_PE_inc_source, loop_PE_inc_extension)] = scheme.genLoopDevice(env, loop, program, app, target_config, i, iterloop, node)
 
             loop_PE_inc_source = re.sub(r'\n\s*\n', '\n\n', loop_PE_inc_source)
-                
+            
+            loop_PE_inc_source = format_cpp_code(loop_PE_inc_source, loop_PE_inc_extension)
+            
             #kernel inc
             path = None
             if scheme.lang.kernel_dir:
@@ -564,6 +572,10 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
             else:
                 iter_kernel_src_tups.append(out[i])
             
+        # apply formating
+        for i in range(len(iter_kernel_inc_tups)):
+            iter_kernel_inc_tups[i] = (format_cpp_code(iter_kernel_inc_tups[i][0], iter_kernel_inc_tups[i][1]), iter_kernel_inc_tups[i][1])
+            iter_kernel_src_tups[i] = (format_cpp_code(iter_kernel_src_tups[i][0], iter_kernel_src_tups[i][1]), iter_kernel_src_tups[i][1])
 
         # else:
         #     [(iter_datamov_inc_source, iter_datamov_inc_extension),
@@ -681,7 +693,7 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
                 if args.verbose:
                     print(f"Generated iter loop device kernel src {j} of {len(app.uniqueLoops())}: {path}")
     
-        if target_config["max_SLR_count"] == 3 and target_config["SLR_count"] >= 2:
+        if target_config["max_SLR_count"] == 3 and target_config["SLR_count"] >= 2 and scheme.target.name == "hls":
             # Generate reapeater if data-path from SLR2 to SLR0
             # def genIterLoopRepeater(
             #     self,
@@ -710,6 +722,82 @@ def codegenHLSDevice(args: Namespace, scheme: Scheme, app: Application, target_c
 
                 if args.verbose:
                     print(f"Generated iterloop repeater src {i} of {len(app.uniqueOuterLoops())}: {path}")
+             
+    # for tapa generate simulation files       
+    if (scheme.target.name == "tapa"):
+        translatedIterUIDs = []
+        translatedKernelNames = []
+        for j, (iterloop, program) in enumerate(app.uniqueOuterLoops()):
+            if iterloop.unique_id in translatedIterUIDs:
+                continue
             
+            #Generate host linking config cfg file
+            out = scheme.genDeviceSimulation(env, iterloop, app.programs[0], app, target_config)
+            new_out = []
+            new_out.append((format_cpp_code(out[0][0], out[0][1]), out[0][1]))
+            new_out.append((format_cpp_code(out[1][0], out[1][1]), out[1][1]))
+            
+            (sim_inc_source, sim_inc_extension) = new_out[0]
+            (sim_src_source, sim_src_extension) = new_out[1]
+            
+            # Writing Simulation include
+            path = None
+            if scheme.lang.kernel_dir:
+                Path(args.out, scheme.target.name, "sim").mkdir(parents=True, exist_ok=True)
+                path = Path(args.out, scheme.target.name, "sim", f"sim_mega_kernel_{j}.{sim_inc_extension}")                
+            else:
+                path = Path(args.out,f"{scheme.target.name}_sim_mega_kernel_{j}.{sim_inc_extension}")
+
+            # Write the gernerated include file
+            logging.debug(f"writing sim_mega_kernel_{j}.{sim_inc_extension} include to {path}")
+                
+            # Write the gernerated source file
+            with open(path, "w") as file:
+                file.write(f"{scheme.lang.com_delim} Auto-generated at {datetime.now()} by ops-translator\n")
+                file.write(sim_inc_source)
+
+                if args.verbose:
+                    print(f"Generated sim_mega_kernel.{sim_inc_extension}: {path}")
+            
+            # Writing simulation source
+            path = None
+            if scheme.lang.kernel_dir:
+                Path(args.out, scheme.target.name, "sim").mkdir(parents=True, exist_ok=True)
+                path = Path(args.out, scheme.target.name, "sim", f"sim_mega_kernel_{j}.{sim_src_extension}")                
+            else:
+                path = Path(args.out,f"{scheme.target.name}_sim_mega_kernel_{j}.{sim_src_extension}")
+
+            # Write the gernerated include file
+            logging.debug(f"writing sim_mega_kernel_{j}.{sim_src_extension} source file to {path}")
+                
+            # Write the gernerated source file
+            with open(path, "w") as file:
+                file.write(f"{scheme.lang.com_delim} Auto-generated at {datetime.now()} by ops-translator\n")
+                file.write(sim_src_source)
+
+                if args.verbose:
+                    print(f"Generated sim_mega_kernel_{j}.{sim_src_extension}: {path}")
+                    
+        # Writing simulation configurations
+        (xrt_source, xrt_extension) = scheme.genSimLinkConfig(env, target_config, app)
+        
+        path = None
+        if scheme.lang.kernel_dir:
+            Path(args.out, scheme.target.name, "sim").mkdir(parents=True, exist_ok=True)
+            path = Path(args.out, scheme.target.name, "sim", f"xrt_sim.{xrt_extension}")                
+        else:
+            path = Path(args.out,f"xrt_sim.{xrt_extension}")
+
+        # Write the gernerated include file
+        logging.debug(f"writing xrt_sim.{xrt_extension} source file to {path}")
+            
+        # Write the gernerated source file
+        with open(path, "w") as file:
+            file.write(f"# Auto-generated at {datetime.now()} by ops-translator\n")
+            file.write(xrt_source)
+
+            if args.verbose:
+                print(f"Generated xrt_sim.{xrt_extension}: {path}")
+        
 if __name__ == "__main__":
     main()

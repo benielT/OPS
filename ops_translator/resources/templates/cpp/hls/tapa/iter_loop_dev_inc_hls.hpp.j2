@@ -1,0 +1,69 @@
+{% import "cpp/hls/iter_loop_dev_macros.j2" as lmac with context %}
+{% import "cpp/hls/stencil_config_macros.j2" as sconf with context %}
+{% macro prototype_params() %}
+        const unsigned short slr_region,
+        const unsigned int outer_itr,
+        {{sconf.stencil_config()}},
+    {% for const_arg in ilh.joint_args|ops_gbl%}
+        const {{const_arg.typ}} {{get_arg_gbl_name(const_arg)}},
+    {% endfor %}
+    {% for const in consts %}
+        const {{const.typ}} {{const.ptr}},
+    {% endfor %}
+    {% for arg in ilh.joint_args|ops_dat %}
+    //{{ilh.dats[arg.dat_id][0].ptr}}
+        {% set first_loop_last = loop.last %}
+        {% if arg is not ops_rw %}
+            {% if prog.is_interleave() %}
+                {% for tile in range(config["tile_banks"]) %}
+                    {% if arg is ops_read %}
+        ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& {{lmac.axis_name_t3(arg,tile)-}}{{"," if not (loop.last and first_loop_last)}}
+                    {% else %}
+        ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& {{lmac.axis_name_t3(arg,tile)-}}{{"," if not (loop.last and first_loop_last)}}
+                    {% endif %}
+                {% endfor %}
+            {% else %}
+                {% if arg is ops_read %}
+        ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& {{lmac.axis_name(arg)-}}{{"," if not loop.last}}
+                {% else %}
+        ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& {{lmac.axis_name(arg)-}}{{"," if not loop.last}}
+                {% endif %}
+            {% endif %}
+        {% else %}
+            {% if prog.is_interleave() %}
+                {% for tile in range(config["tile_banks"]) %}
+       ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& {{lmac.axis_name_t3(arg, tile, "in")-}},
+                {% endfor %}
+                {% for tile in range(config["tile_banks"]) %}
+        ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& {{lmac.axis_name_t3(arg, tile, "out")-}}{{"," if not (loop.last and first_loop_last)}}
+                {% endfor %}
+            {% else %}
+        ::tapa::istream<::tapa::vec_t<stencil_type, vector_factor>>& {{lmac.axis_name_t2(arg, "in")-}},
+        ::tapa::ostream<::tapa::vec_t<stencil_type, vector_factor>>& {{lmac.axis_name_t2(arg, "out")-}}{{"," if not loop.last}}
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+{% endmacro%}
+{% block headers %}
+#pragma once
+#include <ops_tapa_kernel_support.h>
+
+#include "../../common/include/common_config.hpp"
+    {% for df_node in ilh.get_active_df_graph().getAllLoopNodes() %}
+#include "PE_{{df_node.loop.kernel}}.hpp"
+    {% endfor %}
+{% endblock %}
+
+{% block joint_PE %}
+{% endblock %}
+
+{% block datamovement %}
+{% endblock %}
+
+{% block kernel_dataflow_region %}
+{% endblock %}
+
+
+{% block prototype %}
+void kernel_outerloop_{{ilh.id}}{% if slr_iter_par_fact is defined %}_{{slr_iter_par_fact}}{%endif%}(
+    {{prototype_params()-}}){% endblock %}{% block implementation %};{% endblock %}

@@ -34,6 +34,22 @@ namespace ops {
 namespace hls {
 
 #ifdef __SYNTHESIS__
+#if defined(__has_include) && __has_include(<hls_print.h>)
+    #define VITIS_HAS_SYNTH_PRINT 1
+#else
+    #define VITIS_HAS_SYNTH_PRINT 0
+#endif
+#endif 
+
+#if VITIS_HAS_SYNTH_PRINT && defined(__SYNTHESIS__)
+
+// Forward declare Xilinx intrinsics to satisfy TAPA's Clang parser (tapacc)
+extern "C" {
+    void _ssdm_op_PrintNone(const char*);
+    void _ssdm_op_PrintInt(const char*, int);
+    void _ssdm_op_PrintDouble(const char*, unsigned long long);
+}
+
 // Required because blackbox does not support double
 typedef union {
     double d;
@@ -478,6 +494,57 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
 		print("====================================================================================\n");
 #endif
 		index++;
+	}
+}
+
+/**
+ * @brief 	mem2streamV2 reads from a memory location with to an hls stream. Focusing on
+ * 			strict single loop, allowing the vitis to infer burst.
+ *
+ * @tparam MEM_DATA_WIDTH : Data width of the AXI4 port and the hls stream port
+ * @tparam IN_ITR: II of the mem read
+ *
+ * @param mem_in : input memory port
+ * @param stream_out : output hls-stream
+ * @param size : Number of bytes of the data
+ */
+template <unsigned int MEM_DATA_WIDTH, unsigned int IN_ITR=2>
+void mem2streamV2(ap_uint<MEM_DATA_WIDTH>* mem_in,
+				::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out,
+				const unsigned int num_beats)
+{
+#ifndef __SYNTHESIS__
+	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
+			"MEM_DATA_WIDTH failed limit check");
+#endif
+
+	constexpr unsigned int bytes_per_beat = MEM_DATA_WIDTH >> 3;
+
+#ifdef DEBUG_LOG_PRINT
+	print("====================================================================================\n");
+	print("|HLS DEBUG_LOG| mem2stream | num_beats: %d\n", num_beats);
+	print("====================================================================================\n");
+#endif
+
+	for (unsigned int beat = 0; beat < num_beats; beat++)
+	{
+    #pragma HLS PIPELINE II=IN_ITR
+
+        ap_uint<MEM_DATA_WIDTH> tmp = mem_in[beat];
+        strm_out << tmp;
+#ifdef DEBUG_LOG_PRINT
+		print("====================================================================================\n");
+        print("|HLS DEBUG_LOG| mem2stream | reading burst index: %d, val=(\n", beat);
+
+        for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
+        {
+            DataConv conv;
+            conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+            print("		%f,\n", conv.f);
+        }
+        print(")\n\n");
+		print("====================================================================================\n");
+#endif
 	}
 }
 
@@ -974,6 +1041,64 @@ void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
 	}
 }
 
+
+/**
+ * @brief 	stream2memWithAvoidV2 reads from an hls stream and writes to memory while skipping initial beats.
+ *  		enforcing single loop to make vitis infer burst size
+ *
+ * @tparam MEM_DATA_WIDTH : Data width of the AXI4 port and the hls stream port
+ * @tparam BURST_SIZE : Burst length of the AXI4 (max beats < 256)
+ * @tparam IN_ITR: II configuration of mem write
+ *
+ * @param mem_out : output memory port
+ * @param stream_in : input hls-stream
+ * @param num_beats : Total number of beats to process from the stream
+ * @param avoid_beats : Number of initial beats to skip/discard before writing to memory
+ */
+template <unsigned int MEM_DATA_WIDTH, unsigned int IN_ITR=2>
+void stream2memWithAvoidV2(ap_uint<MEM_DATA_WIDTH>* mem_out,
+				::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
+				const unsigned int num_beats, const unsigned int avoid_beats)
+{
+#ifndef __SYNTHESIS__
+	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
+			"MEM_DATA_WIDTH failed limit check");
+#endif
+
+	constexpr unsigned int bytes_per_beat = MEM_DATA_WIDTH / 8;
+
+	const unsigned int writing_beats = num_beats - avoid_beats;
+
+#ifdef DEBUG_LOG_PRINT
+	print("====================================================================================\n");
+	print("|HLS DEBUG_LOG| stream2memWithAvoid | num_beats: %d\n", num_beats);
+	print("|HLS DEBUG_LOG| stream2memWithAvoid | writing_beats: %d\n", writing_beats);
+	print("|HLS DEBUG_LOG| stream2memWithAvoid | avoid_beats: %d\n", avoid_beats);
+	print("====================================================================================\n");
+#endif
+
+	for (unsigned int beat = 0; beat < num_beats; beat++)
+	{
+		#pragma HLS PIPELINE II=IN_ITR
+
+			ap_uint<MEM_DATA_WIDTH> tmp = strm_in.read();
+			if (beat >= avoid_beats)
+				mem_out[beat] = tmp;	
+#ifdef DEBUG_LOG_PRINT
+			print("====================================================================================\n");
+        	print("|HLS DEBUG_LOG| stream2memWithAvoid | writing burst index: %d, val=(\n", beat);
+			for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
+			{
+				DataConv conv;
+				conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+				print("		%f,\n", conv.f);
+			}
+			print(")%d \n\n",0);
+			print("====================================================================================\n");
+#endif
+	}
+}
+
 /**
  * @brief   stream2memWithAvoid variant 2: reads from a smaller hls stream and writes to wider memory while skipping initial beats.
  * This is optimized to write to AXI4 with burst and to utilize maximum throughput.
@@ -1429,6 +1554,121 @@ void interleave2stream(::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_S
 	}
 }
 
+/**
+ * @brief 	updateInterleaveBoundaries directly updates the boundary overlap values of an interleaved stream.
+ *
+ * @details This function replaces the sequence of interleave2stream -> stream2interleave. 
+ * It reads data from NUM_STREAMS of interleaved input streams and produces NUM_STREAMS 
+ * of interleaved output streams. It passes the core standard data straight through 
+ * while extracting the new boundary values from adjacent streams (data_back, data, data_front)
+ * to reconstruct the valid overlaps for the next temporal PE.
+ *
+ * @tparam MEM_DATA_WIDTH The bit-width of the standard memory access (e.g., 64, 128, 256)
+ * @tparam DATA_WIDTH Element datawidth
+ * @tparam OVERLAP_SIZE Overlap size of the low level tiles
+ * @tparam NUM_STREAMS Number of input, output streams
+ *
+ * @param[in] in_stream - Input streams array of size MEM_DATA_WIDTH + DATA_WIDTH * OVERLAP_SIZE
+ * @param[out] out_stream - Output streams array of size MEM_DATA_WIDTH + DATA_WIDTH * OVERLAP_SIZE
+ * @param[in] num_pkts - Number of stream packets
+ */
+template <unsigned short MEM_DATA_WIDTH, unsigned short DATA_WIDTH, unsigned short NUM_STREAMS, unsigned short OVERLAP_SIZE = 1>
+void updateInterleaveBoundaries(::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_SIZE>> in_stream[NUM_STREAMS], ::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_SIZE>> out_stream[NUM_STREAMS], const unsigned int num_pkts) 
+{
+#ifndef __SYNTHESIS__
+	static_assert(NUM_STREAMS % 2 == 0,
+			" NUM_STREAMS has to be divisible by 2");
+#endif
+
+	constexpr unsigned short REALISED_OVERLAP_SIZE = DATA_WIDTH * OVERLAP_SIZE;
+	constexpr unsigned short REALISED_OVERLAP_SIZE_MIN_1 = REALISED_OVERLAP_SIZE - 1;
+	
+	// Original non-interleaved dimensions
+	constexpr unsigned short MSB_IN = MEM_DATA_WIDTH - 1;
+	constexpr unsigned short LSB_LAST_OVERLAP_IN = MEM_DATA_WIDTH - REALISED_OVERLAP_SIZE;
+	
+	// Interleaved dimensions
+	constexpr unsigned short MEM_DATA_WIDTH_OUT = MEM_DATA_WIDTH + REALISED_OVERLAP_SIZE;
+	constexpr unsigned short MSB_OUT = MEM_DATA_WIDTH_OUT - 1;
+	constexpr unsigned short LSB_LAST_OVERLAP_OUT = MEM_DATA_WIDTH_OUT - REALISED_OVERLAP_SIZE;
+	
+	constexpr unsigned short NUM_STREAMS_BY_2 = NUM_STREAMS >> 1;
+	constexpr unsigned short NUM_STREAMS_MIN_1 = NUM_STREAMS - 1;
+
+	const unsigned int num_pkts_plus_1 = register_it(num_pkts + 1);
+
+	// 3-step shift registers mapped to interleaved width
+	ap_uint<MEM_DATA_WIDTH_OUT> data_front[NUM_STREAMS], data[NUM_STREAMS], data_back[NUM_STREAMS];
+	#pragma HLS ARRAY_PARTITION variable=data_front dim=0 complete
+	#pragma HLS ARRAY_PARTITION variable=data dim=0 complete
+	#pragma HLS ARRAY_PARTITION variable=data_back dim=0 complete
+
+	for (unsigned int itr = 0; itr < num_pkts_plus_1; itr++) 
+	{
+		#pragma HLS PIPELINE II=1
+		bool read_cond = register_it(itr < num_pkts);
+		ap_uint<MEM_DATA_WIDTH_OUT> tmp[NUM_STREAMS];
+		#pragma HLS ARRAY_PARTITION variable=tmp dim=0 complete
+
+		if (read_cond) {
+			for (unsigned int n = 0; n < NUM_STREAMS; n++)
+			{
+				#pragma HLS UNROLL
+				tmp[n] = in_stream[n].read();	
+			}
+		}
+
+		for (unsigned int n = 0; n < NUM_STREAMS; n++)
+		{
+			#pragma HLS UNROLL
+			data_back[n] = data[n];
+			data[n] = data_front[n];
+			data_front[n] =  register_it(tmp[n]);	
+		}
+
+		ap_uint<MEM_DATA_WIDTH_OUT> tmp_out[NUM_STREAMS];
+		#pragma HLS ARRAY_PARTITION variable=tmp_out dim=0 complete
+
+		if (itr > 0)
+		{
+			for (unsigned int n = 0; n < NUM_STREAMS_BY_2; n++)
+			{
+				#pragma HLS UNROLL
+				
+				// 1. Pass the standard part of the EVEN stream directly through
+				tmp_out[2*n].range(MSB_OUT, REALISED_OVERLAP_SIZE) = data[2*n].range(MSB_OUT, REALISED_OVERLAP_SIZE);
+				
+				// 2. Update the bottom overlap for the EVEN stream
+				if (n == 0) {
+					// Borrow from the top of the previous iteration's last ODD stream
+					tmp_out[2*n].range(REALISED_OVERLAP_SIZE_MIN_1, 0) = data_back[NUM_STREAMS_MIN_1].range(MSB_IN, LSB_LAST_OVERLAP_IN);
+				} else {
+					// Borrow from the top of the adjacent ODD stream
+					tmp_out[2*n].range(REALISED_OVERLAP_SIZE_MIN_1, 0) = data[2*n-1].range(MSB_IN, LSB_LAST_OVERLAP_IN);
+				}
+				
+				// 3. Pass the standard part of the ODD stream directly through
+				tmp_out[2*n+1].range(MSB_IN, 0) = data[2*n+1].range(MSB_IN, 0);
+				
+				// 4. Update the top overlap for the ODD stream
+				if (n == NUM_STREAMS_BY_2 - 1) {
+					// Borrow from the bottom of the next iteration's first EVEN stream
+					tmp_out[2*n+1].range(MSB_OUT, LSB_LAST_OVERLAP_OUT) = data_front[0].range(2 * REALISED_OVERLAP_SIZE - 1, REALISED_OVERLAP_SIZE);
+				} else {
+					// Borrow from the bottom of the adjacent EVEN stream
+					tmp_out[2*n+1].range(MSB_OUT, LSB_LAST_OVERLAP_OUT) = data[2*n+2].range(2 * REALISED_OVERLAP_SIZE - 1, REALISED_OVERLAP_SIZE);
+				}
+			}
+
+			for (unsigned int n = 0; n < NUM_STREAMS; n++)
+			{
+				#pragma HLS UNROLL
+				out_stream[n].write(tmp_out[n]);
+			}
+		}
+	}
+}
+
 static ap_uint<144> commandGen2D(const ap_uint<64>& offset, const ap_uint<16>& stride_x, const ap_uint<16>& size_x,
                 const ap_uint<16>& stride_y, const ap_uint<16>& size_y, const ap_uint<16>& avoid_x)
 {
@@ -1765,91 +2005,158 @@ static void tileStream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out, ::hls::stream<ap_ui
         }
     }
 }
+
 /**
- * @brief Writes strided tile data from memory to stream with tiling and batching support.
+ * @brief Reads strided tile data from a specific memory bank to a stream with 2D grid support (X-axis tiling only).
  *
- * @details This function reads data from memory writes it to an output stream to according to a
- * tiled memory configuration. It handles multi-dimensional tiling in X, Y, and Z dimensions
- * with support for non-uniform tile sizes at boundaries.
+ * @details This function acts as an optimized Address Generation Unit (AGU) for a specific physical memory bank.
+ * In a 2D grid layout, the memory region is tiled strictly along the X-axis, while the Y-axis is fully 
+ * traversed row-by-row. By utilizing the templated `BANK_ID`, the function statically computes `total_rows`—the 
+ * exact subset of global Y-rows that reside physically within this specific interleaved bank. This design 
+ * guarantees that the inner loop traverses only valid local rows, entirely eliminating loop overhead, pipeline 
+ * bubbles, and runtime modulo operations.
  *
- * @tparam MEM_DATA_WIDTH The bit-width of each memory access (e.g., 64, 128, 256)
- * @tparam BURST_SIZE Burst size for memory transfers (default: 32)
- * @tparam IN_ITR Initiation interval for the pipeline (default: 2)
+ * @tparam MEM_DATA_WIDTH The bit-width of each memory access (e.g., 64, 128, 256).
+ * @tparam NUM_BANKS The total number of interleaved memory banks in the system. Must be a power of two.
+ * @tparam BANK_ID The logical ID of the reading bank. Used at compile-time to determine local row bounds.
+ * @tparam BURST_SIZE Maximum AXI burst size for memory transfers (default: 32).
+ * @tparam IN_ITR Initiation interval for the pipeline (default: 2).
  *
- * @param[in] mem_in Pointer to the input memory where tile data is read from
- * @param[out] strm_out Reference to the output HLS stream that the tile data will be converted to
+ * @param[in] mem_in Pointer to the specific physical AXI memory bank where tile data is read from.
+ * @param[out] strm_out Reference to the output HLS stream passing data to the compute pipeline.
  * @param[in] config Reference to MemConfigTile configuration containing:
- *        - start_offset: Base offset in memory
- *        - end_z, start_z: Z-dimension range
- *        - tile_size_y, last_tile_size_y: Y-tile dimensions
- *        - tile_count_x, tile_count_y: Number of tiles in each dimension
- *        - effective_tile_size_x, effective_tile_size_y: Effective tile dimensions
- *        - grid_xblocks, grid_size_y: Grid dimensions for stride calculation
- * @param[in] stride_start Starting offset for the Y dimension iteration (default: 0).
- *                         Allows partial tile processing starting from a specific Y position.
+ * - start_offset: Base offset in memory
+ * - tile_size_y: Total size of the Y dimension (treated as full grid_size_y in 2D)
+ * - tile_count_x: Number of tiles in the X dimension
+ * - effective_tile_size_x: Effective X-tile dimension for stride offset calculation
+ * - grid_xblocks: Grid dimension for contiguous memory stride calculation
  *
- * @note Supports partial tiles at boundaries through last_tile_size parameters
- * @note Debug logging available when DEBUG_LOG is defined
- * 
+ * @note Supports non-uniform tile sizes at the grid boundaries via `last_tile_size_x`.
+ * @note Debug logging is actively supported when `DEBUG_LOG_PRINT` is defined.
+ *
+ * @see ops::hls::MemConfigTile
+ * @see ops::hls::mem2streamV2
+ */
+template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS=2, unsigned short BANK_ID=0, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
+static void stridedTileMem2stream2D(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, const ops::hls::MemConfigTile& config)
+{
+
+	constexpr unsigned short BANK_SHIFT = LOG2(NUM_BANKS);
+	constexpr unsigned short BANK_MASK = NUM_BANKS - 1;
+	const bool is_additional_row = (config.grid_size_y & BANK_MASK) > BANK_ID;
+	const unsigned short total_rows = (config.grid_size_y >> BANK_SHIFT) + (is_additional_row ? 1 : 0);
+
+    #ifdef DEBUG_LOG_PRINT
+    printf("|HLS DEBUG_LOG|%s|bank-%u| Initializing 2D read (X-tiling only). start_offset:%u, total_size_bytes:%u, tile_count_x:%u, total_y_rows:%u, bank_y_rows:%u, is_additional_row: %u\n", 
+           __func__, BANK_ID, config.start_offset, config.total_size_bytes, config.tile_count_x, config.grid_size_y, total_rows, is_additional_row);
+    #endif
+
+    for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++)
+    {
+        const unsigned int tile_x_offset = tile_x * config.effective_tile_size_x; 
+        const unsigned short tile_size_x = tile_x == (config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
+
+        // Traverse the entire Y dimension, dynamically striding by NUM_BANKS
+        for (unsigned short j = 0; j < total_rows; j++)
+        {
+            unsigned int offset_1 = config.start_offset + tile_x_offset;
+            unsigned int j_offset  = j * config.grid_xblocks;
+            unsigned int offset = offset_1 + j_offset;
+
+        #ifdef DEBUG_LOG_PRINT
+            printf("|HLS DEBUG_LOG|%s|bank-%u| offset_1:%u j_offset:%u final_offset:%u | tile_x_id:%u j_row:%u tile_size_x:%u\n",
+                        __func__, BANK_ID, offset_1, j_offset, offset, (unsigned int)tile_x, (unsigned int)j, (unsigned int)tile_size_x);
+        #endif
+            mem2streamV2<MEM_DATA_WIDTH, IN_ITR>((ap_uint<MEM_DATA_WIDTH>* )(mem_in + offset), strm_out, tile_size_x);
+        }
+    }
+}
+
+/**
+ * @brief Writes strided tile data from memory to stream with 3D tiling support.
+ *
+ * @details This function acts as an optimized Address Generation Unit (AGU) for a specific physical memory bank 
+ * within a 3D tiled layout. Instead of striding across a global Y dimension, it utilizes the templated `BANK_ID` 
+ * to statically resolve the physical Y-bounds per bank on a tile-by-tile basis. This ensures the inner loops 
+ * traverse only the rows resident in this specific memory bank for the current `tile_y`, avoiding runtime 
+ * modulo operations and eliminating loop overhead.
+ *
+ * @tparam MEM_DATA_WIDTH The bit-width of each memory access (e.g., 64, 128, 256).
+ * @tparam NUM_BANKS The total number of interleaved memory banks. Must be a power of two.
+ * @tparam BANK_ID The logical ID of the reading bank. Used at compile-time to determine local row bounds.
+ * @tparam BURST_SIZE Burst size for memory transfers (default: 32).
+ * @tparam IN_ITR Initiation interval for the pipeline (default: 2).
+ *
+ * @param[in] mem_in Pointer to the specific physical AXI memory bank where tile data is read from.
+ * @param[out] strm_out Reference to the output HLS stream passing data to the compute pipeline.
+ * @param[in] config Reference to MemConfigTile configuration containing:
+ * - start_offset: Base offset in memory
+ * - start_z, end_z: Z-dimension iteration range
+ * - tile_size_y, last_tile_size_y: Y-tile dimensions
+ * - tile_count_x, tile_count_y: Number of tiles in each dimension
+ * - effective_tile_size_x, effective_tile_size_y: Effective dimensions for offset calculation
+ * - grid_xblocks, grid_size_y: Grid dimensions for stride calculation
+ *
+ * @note Supports non-uniform tile sizes at the grid boundaries via `last_tile_size_x` and `last_tile_size_y`.
+ * @note Debug logging is actively supported when `DEBUG_LOG_PRINT` is defined.
+ *
  * @see ops::hls::MemConfigTile
  * @see ops::hls::stream2mem
  */
-template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-static void stridedTileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, const ops::hls::MemConfigTile& config, unsigned short stride_start = 0)
+template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS=2, unsigned short BANK_ID=0, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
+static void stridedTileMem2stream3D(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, const ops::hls::MemConfigTile& config)
 {
-    // #pragma HLS INLINE off
-    #ifdef DEBUG_LOG_PRINT
-        printf("|HLS DEBUG_LOG|%s| reading tile. tile_start:%d, tile_size:%d, stride_start:%d\n", __func__, config.start_offset, config.total_size_bytes, stride_start);
-    #endif
-
+    constexpr unsigned short BANK_SHIFT = LOG2(NUM_BANKS);
+    constexpr unsigned short BANK_MASK = NUM_BANKS - 1;
+    
+    // Overall bank Y size is used to calculate the Z stride within the local memory
+    const bool is_additional_row = (config.grid_size_y & BANK_MASK) > BANK_ID;
+    const unsigned short bank_grid_size_y = (config.grid_size_y >> BANK_SHIFT) + (is_additional_row ? 1 : 0);
+    const unsigned int bank_z_stride = bank_grid_size_y * config.grid_xblocks;
     const unsigned short z_diff = config.end_z - config.start_z;
-    const unsigned short tile_size_y_mul_z_diff = config.tile_size_y * z_diff;
-    const unsigned short last_tile_size_y_mul_z_diff = config.last_tile_size_y * z_diff;
+
+    #ifdef DEBUG_LOG_PRINT
+    printf("|HLS DEBUG_LOG|%s|bank-%u| Initializing 3D read. start_offset:%u, tile_count_y:%u, tile_count_x:%u, z_diff:%u, bank_z_stride:%u\n", 
+           __func__, BANK_ID, config.start_offset, config.tile_count_y, config.tile_count_x, z_diff, bank_z_stride);
+    #endif
 
     for (unsigned short tile_y = 0; tile_y < config.tile_count_y; tile_y++)
     {
-        const unsigned short tile_size_y = tile_y == (config.tile_count_y -1) ? config.last_tile_size_y : config.tile_size_y;
-        const unsigned short realized_tile_size_y_mul_z_diff = tile_y == (config.tile_count_y -1) ? last_tile_size_y_mul_z_diff : tile_size_y_mul_z_diff;
-        const unsigned int tile_y_offset = tile_y * config.effective_tile_size_y * config.grid_xblocks;
-        // const unsigned int abs_row_id_y_offset = config.tile_count_x * tile_y * tile_size_y_mul_z_diff;
-
+        const unsigned short tile_size_y = (tile_y == config.tile_count_y - 1) ? config.last_tile_size_y : config.tile_size_y;
+        
+        // Use ap_uint wrapping to find the specific offset for this BANK_ID relative to the tile's starting bank
+        unsigned int global_y_start = tile_y * config.effective_tile_size_y;
+        ap_uint<BANK_SHIFT> start_bank = global_y_start;
+        ap_uint<BANK_SHIFT> bank_offset_in_tile = BANK_ID - start_bank; 
+        
+        const unsigned short remainder = tile_size_y & BANK_MASK;
+        const bool tile_is_additional_row = bank_offset_in_tile < remainder;
+        const unsigned short local_tile_size_y = (tile_size_y >> BANK_SHIFT) + (tile_is_additional_row ? 1 : 0);
+        
+        // Physical offset for this tile in the specific memory bank's Y dimension
+        const unsigned int local_tile_y_offset = ((global_y_start + bank_offset_in_tile) >> BANK_SHIFT) * config.grid_xblocks;
+        
         for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++)
         {
-            const unsigned int abs_row_id_x_offset = tile_x * realized_tile_size_y_mul_z_diff;
             const unsigned int tile_x_offset = tile_x * config.effective_tile_size_x; 
+            const unsigned short tile_size_x = (tile_x == config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
 
             for (unsigned short k = 0; k < z_diff; k++)
             {
-                // const unsigned int abs_row_id_y_offset_k = k * realized_tile_size_y_mul_z_diff;
-                const unsigned int k_offset = k * config.grid_xblocks * config.grid_size_y;
+                const unsigned int k_offset = k * bank_z_stride;
 
-                for (unsigned short j = stride_start; j < tile_size_y; j+=2)
+                for (unsigned short j = 0; j < local_tile_size_y; j++)
                 {
-                    // #pragma HLS PIPELINE // TODO: Check whether this is effective or not. Most probaly not required as mem2stream already has PIPELINE pragma inside.
-                    const unsigned short tile_size_x = tile_x == (config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
-                    
                     unsigned int offset_1 = config.start_offset + tile_x_offset;
-                    unsigned int offset_2 = k_offset + tile_y_offset;
-                    unsigned int offset_3 = offset_1 + offset_2;
-                    unsigned int j_offset  = j * config.grid_xblocks;
-                    unsigned int offset = offset_3 + j_offset;
+                    unsigned int offset_2 = k_offset + local_tile_y_offset;
+                    unsigned int j_offset = j * config.grid_xblocks;
+                    unsigned int offset = offset_1 + offset_2 + j_offset;
 
-                    #ifdef DEBUG_LOG_PRINT
-                        printf("|HLS DEBUG_LOG|%s| offset_1:%u offset_2:%u offset_3:%u j_offset:%u offset:%u tile_y:%u tile_x:%u k:%u j:%u tile_size_x:%u\n",
-                               __func__,
-                               (unsigned int)offset_1,
-                               (unsigned int)offset_2,
-                               (unsigned int)offset_3,
-                               (unsigned int)j_offset,
-                               (unsigned int)offset,
-                               (unsigned int)tile_y,
-                               (unsigned int)tile_x,
-                               (unsigned int)k,
-                               (unsigned int)j,
-                               (unsigned int)tile_size_x);
-                    #endif
-                    mem2stream<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>((ap_uint<MEM_DATA_WIDTH>* )(mem_in + offset), strm_out, tile_size_x);
-
+                #ifdef DEBUG_LOG_PRINT
+                    printf("|HLS DEBUG_LOG|%s|bank-%u| offset_1:%u offset_2:%u j_offset:%u final_offset:%u | tile_y:%u tile_x:%u k:%u j:%u tile_size_x:%u\n",
+                                __func__, BANK_ID, offset_1, offset_2, j_offset, offset, (unsigned int)tile_y, (unsigned int)tile_x, (unsigned int)k, (unsigned int)j, (unsigned int)tile_size_x);
+                #endif
+                    mem2streamV2<MEM_DATA_WIDTH, IN_ITR>((ap_uint<MEM_DATA_WIDTH>* )(mem_in + offset), strm_out, tile_size_x);
                 }
             }
         }
@@ -1968,32 +2275,182 @@ static void readConfigStreamGenerator(const size_t offset_x, const unsigned shor
     }
 }
 
+
+// /**
+//  * @brief readConfigStreamGeneratorV2: Generates and distributes bank-specific configuration commands 
+//  * across multiple output streams.
+//  *
+//  * @details This function decodes a single 160-bit configuration command containing 3D memory 
+//  * access parameters (strides, sizes, and offsets). It iterates through the Z and Y dimensions 
+//  * to compute absolute memory offsets. Utilizing power-of-two bitwise optimizations, it 
+//  * calculates the base bank offset and starting bank, handles modulo wrap-around logic, and 
+//  * pushes appropriate 48-bit sub-commands to an array of hardware streams. The 
+//  * distribution logic is fully unrolled for optimal HLS synthesis.
+//  *
+//  * @tparam NUM_BANKS The number of target memory banks. Must be a power of two to enable 
+//  * bitwise masking optimizations.
+//  * @tparam IN_ITR Initiation interval for the inner HLS pipeline (default: 2).
+//  *
+//  * @param[in] command A 160-bit packed configuration word containing:
+//  * - [63:0]   offset_x: Base offset in the X dimension
+//  * - [95:80]  size_x:   Size in the X dimension
+//  * - [111:96] stride_y: Stride in the Y dimension
+//  * - [127:112] size_y:   Size in the Y dimension
+//  * - [143:128] stride_z: Stride in the Z dimension
+//  * - [159:144] size_z:   Size in the Z dimension
+//  * @param[out] strms Array of output HLS streams (hls::stream<ap_uint<48>>). 
+//  * Each 48-bit command contains:
+//  * - [31:0]   bank_offset: The starting offset for that specific bank
+//  * - [47:32]  b_size_x:    The calculated X dimension size for that specific bank
+//  *
+//  * @note Enforces a compile-time static assertion that `NUM_BANKS` is a power of two, 
+//  * replacing expensive hardware modulo operations with bitwise AND masking.
+//  */
+// template <unsigned short NUM_BANKS, unsigned short IN_ITR = 2, typename... Flags>
+// static void readConfigStreamGeneratorV2(
+//     const unsigned short bank_offset_x_floor, 
+//     const unsigned short bank_tile_size_x_floor, 
+// 	const unsigned short bank_grid_size_x_floor,
+//     ap_uint<LOG2(NUM_BANKS)> bank_offset_x_upper_bank, //This is the starting bank
+//     const unsigned short size_y, 
+// 	const unsigned short bank_offest_y_floor,
+// 	const unsigned short abs_row_offset,
+//     const unsigned short size_z, 
+// 	const unsigned short bank_stride_z_floor,
+//     ::hls::stream<ap_uint<48>> strms[NUM_BANKS], 
+//     Flags... flags)
+// {
+// #ifndef __SYNTHESIS__
+// 	static_assert((NUM_BANKS != 0) && ((NUM_BANKS & (NUM_BANKS - 1)) == 0), "NUM_BANKS must be a power of two");
+// 	static_assert(sizeof...(Flags) == NUM_BANKS, "Error: The number of flag arguments must match NUM_BANKS.");
+// #endif 
+
+// 	constexpr unsigned short NUM_BANKS_SHIFT = LOG2(NUM_BANKS);
+// 	constexpr unsigned short BANK_MASK = NUM_BANKS - 1;
+
+// 	ap_uint<2> flag_array[NUM_BANKS] = { static_cast<ap_uint<2>>(flags)... };
+// 	#pragma HLS ARRAY_PARTITION variable=flag_array complete
+
+// 	unsigned int initial_bank_offsets[NUM_BANKS];
+//     #pragma HLS ARRAY_PARTITION variable=initial_bank_offsets complete dim=1
+    
+//     unsigned short banks_grid_size_x[NUM_BANKS];
+//     #pragma HLS ARRAY_PARTITION variable=banks_grid_size_x complete dim=1
+
+//     unsigned short bank_stride_z[NUM_BANKS];
+//     #pragma HLS ARRAY_PARTITION variable=bank_stride_z complete dim=1
+
+// 	for (ap_uint<NUM_BANKS_SHIFT+1> b_id = 0; b_id < NUM_BANKS; b_id++) {
+//         #pragma HLS UNROLL
+// 		const unsigned short bank_offset_y = bank_offest_y_floor + (flag_array[b_id].range(0,0) ? abs_row_offset : 0);
+// 		initial_bank_offsets[b_id] = bank_offset_x_floor + (b_id < bank_offset_x_upper_bank ? 1 : 0) + bank_offset_y;
+// 		banks_grid_size_x[b_id] = bank_grid_size_x_floor + flag_array[b_id].range(0,0);
+// 		bank_stride_z[b_id] = bank_stride_z_floor + (uint16_t)(is_big_grid_size_x ? grid_size_y : 0);
+
+// #ifdef DEBUG_LOG
+//         printf("|HLS DEBUG_LOG|%s| bank_id: %u, init_offset: %u, banks_grid_size_x: %u, bank_stride_z: %u\n", 
+//                __func__, (unsigned int)b_id, initial_bank_offsets[b_id], banks_grid_size_x[b_id], bank_stride_z[b_id]);
+// #endif
+//     }
+// 	// size_t offset_x = command.range(63,0);
+// 	// ap_uint<16> size_x = command.range(95,80);
+//     // ap_uint<16> stride_y = command.range(111,96);
+//     // ap_uint<16> size_y = command.range(127,112);
+//     // ap_uint<16> stride_z = command.range(143,128);
+//     // ap_uint<16> size_z = command.range(159,144);
+
+// #ifdef DEBUG_LOG_PRINT
+// 	printf("|HLS DEBUG_LOG|%s| command parsed. offset_x:%llu, size_x:%u, stride_y:%u, size_y:%u, stride_z:%u, size_z:%u\n", 
+// 			__func__, (unsigned long long)offset_x, (unsigned int)size_x, (unsigned int)stride_y, 
+// 			(unsigned int)size_y, (unsigned int)stride_z, (unsigned int)size_z);
+// #endif
+
+// 	// const unsigned short size_x_div_by_banks_floor = size_x >> NUM_BANKS_SHIFT;
+// 	// const unsigned int size_x_mod_num_banks = size_x & BANK_MASK;
+
+// 	for (unsigned short z = 0; z < size_z; z++)
+//     {
+//         for (unsigned short y = 0; y < size_y; y++)
+//         {
+//          #pragma HLS LOOP_FLATTEN
+
+//             size_t z_offset = offset_x + z * stride_z;
+//             size_t abs_offset = z_offset + y * stride_y;
+            
+//             const unsigned int bank_offset = abs_offset >> NUM_BANKS_SHIFT;
+//             const unsigned int starting_bank = abs_offset & BANK_MASK; //Equivalent to abs_offset % NUM_BANKS
+            
+//             // Optimized wrap-around calculation
+//             const unsigned int banks_upper_limit = (starting_bank + size_x_mod_num_banks) & BANK_MASK;  //Equivalent to (...) % NUM_BANKS
+//             const bool is_t1_or_t2 = banks_upper_limit < starting_bank;
+
+// #ifdef DEBUG_LOG_PRINT
+// 			printf("|HLS DEBUG_LOG|%s| z:%u, y:%u, abs_offset:%llu, bank_offset:%u, starting_bank:%u\n", 
+// 					__func__, (unsigned int)z, (unsigned int)y, (unsigned long long)abs_offset, 
+// 					(unsigned int)bank_offset, (unsigned int)starting_bank);
+// #endif
+
+//             for (unsigned int i = 0; i < NUM_BANKS; i++)
+//             {
+//                 #pragma HLS UNROLL
+
+//                 const unsigned int current_bank_offset = (i < starting_bank) ? bank_offset + 1 : bank_offset;
+
+//                 const bool is_gt_sb = (i >= starting_bank);
+//                 const bool is_lt_uplim = (i < banks_upper_limit);
+
+//                 bool cond;
+//                 if (is_t1_or_t2) {
+//                     cond = is_gt_sb || is_lt_uplim;
+//                 } else {
+//                     cond = is_gt_sb && is_lt_uplim;
+//                 }
+
+//                 const unsigned char add_arg = cond ? 1 : 0;
+//                 unsigned short b_size_x = size_x_div_by_banks_floor + add_arg;
+
+//                 ap_uint<48> b_command;
+//                 b_command.range(31,0) = current_bank_offset;
+//                 b_command.range(47,32) = b_size_x;
+
+// #ifdef DEBUG_LOG_PRINT
+// 				printf("|HLS DEBUG_LOG|%s| bank_idx:%u, current_bank_offset:%u, b_size_x:%u\n", 
+// 						__func__, (unsigned int)i, (unsigned int)current_bank_offset, (unsigned int)b_size_x);
+// #endif
+
+//                 strms[i] << b_command;
+//             }
+//         }
+//     }
+// }
+
 /**
- * @brief offsetGenerator: Generates and distributes bank-specific configuration commands 
- * across multiple output streams.
+ * @brief offsetGenerator: Generates and distributes bank-specific 32-bit memory offsets 
+ * across multiple output streams for a 3D memory access pattern.
  *
- * @details This function decodes a single 160-bit configuration command containing 3D memory 
- * access parameters (strides, sizes, and offsets). It iterates through the Z and Y dimensions 
- * to compute absolute memory offsets. Utilizing power-of-two bitwise optimizations, it 
- * calculates the base bank offset and starting bank, handles modulo wrap-around logic, and 
- * pushes appropriate 48-bit sub-commands to an array of hardware streams. The 
- * distribution logic is fully unrolled for optimal HLS synthesis.
+ * @details This function calculates absolute memory offsets based on pre-computed 3D spatial 
+ * parameters (tile sizes, grid sizes, and base offsets) provided as individual arguments. 
+ * It iterates through the Z and Y dimensions to compute the absolute memory offsets. Utilizing 
+ * power-of-two bitwise optimizations, it handles base bank offsets and wrap-around logic, 
+ * pushing the appropriate 32-bit offsets to an array of hardware streams. The distribution 
+ * logic is fully unrolled for optimal HLS synthesis.
  *
  * @tparam NUM_BANKS The number of target memory banks. Must be a power of two to enable 
  * bitwise masking optimizations.
  * @tparam IN_ITR Initiation interval for the inner HLS pipeline (default: 2).
  *
- * @param[in] command A 160-bit packed configuration word containing:
- * - [63:0]   offset_x: Base offset in the X dimension
- * - [95:80]  size_x:   Size in the X dimension
- * - [111:96] stride_y: Stride in the Y dimension
- * - [127:112] size_y:   Size in the Y dimension
- * - [143:128] stride_z: Stride in the Z dimension
- * - [159:144] size_z:   Size in the Z dimension
- * @param[out] strms Array of output HLS streams (hls::stream<ap_uint<48>>). 
- * Each 48-bit command contains:
- * - [31:0]   bank_offset: The starting offset for that specific bank
- * - [47:32]  b_size_x:    The calculated X dimension size for that specific bank
+ * @param[in] tile_size_y Size of the tile in the Y dimension.
+ * @param[in] tile_size_z Size of the tile in the Z dimension.
+ * @param[in] bank_grid_size_x_floor Base grid size in the X dimension per bank.
+ * @param[in] big_grid_size_x_banks_upper Number of lower-indexed banks that receive an extra X grid element.
+ * @param[in] grid_size_y Total grid size in the Y dimension.
+ * @param[in] tile_offset_x_floor Base offset in the X dimension per bank.
+ * @param[in] big_offset_x_banks_upper Number of lower-indexed banks that receive an extra X offset element.
+ * @param[in] tile_offset_y Base offset in the Y dimension.
+ * @param[in] bank_tile_size_x_floor Base tile size in the X dimension per bank.
+ * @param[in] big_bank_tile_size_x_mask Bitmask indicating which banks receive an extra X tile element.
+ * @param[out] offset_strm Array of output HLS streams (hls::stream<ap_uint<32>>). 
+ * Each push contains the 32-bit absolute memory offset for that specific bank.
  *
  * @note Enforces a compile-time static assertion that `NUM_BANKS` is a power of two, 
  * replacing expensive hardware modulo operations with bitwise AND masking.
@@ -2001,7 +2458,7 @@ static void readConfigStreamGenerator(const size_t offset_x, const unsigned shor
 template <unsigned short NUM_BANKS, unsigned short IN_ITR=2>
 static void offsetGenerator(const unsigned short tile_size_y, const unsigned short tile_size_z, 
 		const unsigned short bank_grid_size_x_floor, const ap_uint<LOG2(NUM_BANKS)> big_grid_size_x_banks_upper, const unsigned short grid_size_y, 
-		const unsigned short tile_offset_x_floor, const ap_uint<LOG2(NUM_BANKS)> big_offset_x_banks_upper,  const unsigned short tile_offset_y, 
+		const unsigned short tile_offset_x_floor, const ap_uint<LOG2(NUM_BANKS)> big_offset_x_banks_upper,  const unsigned short tile_offset_y, const unsigned short bank_tile_size_x_floor, const ap_uint<NUM_BANKS> big_bank_tile_size_x_mask,
 		::hls::stream<ap_uint<32>> offset_strm[NUM_BANKS])
 {
 #ifndef __SYNTHESIS__
@@ -2029,13 +2486,16 @@ static void offsetGenerator(const unsigned short tile_size_y, const unsigned sho
 	// const unsigned short size_x_div_by_banks_floor = size_x >> NUM_BANKS_SHIFT;
 	// const unsigned int size_x_mod_num_banks = size_x & BANK_MASK;
 	unsigned int initial_bank_offsets[NUM_BANKS];
-	#pragma HLS ARRAY_PARTITION variable=initial_bank_offsets complate;
+	#pragma HLS ARRAY_PARTITION variable=initial_bank_offsets complete
 
 	unsigned short grid_size_x_banks[NUM_BANKS]; //equivalent to stride_y
-	#pragma HLS ARRAY_PARTITION variable=grid_size_x_banks complate;
+	#pragma HLS ARRAY_PARTITION variable=grid_size_x_banks complete
 
 	unsigned short bank_stride_z[NUM_BANKS]; 
-	#pragma HLS ARRAY_PARTITION variable=bank_stride_z complate;
+	#pragma HLS ARRAY_PARTITION variable=bank_stride_z complete
+
+	unsigned short bank_tile_size_x[NUM_BANKS];
+	#pragma HLS ARRAY_PARTITION variable=bank_tile_size_x complete
 
 	for (ap_uint<NUM_BANKS_SHIFT+1> b_id = 0; b_id < NUM_BANKS; b_id++)
 	{
@@ -2044,6 +2504,7 @@ static void offsetGenerator(const unsigned short tile_size_y, const unsigned sho
 		initial_bank_offsets[b_id] = tile_offset_x_floor + (b_id < big_offset_x_banks_upper ? 1 : 0);
 		initial_bank_offsets[b_id] += tile_offset_y * grid_size_x_banks[b_id];
 		bank_stride_z[b_id] = grid_size_x_banks[b_id] * grid_size_y;
+		bank_tile_size_x[b_id] = bank_tile_size_x_floor + big_bank_tile_size_x_mask[b_id];
 
 #ifdef DEBUG_LOG_PRINT
                 printf("|HLS DEBUG_LOG|%s| bank_id: %u, grid_size_x_banks: %u, initial_bank_offsets: %u: bank_stride_z: %u\n", 
@@ -2067,9 +2528,106 @@ static void offsetGenerator(const unsigned short tile_size_y, const unsigned sho
                 printf("|HLS DEBUG_LOG|%s| Inner Loop. z:%u, y:%u, b_id:%u, abs_bank_offset:%u\n", 
                         __func__, (unsigned int)z, (unsigned int)y, (unsigned int)b_id, abs_bank_offset);
 #endif
-
-				offset_strm[b_id].write(abs_bank_offset);
+				if (bank_tile_size_x[b_id] != 0)
+					offset_strm[b_id].write(abs_bank_offset);
 			}
+        }
+    }
+}
+
+/**
+ * @brief offsetGenerator: Generates and distributes bank-specific 32-bit memory offsets 
+ * across multiple output streams for a 2D memory access pattern.
+ *
+ * @details This function calculates absolute memory offsets based on pre-computed 2D spatial 
+ * parameters (tile sizes, grid sizes, and base offsets) provided as individual arguments. 
+ * It iterates through the Y dimension to compute the absolute memory offsets. Utilizing 
+ * power-of-two bitwise optimizations, it handles base bank offsets and wrap-around logic, 
+ * pushing the appropriate 32-bit offsets to an array of hardware streams. The distribution 
+ * logic is fully unrolled for optimal HLS synthesis.
+ *
+ * @tparam NUM_BANKS The number of target memory banks. Must be a power of two to enable 
+ * bitwise masking optimizations.
+ * @tparam IN_ITR Initiation interval for the inner HLS pipeline (default: 2).
+ *
+ * @param[in] tile_size_y Size of the tile in the Y dimension.
+ * @param[in] bank_grid_size_x_floor Base grid size in the X dimension per bank.
+ * @param[in] big_grid_size_x_banks_upper Number of lower-indexed banks that receive an extra X grid element.
+ * @param[in] tile_offset_x_floor Base offset in the X dimension per bank.
+ * @param[in] big_offset_x_banks_upper Number of lower-indexed banks that receive an extra X offset element.
+ * @param[in] bank_tile_size_x_floor Base tile size in the X dimension per bank.
+ * @param[in] big_bank_tile_size_x_mask Bitmask indicating which banks receive an extra X tile element.
+ * @param[out] offset_strm Array of output HLS streams (hls::stream<ap_uint<32>>). 
+ * Each push contains the 32-bit absolute memory offset for that specific bank.
+ *
+ * @note Enforces a compile-time static assertion that `NUM_BANKS` is a power of two, 
+ * replacing expensive hardware modulo operations with bitwise AND masking.
+ */
+template <unsigned short NUM_BANKS, unsigned short IN_ITR=2>
+static void offsetGenerator(const unsigned short tile_size_y, 
+        const unsigned short bank_grid_size_x_floor, const ap_uint<LOG2(NUM_BANKS)> big_grid_size_x_banks_upper, 
+        const unsigned short tile_offset_x_floor, const ap_uint<LOG2(NUM_BANKS)> big_offset_x_banks_upper,  
+        const unsigned short bank_tile_size_x_floor, 
+        const ap_uint<NUM_BANKS> big_bank_tile_size_x_mask,
+        ::hls::stream<ap_uint<32>> offset_strm[NUM_BANKS])
+{
+#ifndef __SYNTHESIS__
+    static_assert((NUM_BANKS != 0) && ((NUM_BANKS & (NUM_BANKS - 1)) == 0), "NUM_BANKS must be a power of two");
+#endif 
+
+    constexpr unsigned short NUM_BANKS_SHIFT = LOG2(NUM_BANKS);
+    constexpr unsigned short BANK_MASK = NUM_BANKS - 1;
+
+    // size_t offset_x = command.range(63,0);
+    // ap_uint<16> size_x = command.range(95,80);
+    // ap_uint<16> stride_y = command.range(111,96);
+    // ap_uint<16> size_y = command.range(127,112);
+
+#ifdef DEBUG_LOG_PRINT
+    printf("|HLS DEBUG_LOG|%s| Initial Parameters. tile_size_y:%u, bank_grid_size_x_floor:%u, big_grid_size_x_banks_upper:%u,"
+            "tile_offset_x_floor:%u, big_offset_x_banks_upper:%u\n", 
+            __func__, (unsigned int)tile_size_y, (unsigned int)bank_grid_size_x_floor, 
+            (unsigned int)big_grid_size_x_banks_upper, (unsigned int)tile_offset_x_floor, 
+            (unsigned int)big_offset_x_banks_upper);
+#endif
+
+    unsigned int initial_bank_offsets[NUM_BANKS];
+    #pragma HLS ARRAY_PARTITION variable=initial_bank_offsets complete
+
+    unsigned short grid_size_x_banks[NUM_BANKS]; // equivalent to stride_y
+    #pragma HLS ARRAY_PARTITION variable=grid_size_x_banks complete
+
+    unsigned short bank_tile_size_x[NUM_BANKS];
+    #pragma HLS ARRAY_PARTITION variable=bank_tile_size_x complete
+
+    for (ap_uint<NUM_BANKS_SHIFT+1> b_id = 0; b_id < NUM_BANKS; b_id++)
+    {
+        #pragma HLS UNROLL
+        grid_size_x_banks[b_id] = bank_grid_size_x_floor + (b_id < big_grid_size_x_banks_upper ? 1 : 0);
+        initial_bank_offsets[b_id] = tile_offset_x_floor + (b_id < big_offset_x_banks_upper ? 1 : 0);
+        bank_tile_size_x[b_id] = bank_tile_size_x_floor + big_bank_tile_size_x_mask[b_id];
+
+#ifdef DEBUG_LOG_PRINT
+        printf("|HLS DEBUG_LOG|%s| bank_id: %u, grid_size_x_banks: %u, initial_bank_offsets: %u\n", 
+                __func__, (unsigned int)b_id, grid_size_x_banks[b_id], initial_bank_offsets[b_id]);
+#endif
+    }
+
+    // Single loop for 2D, looping over Y dimension only
+    for (unsigned short y = 0; y < tile_size_y; y++)
+    {
+        #pragma HLS PIPELINE II = IN_ITR
+        for (ap_uint<NUM_BANKS_SHIFT+1> b_id = 0; b_id < NUM_BANKS; b_id++)
+        {
+            #pragma HLS UNROLL
+            const unsigned int abs_bank_offset = initial_bank_offsets[b_id] + y * grid_size_x_banks[b_id];
+
+#ifdef DEBUG_LOG_PRINT
+            printf("|HLS DEBUG_LOG|%s| Inner Loop. y:%u, b_id:%u, abs_bank_offset:%u\n", 
+                    __func__, (unsigned int)y, (unsigned int)b_id, abs_bank_offset);
+#endif
+            if (bank_tile_size_x[b_id] != 0)
+                offset_strm[b_id].write(abs_bank_offset);
         }
     }
 }
@@ -2353,39 +2911,44 @@ static void stridedTileMem2streamV3(ap_uint<MEM_DATA_WIDTH>* mem_in,
  * @param[in] size_y Number of rows
  * @param[in] size_z Depth (default: 1)
  */
-template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
+template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short BANK_ID, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
 static void stridedTileMem2streamV4(ap_uint<MEM_DATA_WIDTH>* mem_in, 
                                     ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, 
 									::hls::stream<ap_uint<32>>& offset_command,
-                                    const unsigned short bank_size_x_floor,
-									const ap_uint<1> is_big_size_x,
-									const unsigned short size_y,
-                                    const unsigned short size_z=1
+                                    const unsigned short bank_tile_size_x_floor,
+									const ap_uint<NUM_BANKS> big_bank_tile_size_x_mask,
+									const unsigned int total_rows
+									// const unsigned short tile_size_y,
+                                    // const unsigned short tile_size_z=1
 #ifdef DEBUG_LOG_PRINT
                                     , const char* print_prompt = ""
 #endif  
     )
 {
-    const unsigned int total_iters = size_z * size_y;
-	const unsigned short bank_size_x =  bank_size_x_floor + is_big_size_x;
-
+	constexpr unsigned short BURST_SIZE_SHIFT = LOG2(BURST_SIZE);
+	constexpr unsigned short BURST_SIZE_MASK = BURST_SIZE - 1;
+    // const unsigned int total_iters = size_z * size_y;
+	const unsigned short bank_size_x =  bank_tile_size_x_floor + big_bank_tile_size_x_mask.range(BANK_ID, BANK_ID);
+	// const unsigned short burst_beats = bank_size_x >> BURST_SIZE_SHIFT;
+	// const unsigned short non_burst_beats = bank_size_x & BURST_SIZE_MASK;
+	// const bool is_burst_beats_zero = burst_beats == 0;
 
 #ifdef DEBUG_LOG_PRINT
-				printf("|HLS DEBUG_LOG|%s|%s| reading tile from mem to stream, size_y:%d, size_z:%d, total_iters:%d, bank_size_x:%d \n", 
-						__func__, print_prompt, size_y, size_z, total_iters, bank_size_x);
+				printf("|HLS DEBUG_LOG|%s|%s| reading tile from mem to stream, total_rows:%d, bank_size_x:%d \n", 
+						__func__, print_prompt, total_rows, bank_size_x);
 #endif
 
 	unsigned int bank_offset = 0;
 
-    tile_loop: for (unsigned int i = 0; i < total_iters; i++) {
-		read_burst_loop: for (unsigned short j = 0; j < bank_size_x; j++) {
+    tile_loop: for (unsigned int j = 0; j < total_rows; j++) {
+		read_burst_loop: for (unsigned short i = 0; i < bank_size_x; i++) {
 			#pragma HLS LOOP_FLATTEN
 			#pragma HLS PIPELINE II=IN_ITR
 
-			if (j == 0) {
+			if (i == 0) {
 				bank_offset = offset_command.read();
 			}
-			ap_uint<MEM_DATA_WIDTH> tmp = mem_in[bank_offset + j];
+			ap_uint<MEM_DATA_WIDTH> tmp = mem_in[bank_offset + i];
 			strm_out << tmp;
 
 	#ifdef DEBUG_LOG_PRINT
@@ -2402,6 +2965,13 @@ static void stridedTileMem2streamV4(ap_uint<MEM_DATA_WIDTH>* mem_in,
 		printf("====================================================================================\n");
 	#endif
 		}
+		// read_non_burst_loop: for (unsigned int i = 0; i < non_burst_beats; i++) {
+		// 	if (i == 0 and is_burst_beats_zero) {
+		// 		bank_offset = offset_command.read();
+		// 	}
+		// 	ap_uint<MEM_DATA_WIDTH> tmp = mem_in[bank_offset + i];
+		// 	strm_out << tmp;
+		// }
     }
 }
 
@@ -2627,33 +3197,39 @@ static void stridedTileStream2memWithAvoidV3(
 /**
  * @brief stridedTileStream2memWithAvoidV4: Writes a 3D strided tile from a hardware stream to memory, incorporating boundary avoidance.
  *
- * @details This is a standalone, optimized version (V3) that eliminates Vitis HLS loop flattening 
+ * @details This is a standalone, optimized version (V4) that eliminates Vitis HLS loop flattening 
  * warnings by unifying the stream reads, discards, and memory writes into a single inner loop.
- * It dynamically reads a 64-bit command to determine the absolute memory offset, write length (`size_x`), 
- * and boundary avoidance zone (`avoid_x`).
+ * It uses statically provided bank configuration masks and sizes, reading a 32-bit base memory offset 
+ * from a command stream at the start of each row. It actively drains the input stream but conditionally 
+ * avoids writing the data to memory if the current indices fall within the `avoid_x` or `avoid_y` boundary zones.
  *
  * @tparam MEM_DATA_WIDTH The bit-width of the AXI memory interface and the input data stream.
+ * @tparam NUM_BANKS The total number of memory banks.
+ * @tparam BANK_ID The specific ID of the target memory bank.
  * @tparam BURST_SIZE The maximum AXI burst length (kept for API compatibility).
  * @tparam IN_ITR The targeted Initiation Interval (II) for the underlying pipeline (default: 2).
  *
  * @param[in] strm_in The input HLS stream containing the computed tile data to be written.
  * @param[out] out Pointer to the mapped target memory bank (typically an AXI4 master interface).
- * @param[in] strm_command The HLS stream providing bank-specific 64-bit configuration commands.
- * - [31:0]  bank_offset: The absolute base offset in memory for the current row.
- * - [47:32] size_x:      The total number of elements to process in the X dimension.
- * - [63:48] avoid_x:     The number of boundary elements to avoid writing.
+ * @param[in] offset_command The HLS stream providing the 32-bit absolute base offset in memory for the current row.
+ * @param[in] bank_tile_size_x_floor Base tile size in the X dimension per bank.
+ * @param[in] big_bank_tile_size_x_mask Bitmask indicating which banks receive an extra X tile element.
+ * @param[in] bank_avoid_x_floor Base number of boundary elements to avoid writing in X per bank.
+ * @param[in] big_bank_avoid_x_mask Bitmask for extra boundary elements to avoid in X.
+ * @param[in] avoid_y The number of initial iterations in the Y dimension to skip writing to memory.
  * @param[in] size_y The total number of iterations in the Y dimension.
- * @param[in] size_z The total number of iterations in the Z dimension.
+ * @param[in] size_z The total number of iterations in the Z dimension (default: 1).
  */
-template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
+
+template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short BANK_ID, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
 static void stridedTileStream2memWithAvoidV4(
     	::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, 
 		ap_uint<MEM_DATA_WIDTH>* out, 
 		::hls::stream<ap_uint<32>>& offset_command, 
-		const unsigned short bank_size_x_floor,
-		const ap_uint<1> is_big_size_x,
+		const unsigned short bank_tile_size_x_floor,
+		const ap_uint<NUM_BANKS> big_bank_tile_size_x_mask,
 		const unsigned short bank_avoid_x_floor,
-		const ap_uint<1> is_big_avoid_x,
+		const ap_uint<NUM_BANKS> big_bank_avoid_x_mask,
 		const unsigned short avoid_y,
 		const unsigned short size_y,
 		const unsigned short size_z=1
@@ -2662,11 +3238,17 @@ static void stridedTileStream2memWithAvoidV4(
 #endif  
 )
 {
-    const unsigned int total_iters = size_z * size_y;
-	const unsigned short bank_size_x = bank_size_x_floor + is_big_size_x;
-	const unsigned short avoid_x = bank_avoid_x_floor + is_big_avoid_x;
-	const unsigned short avoid_iterations = bank_size_x * avoid_y;
-	const unsigned short size_y_mask = size_y - 1;
+	constexpr unsigned short BURST_SIZE_SHIFT = LOG2(BURST_SIZE);
+	constexpr unsigned short BURST_SIZE_MASK = BURST_SIZE - 1;
+
+    // const unsigned int total_iters = size_z * size_y;
+	const unsigned short bank_size_x = bank_tile_size_x_floor + big_bank_tile_size_x_mask.range(BANK_ID, BANK_ID);
+	const unsigned short avoid_x = bank_avoid_x_floor + big_bank_avoid_x_mask(BANK_ID, BANK_ID);
+	// const unsigned short avoid_iterations = bank_size_x * avoid_y;
+	// const unsigned short size_y_mask = size_y - 1;
+	// const unsigned short burst_beats = bank_size_x >> BURST_SIZE_SHIFT;
+	// const unsigned short non_burst_beats = bank_size_x & BURST_SIZE_MASK;
+	// const bool is_burst_beats_zero = burst_beats == 0;
 	unsigned int bank_offset = 0;
 
 #ifdef DEBUG_LOG_PRINT
@@ -2674,26 +3256,117 @@ static void stridedTileStream2memWithAvoidV4(
 			__func__, print_prompt, bank_size_x, avoid_x);
 #endif
 
-    tile_loop: for (unsigned int i = 0; i < total_iters; i++) {
-        write_burst_loop: for (unsigned short j = 0; j < bank_size_x; j++) {
-			#pragma HLS LOOP_FLATTEN
-            #pragma HLS PIPELINE II=IN_ITR
-			
-			unsigned short row_id = i & size_y_mask;
-			if (j == 0) {
-				bank_offset = offset_command.read();
+    tile_loop_1: for (unsigned short z = 0; z < size_z; z++) {
+		tile_loop_2: for (unsigned short y = 0; y < size_y; y++) {
+			write_burst_loop: for (unsigned short j = 0; j < bank_size_x; j++) {
+				#pragma HLS LOOP_FLATTEN
+				#pragma HLS PIPELINE II=IN_ITR
+				
+				if (j == 0) {
+					bank_offset = offset_command.read();
+				}
+				// Always read from the stream to drain it properly
+				ap_uint<MEM_DATA_WIDTH> tmp = strm_in.read();
+				
+				// Only write to memory if we have passed the avoid_x threshold.
+				if (j >= avoid_x and y >= avoid_y) {
+					out[bank_offset + j] = tmp;
+				}
+
+	#ifdef DEBUG_LOG_PRINT
+				printf("====================================================================================\n");
+				printf("|HLS DEBUG_LOG|%s|%s| writing burst  x: %d, y: %d, z:%d \n",__func__ , print_prompt, j, y, z);
+				// Identify if we are in the avoid zone or actively writing
+				if (j < avoid_x) {
+					printf("|HLS DEBUG_LOG|%s|%s| SKIPPING (Avoid Zone) stream beat: %d, val=(\n", __func__, print_prompt, j);
+				} else {
+					printf("|HLS DEBUG_LOG|%s|%s| WRITING stream beat: %d to mem offset: %d, val=(\n", __func__, print_prompt, j, bank_offset + j);
+				}
+
+				// Print the payload using the original DataConv logic
+				for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
+				{
+					DataConv conv;
+					conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+					printf("     %f,\n", conv.f);
+				}
+				printf(")\n\n");
+				printf("====================================================================================\n");
+	#endif
 			}
+        }
+    }
+}
+
+/**
+ * @brief stridedTileStream2memWithAvoidV4: Writes a 2D strided tile from a hardware stream to memory, incorporating boundary avoidance.
+ *
+ * @details This is a standalone, optimized version that eliminates Vitis HLS loop flattening 
+ * warnings by unifying the stream reads, discards, and memory writes into a single inner loop.
+ * It uses statically provided bank configuration masks and sizes, reading a 32-bit base memory offset 
+ * from a command stream per row. It avoids writing the first `avoid_x` elements to memory.
+ *
+ * @tparam MEM_DATA_WIDTH The bit-width of the AXI memory interface and the input data stream.
+ * @tparam NUM_BANKS The total number of memory banks.
+ * @tparam BANK_ID The specific ID of the target memory bank.
+ * @tparam BURST_SIZE The maximum AXI burst length (kept for API compatibility).
+ * @tparam IN_ITR The targeted Initiation Interval (II) for the underlying pipeline (default: 2).
+ *
+ * @param[in] strm_in The input HLS stream containing the computed tile data to be written.
+ * @param[out] out Pointer to the mapped target memory bank (typically an AXI4 master interface).
+ * @param[in] offset_command The HLS stream providing the 32-bit absolute base offset in memory for the current row.
+ * @param[in] bank_tile_size_x_floor Base tile size in the X dimension per bank.
+ * @param[in] big_bank_tile_size_x_mask Bitmask indicating which banks receive an extra X tile element.
+ * @param[in] bank_avoid_x_floor Base number of boundary elements to avoid writing in X per bank.
+ * @param[in] big_bank_avoid_x_mask Bitmask for extra boundary elements to avoid in X.
+ * @param[in] size_y The total number of iterations in the Y dimension.
+ */
+template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short BANK_ID, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
+static void stridedTileStream2memWithAvoidV4(
+        ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, 
+        ap_uint<MEM_DATA_WIDTH>* out, 
+        ::hls::stream<ap_uint<32>>& offset_command, 
+        const unsigned short bank_tile_size_x_floor,
+        const ap_uint<NUM_BANKS> big_bank_tile_size_x_mask,
+        const unsigned short bank_avoid_x_floor,
+        const ap_uint<NUM_BANKS> big_bank_avoid_x_mask,
+        const unsigned short size_y
+#ifdef DEBUG_LOG_PRINT
+        , const char* print_prompt = ""
+#endif  
+)
+{
+    // constexpr unsigned short BURST_SIZE_SHIFT = LOG2(BURST_SIZE);
+    // constexpr unsigned short BURST_SIZE_MASK = BURST_SIZE - 1;
+
+    const unsigned short bank_size_x = bank_tile_size_x_floor + big_bank_tile_size_x_mask.range(BANK_ID, BANK_ID);
+    const unsigned short avoid_x = bank_avoid_x_floor + big_bank_avoid_x_mask.range(BANK_ID, BANK_ID);
+    unsigned int bank_offset = 0;
+
+#ifdef DEBUG_LOG_PRINT
+    printf("|HLS DEBUG_LOG|%s|%s| reading stream to mem -  bank_size_x:%d, avoid_x:%d \n", 
+            __func__, print_prompt, bank_size_x, avoid_x);
+#endif
+
+    tile_loop_y: for (unsigned short y = 0; y < size_y; y++) {
+        write_burst_loop: for (unsigned short j = 0; j < bank_size_x; j++) {
+            #pragma HLS LOOP_FLATTEN
+            #pragma HLS PIPELINE II=IN_ITR
+            
+            if (j == 0) {
+                bank_offset = offset_command.read();
+            }
             // Always read from the stream to drain it properly
             ap_uint<MEM_DATA_WIDTH> tmp = strm_in.read();
             
             // Only write to memory if we have passed the avoid_x threshold.
-            if (j >= avoid_x and row_id >= avoid_y) {
+            if (j >= avoid_x) {
                 out[bank_offset + j] = tmp;
             }
 
 #ifdef DEBUG_LOG_PRINT
             printf("====================================================================================\n");
-            printf("|HLS DEBUG_LOG|%s|%s| writing  i: %d, j: %d \n",__func__ , print_prompt, i, j);
+            printf("|HLS DEBUG_LOG|%s|%s| writing burst  x: %d, y: %d\n",__func__ , print_prompt, j, y);
             // Identify if we are in the avoid zone or actively writing
             if (j < avoid_x) {
                 printf("|HLS DEBUG_LOG|%s|%s| SKIPPING (Avoid Zone) stream beat: %d, val=(\n", __func__, print_prompt, j);
@@ -2714,7 +3387,6 @@ static void stridedTileStream2memWithAvoidV4(
         }
     }
 }
-
 
 /**
  * @brief stridedTileStream2memWithAvoidV5: Writes a 3D strided tile from a hardware stream to memory, incorporating boundary avoidance.
@@ -3027,7 +3699,8 @@ template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned shor
 static void redirectV2(
         ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in[NUM_BANKS],
         ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out[NUM_BANKS],
-		const unsigned short bank_size_x_floor, const unsigned short size_x_div_by_banks_ceil, const ap_uint<1> is_big_bank_size_x[NUM_BANKS], const ap_uint<LOG2(NUM_BANKS)> big_offset_x_banks_upper, const unsigned short size_y, const unsigned short size_z)
+		const unsigned short bank_tile_size_x_floor, const unsigned short bank_tile_size_x_ceil, const ap_uint<NUM_BANKS> big_bank_tile_size_x_mask, const ap_uint<LOG2(NUM_BANKS)> big_offset_x_banks_upper, 
+		/*const unsigned short tile_size_y, const unsigned short tile_size_z*/ const unsigned int total_rows)
 {
     // Enforce the power-of-two constraint for bitwise optimizations
 #ifndef __SYNTHESIS__
@@ -3039,118 +3712,119 @@ static void redirectV2(
 
 #ifdef DEBUG_LOG_PRINT
     printf("==== DATAMOVER REDIRECT INITIAL PARAMETERS ====\n");
-    printf("bank_size_x_floor: %lu\n", bank_size_x_floor);
+	printf("bank_tile_size_x_ceil: %u\n", bank_tile_size_x_ceil);
+    printf("bank_tile_size_x_floor: %u\n", bank_tile_size_x_floor);
     printf("is_big_bank_size_x: {");
 	for (ap_uint<LOG2(NUM_BANKS)+1> b_id = 0; b_id < NUM_BANKS; b_id++) {
-		 printf("%d%s", is_big_bank_size_x[b_id], (b_id == NUM_BANKS - 1 ? "" : ", "));
+		 printf("%d%s", (unsigned short)big_bank_tile_size_x_mask.range(b_id, b_id), (b_id == NUM_BANKS - 1 ? "" : ", "));
 	}
 	printf("}\n");
-    printf("size_y: %u\n", (unsigned int)size_y);
-    printf("size_z: %u\n", (unsigned int)size_z);
-    printf("size_x_div_by_banks_ceil: %u\n", size_x_div_by_banks_ceil);
-    printf("size_x_div_by_banks_floor: %u\n", bank_size_x_floor);
+    // printf("tile_size_y: %u\n", (unsigned int)tile_size_y);
+    // printf("tile_size_z: %u\n", (unsigned int)tile_size_z);
+	printf("total_rows: %u\n", (unsigned int)total_rows);
     printf("NUM_BANKS: %u\n", NUM_BANKS);
     printf("========================================\n");
 #endif
 
-    for (unsigned short z = 0; z < size_z; z++)
-    {
-        for (unsigned short y = 0; y < size_y; y++)
-        {
-            #pragma HLS LOOP_FLATTEN
+    // for (unsigned short z = 0; z < size_z; z++)
+    // {
+    //     for (unsigned short y = 0; y < size_y; y++)
+    //     {
+	for (unsigned int row_id = 0; row_id < total_rows; row_id++) 
+	{
+		#pragma HLS LOOP_FLATTEN
 
-            // const size_t z_offset = offset_x + z * stride_z;
-            // const size_t abs_offset = z_offset + y * stride_y;
-            
-            // Replaced modulo with bitwise AND
-            const ap_uint<NUM_BANKS_SHIFT> starting_bank = big_offset_x_banks_upper;
-            // const unsigned int banks_upper_limit = (starting_bank + size_x_mod_banks) & BANK_MASK;
-            // const bool is_t1_or_t2 = banks_upper_limit < starting_bank;
+		// const size_t z_offset = offset_x + z * stride_z;
+		// const size_t abs_offset = z_offset + y * stride_y;
+		
+		// Replaced modulo with bitwise AND
+		const ap_uint<NUM_BANKS_SHIFT> starting_bank = big_offset_x_banks_upper;
+		// const unsigned int banks_upper_limit = (starting_bank + size_x_mod_banks) & BANK_MASK;
+		// const bool is_t1_or_t2 = banks_upper_limit < starting_bank;
 
-            // Pre-calculate bank conditions outside the inner pipeline loop
-            // bool bank_cond[NUM_BANKS];
-            // #pragma HLS ARRAY_PARTITION variable=bank_cond complete dim=1
+		// Pre-calculate bank conditions outside the inner pipeline loop
+		// bool bank_cond[NUM_BANKS];
+		// #pragma HLS ARRAY_PARTITION variable=bank_cond complete dim=1
 
-            // for (unsigned int i = 0; i < NUM_BANKS; i++)
-            // {
-            //     #pragma HLS UNROLL
-            //     const bool is_gt_sb = i >= starting_bank;
-            //     const bool is_lt_uplim = i < banks_upper_limit;
+		// for (unsigned int i = 0; i < NUM_BANKS; i++)
+		// {
+		//     #pragma HLS UNROLL
+		//     const bool is_gt_sb = i >= starting_bank;
+		//     const bool is_lt_uplim = i < banks_upper_limit;
 
-            //     if (is_t1_or_t2) {
-            //         bank_cond[i] = is_gt_sb || is_lt_uplim;
-            //     } else {
-            //         bank_cond[i] = is_gt_sb && is_lt_uplim;
-            //     }
-            // }
+		//     if (is_t1_or_t2) {
+		//         bank_cond[i] = is_gt_sb || is_lt_uplim;
+		//     } else {
+		//         bank_cond[i] = is_gt_sb && is_lt_uplim;
+		//     }
+		// }
 
-            for (unsigned short x = 0; x < size_x_div_by_banks_ceil; x++)
-            {
-                #pragma HLS PIPELINE II=IN_ITR
+		for (unsigned short x = 0; x < bank_tile_size_x_ceil; x++)
+		{
+			#pragma HLS PIPELINE II=IN_ITR
 
-                // Fully partition these to map to discrete registers
-                ap_uint<MEM_DATA_WIDTH> tmp[NUM_BANKS];
-                ap_uint<MEM_DATA_WIDTH> swap[NUM_BANKS];
-                #pragma HLS ARRAY_PARTITION variable=tmp complete dim=1
-                #pragma HLS ARRAY_PARTITION variable=swap complete dim=1
+			// Fully partition these to map to discrete registers
+			ap_uint<MEM_DATA_WIDTH> tmp[NUM_BANKS];
+			ap_uint<MEM_DATA_WIDTH> swap[NUM_BANKS];
+			#pragma HLS ARRAY_PARTITION variable=tmp complete dim=1
+			#pragma HLS ARRAY_PARTITION variable=swap complete dim=1
 
-                const bool is_x_lt_bank_x_size = x < bank_size_x_floor;
+			const bool is_x_lt_bank_x_size = x < bank_tile_size_x_floor;
 
-                // 1. Read from input streams based on conditions
-                for (unsigned int i = 0; i < NUM_BANKS; i++)
-                {
-                    #pragma HLS UNROLL
-                    const bool read_cond = is_x_lt_bank_x_size || is_big_bank_size_x[i];
-                    tmp[i] = read_cond ? register_it(strm_in[i].read()) : ap_uint<MEM_DATA_WIDTH>(0);
-
-#ifdef DEBUG_LOG_PRINT
-					auto read_val = tmp[i]; 
-					if (read_cond) {
-						printf("==== REDIRECT READ ====\n");
-						printf("Bank[%u], X[%u], Y[%u], Z[%u]\n", i, x, (unsigned int)y, (unsigned int)z);
-						printf("Values (float): (");
-						for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
-							DataConv conv;
-							conv.i = read_val.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
-							if (j > 0) printf(", ");
-							printf("%f", conv.f);
-						}
-						printf(")\n");
-						printf("=====================\n");
-					}
-#endif
-                }
-
-                // 2. The Barrel Shifter (Replaces the large switch statement)
-                for (unsigned int i = 0; i < NUM_BANKS; i++)
-                {
-                    #pragma HLS UNROLL
-                    unsigned int src_idx = (starting_bank + i) & BANK_MASK;
-                    swap[i] = tmp[src_idx];
-                }
-
-                // 3. Write to output streams
-                for (unsigned int i = 0; i < NUM_BANKS; i++)
-                {
-                    #pragma HLS UNROLL
-                    strm_out[i] << swap[i];
+			// 1. Read from input streams based on conditions
+			for (unsigned int i = 0; i < NUM_BANKS; i++)
+			{
+				#pragma HLS UNROLL
+				const bool read_cond = is_x_lt_bank_x_size || big_bank_tile_size_x_mask.range(i,i);
+				tmp[i] = read_cond ? register_it(strm_in[i].read()) : ap_uint<MEM_DATA_WIDTH>(0);
 
 #ifdef DEBUG_LOG_PRINT
-					auto write_val = swap[i];
-					printf("==== REDIRECT WRITE ====\n");
-					printf("Bank[%u],  X[%u], Y[%u], Z[%u]\n", i, x, (unsigned int)y, (unsigned int)z);
+				auto read_val = tmp[i]; 
+				if (read_cond) {
+					printf("==== REDIRECT READ ====\n");
+					printf("Bank[%u], X[%u], ROW_ID[%u]\n", i, x, (unsigned int)row_id);
 					printf("Values (float): (");
 					for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
 						DataConv conv;
-						conv.i = write_val.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+						conv.i = read_val.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
 						if (j > 0) printf(", ");
 						printf("%f", conv.f);
 					}
 					printf(")\n");
-					printf("======================\n");
+					printf("=====================\n");
+				}
 #endif
-                }
-            }
+			}
+
+			// 2. The Barrel Shifter (Replaces the large switch statement)
+			for (unsigned int i = 0; i < NUM_BANKS; i++)
+			{
+				#pragma HLS UNROLL
+				unsigned int src_idx = (starting_bank + i) & BANK_MASK;
+				swap[i] = tmp[src_idx];
+			}
+
+			// 3. Write to output streams
+			for (unsigned int i = 0; i < NUM_BANKS; i++)
+			{
+				#pragma HLS UNROLL
+				strm_out[i] << swap[i];
+
+#ifdef DEBUG_LOG_PRINT
+				auto write_val = swap[i];
+				printf("==== REDIRECT WRITE ====\n");
+				printf("Bank[%u],  X[%u], ROW_ID[%u]\n", i, x, (unsigned int)row_id);
+				printf("Values (float): (");
+				for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
+					DataConv conv;
+					conv.i = write_val.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+					if (j > 0) printf(", ");
+					printf("%f", conv.f);
+				}
+				printf(")\n");
+				printf("======================\n");
+#endif
+			}
         }
     }
 }
@@ -4065,7 +4739,8 @@ template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned shor
 static void reverseRedirectV2(
         ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in[NUM_BANKS],
         ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out[NUM_BANKS],
-        const unsigned short bank_size_x_floor, const unsigned short size_x_div_by_banks_ceil,  const ap_uint<1> is_big_bank_size_x[NUM_BANKS], const ap_uint<LOG2(NUM_BANKS)> big_offset_x_banks_upper, const unsigned short size_y, const unsigned short size_z)
+        const unsigned short bank_tile_size_x_floor, const unsigned short bank_tile_size_x_ceil,  const ap_uint<NUM_BANKS> big_bank_tile_size_x_mask, const ap_uint<LOG2(NUM_BANKS)> big_offset_x_banks_upper, 
+		/*const unsigned short size_y, const unsigned short size_z*/ const unsigned int total_rows)
 {
 #ifndef __SYNTHESIS__
 	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
@@ -4090,114 +4765,113 @@ static void reverseRedirectV2(
 
 #ifdef DEBUG_LOG_PRINT
     printf("==== DATAMOVER REDIRECT INITIAL PARAMETERS ====\n");
-    printf("bank_size_x_floor: %lu\n", bank_size_x_floor);
-    printf("is_big_bank_size_x: {");
+    printf("bank_tile_size_x_floor: %lu\n", bank_tile_size_x_floor);
+	printf("bank_tile_size_x_ceil: %lu\n", bank_tile_size_x_ceil);
+    printf("big_bank_tile_size_x_mask: {");
 	for (ap_uint<LOG2(NUM_BANKS)+1> b_id = 0; b_id < NUM_BANKS; b_id++) {
-		 printf("%d%s", is_big_bank_size_x[b_id], (b_id == NUM_BANKS - 1 ? "" : ", "));
+		printf("%d", (unsigned short)big_bank_tile_size_x_mask[b_id]);
+		if (b_id != NUM_BANKS - 1) 
+            printf(", ");
 	}
 	printf("}\n");
-    printf("size_y: %u\n", (unsigned int)size_y);
-    printf("size_z: %u\n", (unsigned int)size_z);
-    printf("size_x_div_by_banks_ceil: %u\n", size_x_div_by_banks_ceil);
-    printf("size_x_div_by_banks_floor: %u\n", bank_size_x_floor);
+    // printf("size_y: %u\n", (unsigned int)size_y);
+    // printf("size_z: %u\n", (unsigned int)size_z);
+	printf("total_rows: %d\n", (unsigned int)total_rows);
     printf("NUM_BANKS: %u\n", NUM_BANKS);
     printf("========================================\n");
 #endif
 
-    for (unsigned short z = 0; z < size_z; z++)
+    for (unsigned int row_id = 0; row_id < total_rows; row_id++)
     {
-        for (unsigned short y = 0; y < size_y; y++)
-        {
-            #pragma HLS LOOP_FLATTEN
-			const ap_uint<NUM_BANKS_SHIFT> starting_bank = big_offset_x_banks_upper;
-            // const size_t z_offset = offset_x + z * stride_z;
-            // const size_t abs_offset = z_offset + y * stride_y;
-            
-            // const unsigned int starting_bank = abs_offset & BANK_MASK;
-            // const unsigned int banks_upper_limit = (starting_bank + size_x_mod_banks) & BANK_MASK;
-            // const bool is_t1_or_t2 = banks_upper_limit < starting_bank;
+		#pragma HLS LOOP_FLATTEN
+		const ap_uint<NUM_BANKS_SHIFT> starting_bank = big_offset_x_banks_upper;
+		// const size_t z_offset = offset_x + z * stride_z;
+		// const size_t abs_offset = z_offset + y * stride_y;
+		
+		// const unsigned int starting_bank = abs_offset & BANK_MASK;
+		// const unsigned int banks_upper_limit = (starting_bank + size_x_mod_banks) & BANK_MASK;
+		// const bool is_t1_or_t2 = banks_upper_limit < starting_bank;
 
-            // Pre-calculate boundary write conditions
-            // bool bank_cond[NUM_BANKS];
-            // #pragma HLS ARRAY_PARTITION variable=bank_cond complete dim=1
+		// Pre-calculate boundary write conditions
+		// bool bank_cond[NUM_BANKS];
+		// #pragma HLS ARRAY_PARTITION variable=bank_cond complete dim=1
 
-            // for (unsigned int i = 0; i < NUM_BANKS; i++)
-            // {
-            //     #pragma HLS UNROLL
-            //     const bool is_gt_sb = i >= starting_bank;
-            //     const bool is_lt_uplim = i < banks_upper_limit;
+		// for (unsigned int i = 0; i < NUM_BANKS; i++)
+		// {
+		//     #pragma HLS UNROLL
+		//     const bool is_gt_sb = i >= starting_bank;
+		//     const bool is_lt_uplim = i < banks_upper_limit;
 
-            //     if (is_t1_or_t2) {
-            //         bank_cond[i] = is_gt_sb || is_lt_uplim;
-            //     } else {
-            //         bank_cond[i] = is_gt_sb && is_lt_uplim;
-            //     }
-            // }
+		//     if (is_t1_or_t2) {
+		//         bank_cond[i] = is_gt_sb || is_lt_uplim;
+		//     } else {
+		//         bank_cond[i] = is_gt_sb && is_lt_uplim;
+		//     }
+		// }
 
-            for (unsigned short x = 0; x < size_x_div_by_banks_ceil; x++)
-            {
-                #pragma HLS PIPELINE II=IN_ITR
+		for (unsigned short x = 0; x < bank_tile_size_x_ceil; x++)
+		{
+			#pragma HLS PIPELINE II=IN_ITR
 
-                ap_uint<MEM_DATA_WIDTH> tmp[NUM_BANKS];
-                ap_uint<MEM_DATA_WIDTH> swap[NUM_BANKS];
-                #pragma HLS ARRAY_PARTITION variable=tmp complete dim=1
-                #pragma HLS ARRAY_PARTITION variable=swap complete dim=1
+			ap_uint<MEM_DATA_WIDTH> tmp[NUM_BANKS];
+			ap_uint<MEM_DATA_WIDTH> swap[NUM_BANKS];
+			#pragma HLS ARRAY_PARTITION variable=tmp complete dim=1
+			#pragma HLS ARRAY_PARTITION variable=swap complete dim=1
 
-                const bool is_x_lt_bank_x_size = x < bank_size_x_floor;
+			const bool is_x_lt_bank_x_size = x < bank_tile_size_x_floor;
 
-                // 1. Unconditional Read
-                for (unsigned int i = 0; i < NUM_BANKS; i++)
-                {
-                    #pragma HLS UNROLL
-                    tmp[i] = register_it(strm_in[i].read());
+			// 1. Unconditional Read
+			for (unsigned int i = 0; i < NUM_BANKS; i++)
+			{
+				#pragma HLS UNROLL
+				tmp[i] = register_it(strm_in[i].read());
 #ifdef DEBUG_LOG_PRINT
-                    printf("==== REVERSE REDIRECT READ ====\n");
-                    printf("Bank[%u], X[%u], Y[%u], Z[%u]\n", i, x, (unsigned int)y, (unsigned int)z);
-                    printf("Values (float): (");
-                    for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
-                        DataConv conv;
-                        conv.i = tmp[i].range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
-                        if (j > 0) printf(", ");
-                        printf("%f", conv.f);
-                    }
-                    printf(")\n");
-                    printf("============================\n");
+				printf("==== REVERSE REDIRECT READ ====\n");
+				printf("Bank[%u], X[%u], ROW_ID[%u] \n", i, x, (unsigned int)row_id);
+				printf("Values (float): (");
+				for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
+					DataConv conv;
+					conv.i = tmp[i].range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+					if (j > 0) printf(", ");
+					printf("%f", conv.f);
+				}
+				printf(")\n");
+				printf("============================\n");
 #endif
-                }
+			}
 
-                // 2. Reverse Barrel Shifter
-                for (unsigned int i = 0; i < NUM_BANKS; i++)
-                {
-                    #pragma HLS UNROLL
-                    unsigned int src_idx = (i - starting_bank + NUM_BANKS) & BANK_MASK;
-                    swap[i] = tmp[src_idx];
-                }
+			// 2. Reverse Barrel Shifter
+			for (unsigned int i = 0; i < NUM_BANKS; i++)
+			{
+				#pragma HLS UNROLL
+				unsigned int src_idx = (i - starting_bank + NUM_BANKS) & BANK_MASK;
+				swap[i] = tmp[src_idx];
+			}
 
-                // 3. Conditional Write to Outputs
-                for (unsigned int i = 0; i < NUM_BANKS; i++)
-                {
-                    #pragma HLS UNROLL
-                    const bool write_cond = is_x_lt_bank_x_size || is_big_bank_size_x[i];
-                    
-                    if (write_cond) {
-                        strm_out[i] << swap[i];
+			// 3. Conditional Write to Outputs
+			for (unsigned int i = 0; i < NUM_BANKS; i++)
+			{
+				#pragma HLS UNROLL
+				const bool write_cond = is_x_lt_bank_x_size || big_bank_tile_size_x_mask.range(i,i);
+				
+				if (write_cond) {
+					strm_out[i] << swap[i];
 #ifdef DEBUG_LOG_PRINT
-                        printf("==== REVERSE REDIRECT WRITE ====\n");
-                        printf("Bank[%u], X[%u], Y[%u], Z[%u]\n", i, x, (unsigned int)y, (unsigned int)z);
-                        printf("Values (float): (");
-                        for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
-                            DataConv conv;
-                            conv.i = swap[i].range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
-                            if (j > 0) printf(", ");
-                            printf("%f", conv.f);
-                        }
-                        printf(")\n");
-                        printf("===============================\n");
+					printf("==== REVERSE REDIRECT WRITE ====\n");
+					printf("Bank[%u], X[%u], ROW_ID[%u]\n", i, x, (unsigned int)row_id);
+					printf("Values (float): (");
+					for (unsigned int j = 0; j < MEM_DATA_WIDTH / (DEBUG_LOG_SIZE_OF * 8); j++) {
+						DataConv conv;
+						conv.i = swap[i].range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+						if (j > 0) printf(", ");
+						printf("%f", conv.f);
+					}
+					printf(")\n");
+					printf("===============================\n");
 #endif
-                    }
-                }
-            }
-        }
+				}
+			}
+		}     
     }
 }
 
@@ -4465,82 +5139,164 @@ static void reverseRedirect(
 // }
 
 /**
- * @brief Writes strided tile data from a stream to memory with tiling and batching support.
+ * @brief Writes strided tile data from a stream to a specific memory bank with 2D boundary avoidance (X-tiling only).
  *
- * @details This function reads data from an input stream and writes it to memory according to a
- * tiled memory configuration. It handles multi-dimensional tiling in X, Y, and Z dimensions
- * with support for non-uniform tile sizes at boundaries.
+ * @details This function acts as the optimized write-side Address Generation Unit (AGU) for a physical memory bank 
+ * within a 2D tiled layout. It calculates the specific `avoid_x` boundary size dynamically per-tile to eliminate 
+ * redundant writes of overlap (ghost) zones. Because 2D grids are only tiled on the X-axis, the Y-axis is traversed 
+ * contiguously based on the subset of rows (`total_rows`) mathematically assigned to this `BANK_ID`. This ensures 
+ * perfect AXI write bursts without branching penalties inside the inner loop.
  *
- * @tparam MEM_DATA_WIDTH The bit-width of each memory access (e.g., 64, 128, 256)
- * @tparam BURST_SIZE Burst size for memory transfers (default: 32)
- * @tparam IN_ITR Initiation interval for the pipeline (default: 2)
+ * @tparam MEM_DATA_WIDTH The bit-width of each memory access (e.g., 64, 128, 256).
+ * @tparam NUM_BANKS The total number of interleaved memory banks. Must be a power of two.
+ * @tparam BANK_ID The logical ID of the writing bank. Used at compile-time to determine local row bounds.
+ * @tparam BURST_SIZE Maximum AXI burst size for memory transfers (default: 32).
+ * @tparam IN_ITR Initiation interval for the pipeline (default: 2).
  *
- * @param[in] strm_in Reference to the input HLS stream containing the tile data to be written
- * @param[out] mem_out Pointer to the output memory where tile data will be written
+ * @param[in] strm_in Reference to the input HLS stream returning processed data from the compute PE.
+ * @param[out] mem_out Pointer to the specific physical AXI memory bank where data will be written.
  * @param[in] config Reference to MemConfigTile configuration containing:
- *        - start_offset: Base offset in memory
- *        - end_z, start_z: Z-dimension range
- *        - tile_size_y, last_tile_size_y: Y-tile dimensions
- *        - tile_count_x, tile_count_y: Number of tiles in each dimension
- *        - effective_tile_size_x, effective_tile_size_y: Effective tile dimensions
- *        - grid_xblocks, grid_size_y: Grid dimensions for stride calculation
- * @param[in] stride_start Starting offset for the Y dimension iteration (default: 0).
- *                         Allows partial tile processing starting from a specific Y position.
+ * - start_offset: Base offset in memory
+ * - tile_size_y: Total size of the Y dimension (treated as full grid_size_y in 2D)
+ * - tile_count_x: Number of tiles in the X dimension
+ * - effective_tile_size_x: Effective X-tile dimension for offset calculation
+ * - grid_xblocks: Grid dimension for contiguous memory stride calculation
+ * - tile_overlap_size_x: Overlap size used to compute avoid_x boundaries
  *
- * @note Supports partial tiles at boundaries through last_tile_size parameters
- * @note Debug logging available when DEBUG_LOG is defined
- * 
+ * @note Supports non-uniform tile sizes at the grid boundaries via `last_tile_size_x`.
+ * @note Debug logging is actively supported when `DEBUG_LOG_PRINT` is defined.
+ *
  * @see ops::hls::MemConfigTile
- * @see ops::hls::stream2mem
+ * @see ops::hls::stream2memWithAvoidV2
  */
-template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-static void stridedTileStream2mem(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, ap_uint<MEM_DATA_WIDTH>* mem_out, const ops::hls::MemConfigTile& config, unsigned short stride_start = 0)
+template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS=2, unsigned short BANK_ID=0, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
+static void stridedTileStream2mem2D(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, ap_uint<MEM_DATA_WIDTH>* mem_out, const ops::hls::MemConfigTile& config)
 {
-    // #pragma HLS INLINE off
     #ifdef DEBUG_LOG_PRINT
-        printf("|HLS DEBUG_LOG|%s| writing tile. tile_start:%d, tile_size:%d\n", __func__, config.start_offset, config.total_size_bytes);
+    printf("|HLS DEBUG_LOG|%s|bank-%u| Initializing 2D write (X-tiling only). start_offset:%u, total_size_bytes:%u, tile_count_x:%u, total_y_rows:%u\n", 
+           __func__, BANK_ID,config.start_offset, config.total_size_bytes, config.tile_count_x, config.tile_size_y);
     #endif
 
+	constexpr unsigned short BANK_SHIFT = LOG2(NUM_BANKS);
+	constexpr unsigned short BANK_MASK = NUM_BANKS - 1;
+
+	const bool is_additional_row = (config.grid_size_y & BANK_MASK) > BANK_ID;
+	const unsigned short total_rows = (config.grid_size_y >> BANK_SHIFT) + (is_additional_row ? 1 : 0);
+
+    for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++)
+    {
+		const unsigned short avoid_x = tile_x == 0 ? 0 : config.tile_overlap_size_x >> 1;
+        const unsigned int tile_x_offset = tile_x * config.effective_tile_size_x; 
+        const unsigned short tile_size_x = tile_x == (config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
+
+        // Traverse the entire Y dimension, dynamically striding by NUM_BANKS
+        for (unsigned short j = 0; j < total_rows; j++)
+        {
+            unsigned int offset_1 = config.start_offset + tile_x_offset;
+            unsigned int j_offset  = j * config.grid_xblocks;
+            unsigned int offset = offset_1 + j_offset;
+            
+        #ifdef DEBUG_LOG_PRINT
+            printf("|HLS DEBUG_LOG|%s| offset_1:%u j_offset:%u final_offset:%u | tile_x_id:%u j_row:%u avoid_x: %u, tile_size_x:%u\n",
+                        __func__, offset_1, j_offset, offset, (unsigned int)tile_x, (unsigned int)j, (unsigned int)avoid_x, (unsigned int)tile_size_x);
+        #endif
+            stream2memWithAvoidV2<MEM_DATA_WIDTH, IN_ITR>((ap_uint<MEM_DATA_WIDTH>* )(mem_out + offset), strm_in, tile_size_x, avoid_x);
+        }
+    }
+}
+
+/**
+ * @brief Writes strided tile data from a stream to memory with 3D tiling and 2D boundary avoidance.
+ *
+ * @details This function acts as the optimized write-side Address Generation Unit (AGU) for a physical memory bank 
+ * within a 3D tiled layout. It calculates boundary avoidance dynamically for both the X and Y dimensions to prevent 
+ * writing overlapping ghost zones to memory. If the current local row `j` falls within the `local_avoid_y` threshold, 
+ * it forces `current_avoid_x` to equal `tile_size_x`, ensuring the stream is drained for that row without writing 
+ * any elements to memory.
+ *
+ * @tparam MEM_DATA_WIDTH The bit-width of each memory access (e.g., 64, 128, 256).
+ * @tparam NUM_BANKS The total number of interleaved memory banks. Must be a power of two.
+ * @tparam BANK_ID The logical ID of the writing bank. Used at compile-time to determine local bounds.
+ * @tparam BURST_SIZE Maximum AXI burst size for memory transfers (default: 32).
+ * @tparam IN_ITR Initiation interval for the pipeline (default: 2).
+ *
+ * @param[in] strm_in Reference to the input HLS stream returning processed data from the compute PE.
+ * @param[out] mem_out Pointer to the specific physical AXI memory bank where data will be written.
+ * @param[in] config Reference to MemConfigTile configuration containing:
+ * - start_offset: Base offset in memory
+ * - start_z, end_z: Z-dimension iteration range
+ * - tile_size_y, last_tile_size_y: Y-tile dimensions
+ * - tile_count_x, tile_count_y: Number of tiles in each dimension
+ * - effective_tile_size_x, effective_tile_size_y: Effective dimensions for offset calculation
+ * - grid_xblocks, grid_size_y: Grid dimensions for stride calculation
+ * - tile_overlap_size_x, tile_overlap_size_y: Overlap sizes used to compute avoid bounds
+ *
+ * @note Supports non-uniform tile sizes at the grid boundaries.
+ */
+template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS=2, unsigned short BANK_ID=0, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
+static void stridedTileStream2mem3D(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, ap_uint<MEM_DATA_WIDTH>* mem_out, const ops::hls::MemConfigTile& config)
+{
+    constexpr unsigned short BANK_SHIFT = LOG2(NUM_BANKS);
+    constexpr unsigned short BANK_MASK = NUM_BANKS - 1;
+    
+    const bool is_additional_row = (config.grid_size_y & BANK_MASK) > BANK_ID;
+    const unsigned short bank_grid_size_y = (config.grid_size_y >> BANK_SHIFT) + (is_additional_row ? 1 : 0);
+    const unsigned int bank_z_stride = bank_grid_size_y * config.grid_xblocks;
     const unsigned short z_diff = config.end_z - config.start_z;
-    const unsigned short tile_size_y_mul_z_diff = config.tile_size_y * z_diff;
-    const unsigned short last_tile_size_y_mul_z_diff = config.last_tile_size_y * z_diff;
+
+    #ifdef DEBUG_LOG_PRINT
+    printf("|HLS DEBUG_LOG|%s|bank-%u| Initializing 3D write. start_offset:%u, tile_count_y:%u, tile_count_x:%u, z_diff:%u\n", 
+           __func__, BANK_ID, config.start_offset, config.tile_count_y, config.tile_count_x, z_diff);
+    #endif
 
     for (unsigned short tile_y = 0; tile_y < config.tile_count_y; tile_y++)
     {
-        const unsigned short tile_size_y = tile_y == (config.tile_count_y -1) ? config.last_tile_size_y : config.tile_size_y;
-        const unsigned short realized_tile_size_y_mul_z_diff = tile_y == (config.tile_count_y -1) ? last_tile_size_y_mul_z_diff : tile_size_y_mul_z_diff;
-        const unsigned int tile_y_offset = tile_y * config.effective_tile_size_y * config.grid_xblocks;
+        unsigned int global_y_start = tile_y * config.effective_tile_size_y;
+        ap_uint<BANK_SHIFT> start_bank = global_y_start;
+        ap_uint<BANK_SHIFT> bank_offset_in_tile = BANK_ID - start_bank; 
+
+        // 1. Calculate how many global avoid rows physically reside in this bank
+        const unsigned short global_avoid_y = (tile_y == 0) ? 0 : (config.tile_overlap_size_y >> 1);
+        const unsigned short avoid_remainder = global_avoid_y & BANK_MASK;
+        const bool avoid_is_additional = bank_offset_in_tile < avoid_remainder;
+        const unsigned short local_avoid_y = (global_avoid_y >> BANK_SHIFT) + (avoid_is_additional ? 1 : 0);
+
+        const unsigned short tile_size_y = (tile_y == config.tile_count_y - 1) ? config.last_tile_size_y : config.tile_size_y;
+        
+        // 2. Resolve the local boundary for tile_y inside this bank
+        const unsigned short remainder = tile_size_y & BANK_MASK;
+        const bool tile_is_additional_row = bank_offset_in_tile < remainder;
+        const unsigned short local_tile_size_y = (tile_size_y >> BANK_SHIFT) + (tile_is_additional_row ? 1 : 0);
+        
+        // Physical offset for this tile in the specific memory bank's Y dimension
+        const unsigned int local_tile_y_offset = ((global_y_start + bank_offset_in_tile) >> BANK_SHIFT) * config.grid_xblocks;
 
         for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++)
         {
-            const unsigned int abs_row_id_x_offset = tile_x * realized_tile_size_y_mul_z_diff;
+            const unsigned short base_avoid_x = tile_x == 0 ? 0 : config.tile_overlap_size_x >> 1;
+            
             const unsigned int tile_x_offset = tile_x * config.effective_tile_size_x; 
+            const unsigned short tile_size_x = (tile_x == config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
 
             for (unsigned short k = 0; k < z_diff; k++)
             {
-                const unsigned int k_offset = k * config.grid_xblocks * config.grid_size_y;
+                const unsigned int k_offset = k * bank_z_stride;
 
-                for (unsigned short j = stride_start; j < tile_size_y; j+=2)
+                for (unsigned short j = 0; j < local_tile_size_y; j++)
                 {
-                    // #pragma HLS PIPELINE // TODO: Check whether this is effective or not. Most probaly not required as stream2mem already has PIPELINE pragma inside.
-                    const unsigned short tile_size_x = tile_x == (config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
-                    
                     unsigned int offset_1 = config.start_offset + tile_x_offset;
-                    unsigned int offset_2 = k_offset + tile_y_offset;
-                    unsigned int offset_3 = offset_1 + offset_2;
-                    unsigned int j_offset  = j * config.grid_xblocks;
-                    unsigned int offset = offset_3 + j_offset;
-                    #ifdef DEBUG_LOG_PRINT
-                        printf("|HLS DEBUG_LOG|%s| offset:%u tile_y:%u tile_x:%u k:%u j:%u tile_size_x:%u\n",
-                               __func__,
-                               (unsigned int)offset,
-                               (unsigned int)tile_y,
-                               (unsigned int)tile_x,
-                               (unsigned int)k,
-                               (unsigned int)j,
-                               (unsigned int)tile_size_x);
-                    #endif
-                    stream2mem<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>((ap_uint<MEM_DATA_WIDTH>* )(mem_out + offset), strm_in, tile_size_x);
+                    unsigned int offset_2 = k_offset + local_tile_y_offset;
+                    unsigned int j_offset = j * config.grid_xblocks;
+                    unsigned int offset = offset_1 + offset_2 + j_offset;
+
+                    // 3. If in the Y-avoid zone, mask the entire row out by forcing avoid_x == tile_size_x
+                    unsigned short current_avoid_x = (j < local_avoid_y) ? tile_size_x : base_avoid_x;
+
+                #ifdef DEBUG_LOG_PRINT
+                    printf("|HLS DEBUG_LOG|%s|bank-%u| offset_1:%u offset_2:%u j_offset:%u final_offset:%u | tile_y:%u tile_x:%u k:%u j:%u current_avoid_x:%u tile_size_x:%u\n",
+                                __func__, BANK_ID, offset_1, offset_2, j_offset, offset, (unsigned int)tile_y, (unsigned int)tile_x, (unsigned int)k, (unsigned int)j, (unsigned int)current_avoid_x, (unsigned int)tile_size_x);
+                #endif
+                    stream2memWithAvoidV2<MEM_DATA_WIDTH, IN_ITR>((ap_uint<MEM_DATA_WIDTH>* )(mem_out + offset), strm_in, tile_size_x, current_avoid_x);
                 }
             }
         }
@@ -4626,333 +5382,411 @@ static void stridedTileStream2mem(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_i
 // }
 
 /**
- * @brief Merges two input streams into a single output stream based on linearized row parity within a tiled layout.
+ * @brief Merges an array of parallel input streams into a single output stream based on 2D row parity.
  *
- * @details This function reads data from two input streams and writes to an output stream, alternating
- * between the streams based on the computed absolute row index within the tiled 3D region. Even row
- * indices read from strm_in_b1, odd indices read from strm_in_b2.
+ * @details This component acts as a deterministic, static multiplexer bridging the decoupled memory datamovers 
+ * and the central compute PE. It sequentially iterates over the complete 2D grid space (tiled in X, full span in Y), 
+ * dynamically extracting data from the correct bank stream. Routing is dictated purely by the global Y-row 
+ * index (`j`), utilizing a highly efficient power-of-two bitwise mask (`BANK_MASK`) to resolve the target bank 
+ * ID in hardware without pipeline stalls.
  *
- * @tparam MEM_DATA_WIDTH The bit-width of each stream element
- * @tparam IN_ITR Initiation interval for the pipeline (default: 2)
+ * @tparam MEM_DATA_WIDTH The bit-width of each stream element.
+ * @tparam NUM_BANKS The total number of physical memory banks/streams. Must be a power of two.
+ * @tparam IN_ITR Initiation interval for the pipeline (default: 2).
  *
- * @param[in] strm_in_b1 Reference to the first input HLS stream (bank 1)
- * @param[in] strm_in_b2 Reference to the second input HLS stream (bank 2)
- * @param[out] strm_out Reference to the output HLS stream receiving merged data
- * @param[in] config Reference to MemConfigTile configuration containing:
- *        - start_z, end_z: Z-dimension range
- *        - tile_size_y, last_tile_size_y: Y-tile dimensions
- *        - tile_size_x, last_tile_size_x: X-tile dimensions
- *        - tile_count_x, tile_count_y: Number of tiles in each dimension
+ * @param[in] strm_in Array of input HLS streams corresponding to each interleaved memory bank.
+ * @param[out] strm_out Reference to the merged sequential output HLS stream feeding the compute kernel.
+ * @param[in] config Reference to MemConfigTile configuration guiding the global coordinate bounds.
  *
- * @note Stream selection alternates based on the absolute linearized row index parity
- * @note Debug logging available when DEBUG_LOG is defined
- *
- * @see ops::hls::MemConfigTile
- * @see ops::hls::stridedTileMem2stream
- * @see ops::hls::stridedTileStream2mem
+ * @note Enforces a static compile-time check ensuring `NUM_BANKS` is a power of two.
  */
-template <unsigned short MEM_DATA_WIDTH,  unsigned short IN_ITR=2>
-static void combineSteams(
-    ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in_b1,
-    ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in_b2,
+template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short IN_ITR=2>
+static void combineStreams2D(
+    ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in[NUM_BANKS],
     ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out,
     const ops::hls::MemConfigTile& config)
 {
-    // #pragma HLS INLINE off
+#ifndef __SYNTHESIS__
+    static_assert((NUM_BANKS != 0) && ((NUM_BANKS & (NUM_BANKS - 1)) == 0), "NUM_BANKS must be a power of two");
+#endif
+
+#ifdef DEBUG_LOG_PRINT
+	printf("|HLS DEBUG_LOG|%s| Begining \n", __func__);
+#endif 
+	constexpr unsigned short BANK_MASK = NUM_BANKS - 1;
+
+    for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++)
+    {
+        const unsigned short tile_size_x = tile_x == (config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
+
+        for (unsigned short j = 0; j < config.grid_size_y; j++)
+        {
+            unsigned int bank_id = j & BANK_MASK;
+
+            for (unsigned short i = 0; i < tile_size_x; i++)
+            {
+            #pragma HLS PIPELINE II=IN_ITR
+                ap_uint<MEM_DATA_WIDTH> data;
+
+				data = strm_in[bank_id].read();
+#ifdef DEBUG_LOG_PRINT
+				printf("|HLS DEBUG_LOG|%s| Reading and forwaring tile:%u, i: %u, j:%u, bank: %d, val=(\n", __func__, tile_x, i, j, bank_id);
+
+				for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
+				{
+					DataConv conv;
+					conv.i = data.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+					printf("%f,", conv.f);
+				}
+				printf(")\n");
+#endif
+                strm_out.write(data);
+            }
+        }
+    }
+#ifdef DEBUG_LOG_PRINT
+	printf("|HLS DEBUG_LOG|%s| Exiting \n", __func__);
+#endif 
+}
+
+/**
+ * @brief Merges multiple input streams into a single output stream based on row parity for a 3D tiled layout.
+ *
+ * @details This function reads data from an array of NUM_BANKS input streams and writes to an output stream,
+ * alternating between the streams based on the computed absolute row index within the tiled 3D region.
+ * Uses bitwise AND operations for power-of-two NUM_BANKS optimization to determine the correct bank.
+ *
+ * @tparam MEM_DATA_WIDTH The bit-width of each stream element
+ * @tparam NUM_BANKS The number of memory banks/streams. Must be a power of two.
+ * @tparam IN_ITR Initiation interval for the pipeline (default: 2)
+ *
+ * @param[in] strm_in Array of input HLS streams corresponding to each bank.
+ * @param[out] strm_out Reference to the output HLS stream receiving merged data
+ * @param[in] config Reference to MemConfigTile configuration containing:
+ * - start_z, end_z: Z-dimension range
+ * - tile_size_y, last_tile_size_y: Y-tile dimensions
+ * - tile_size_x, last_tile_size_x: X-tile dimensions
+ * - tile_count_x, tile_count_y: Number of tiles in each dimension
+ *
+ * @note Stream selection relies on an unrolled multiplexer to satisfy HLS dataflow constraints.
+ * @note Debug logging available when DEBUG_LOG_PRINT is defined
+ *
+ * @see ops::hls::MemConfigTile
+ * @see ops::hls::stridedTileMem2stream3D
+ * @see ops::hls::stridedTileStream2mem3D
+ */
+template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short IN_ITR=2>
+static void combineStreams3D(
+    ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in[NUM_BANKS],
+    ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out,
+    const ops::hls::MemConfigTile& config)
+{
+#ifndef __SYNTHESIS__
+    static_assert((NUM_BANKS != 0) && ((NUM_BANKS & (NUM_BANKS - 1)) == 0), "NUM_BANKS must be a power of two");
+#endif
+
+#ifdef DEBUG_LOG_PRINT
+    printf("|HLS DEBUG_LOG|%s| Beginning 3D stream combination \n", __func__);
+#endif 
+    constexpr unsigned short BANK_SHIFT = LOG2(NUM_BANKS);
+    constexpr unsigned short BANK_MASK = NUM_BANKS - 1;
     const unsigned short z_diff = config.end_z - config.start_z;
-    const unsigned short tile_size_y_mul_z_diff = config.tile_size_y * z_diff;
-    const unsigned short last_tile_size_y_mul_z_diff = config.last_tile_size_y * z_diff;
 
     for (unsigned short tile_y = 0; tile_y < config.tile_count_y; tile_y++)
     {
-        const unsigned short tile_size_y = tile_y == (config.tile_count_y -1) ? config.last_tile_size_y : config.tile_size_y;
-        // const unsigned short realized_tile_size_y_mul_z_diff = tile_y == (config.tile_count_y -1) ? last_tile_size_y_mul_z_diff : tile_size_y_mul_z_diff;
-        // const unsigned int tile_y_offset = tile_y * config.effective_tile_size_y * config.grid_xblocks;
+        const unsigned short tile_size_y = (tile_y == config.tile_count_y -1) ? config.last_tile_size_y : config.tile_size_y;
+        ap_uint<BANK_SHIFT> start_bank = tile_y * config.effective_tile_size_y;
 
         for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++)
         {
-            // const unsigned int abs_row_id_x_offset = tile_x * realized_tile_size_y_mul_z_diff;
-            // const unsigned int tile_x_offset = tile_x * config.effective_tile_size_x;
+            const unsigned short tile_size_x = (tile_x == config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
 
             for (unsigned short k = 0; k < z_diff; k++)
             {
-                // const unsigned int abs_row_id_y_offset_k = k * realized_tile_size_y_mul_z_diff;
-
                 for (unsigned short j = 0; j < tile_size_y; j++)
                 {
-                    const unsigned short tile_size_x = tile_x == (config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
-                    
-                    // unsigned int abs_x_row_id = j + abs_row_id_y_offset_k + abs_row_id_x_offset + abs_row_id_y_offset;
-                    unsigned int local_tile_row_id = j;
+                    ap_uint<BANK_SHIFT> bank_id_init = j & BANK_MASK;
+                    ap_uint<BANK_SHIFT> bank_id = bank_id_init + start_bank;
 
                     for (unsigned short i = 0; i < tile_size_x; i++)
                     {
-                    #pragma HLS PIPELINE //TODO: Check whether this is effective or not. Most probaly not required as mem2stream already has PIPELINE pragma inside.
-                        if (local_tile_row_id % 2 == 0)
+                    #pragma HLS PIPELINE II=IN_ITR
+                        ap_uint<MEM_DATA_WIDTH> data = strm_in[bank_id].read();
+                        
+        #ifdef DEBUG_LOG_PRINT
+                        printf("|HLS DEBUG_LOG|%s| Reading and forwarding tile_y:%u, tile_x:%u, k:%u, j:%u, i:%u, bank:%u, val=(\n", __func__, tile_y, tile_x, k, j, i, (unsigned int)bank_id);
+
+                        for (unsigned k_idx = 0; k_idx < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k_idx++)
                         {
-                            #ifdef DEBUG_LOG_PRINT
-                                printf("|HLS DEBUG_LOG|%s| reading from bank 1. tile_y:%u tile_x:%u k:%u j:%u i:%u local_tile_row_id:%u\n",
-                                       __func__,
-                                       (unsigned int)tile_y,
-                                       (unsigned int)tile_x,
-                                       (unsigned int)k,
-                                       (unsigned int)j,
-                                       (unsigned int)i,
-                                       (unsigned int)local_tile_row_id);
-                            #endif
-                            ap_uint<MEM_DATA_WIDTH> data_b1 = strm_in_b1.read();
-#ifdef DEBUG_LOG_PRINT
-                                    printf("   |HLS DEBUG_LOG||%s| read data_b1 val=(", __func__);
-                                    ops::hls::DataConv tmp;
-                                    for (unsigned n = 0; n < MEM_DATA_WIDTH; n+=32)
-                                    {
-                                        tmp.i = data_b1.range(n + 32 - 1, n);
-                                        printf("%f,", tmp.f);
-                                    }
-                                    printf(")\n");
-#endif
-                            strm_out.write(data_b1);
+                            DataConv conv;
+                            conv.i = data.range((k_idx+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k_idx * DEBUG_LOG_SIZE_OF * 8);
+                            printf("%f,", conv.f);
                         }
-                        else
-                        {
-#ifdef DEBUG_LOG_PRINT
-                                printf("|HLS DEBUG_LOG|%s| reading from bank 2. tile_y:%u tile_x:%u k:%u j:%u i:%u local_tile_row_id:%u\n",
-                                        __func__,
-                                        (unsigned int)tile_y,
-                                        (unsigned int)tile_x,
-                                        (unsigned int)k,
-                                        (unsigned int)j,
-                                        (unsigned int)i,
-                                        (unsigned int)local_tile_row_id);
-#endif
-                            ap_uint<MEM_DATA_WIDTH> data_b2 = strm_in_b2.read();
-#ifdef DEBUG_LOG_PRINT
-                                    printf("   |HLS DEBUG_LOG||%s| read data_b2 val=(", __func__);
-                                    ops::hls::DataConv tmp;
-                                    for (unsigned n = 0; n < MEM_DATA_WIDTH; n+=32)
-                                    {
-                                        tmp.i = data_b2.range(n + 32 - 1, n);
-                                        printf("%f,", tmp.f);
-                                    }
-                                    printf(")\n");
-#endif
-                            strm_out.write(data_b2);
-                        }
+                        printf(")\n");
+        #endif
+                        strm_out.write(data);
                     }
                 }
             }
         }
     }
+#ifdef DEBUG_LOG_PRINT
+    printf("|HLS DEBUG_LOG|%s| Exiting \n", __func__);
+#endif 
 }
 
 /**
- * @brief Splits an input stream into two output streams based on linearized row parity within a tiled layout.
+ * @brief Demultiplexes a sequential data stream into parallel bank-specific streams based on 2D row parity.
  *
- * @details This function reads data from an input stream and writes to two output streams, alternating
- * between the streams based on the computed absolute row index within the tiled 3D region. Even row
- * indices are written to strm_out_b1, odd indices to strm_out_b2.
+ * @details This component acts as a deterministic demultiplexer routing output data from the central compute PE 
+ * back to the isolated, bank-specific datamovers. It iterates over the complete 2D grid space (tiled in X, 
+ * full span in Y) and routes elements based on the global Y-row index. It uses a power-of-two bitwise mask 
+ * (`BANK_MASK`) for zero-cost hardware routing, forwarding the payload to the corresponding index in the `strm_out` array.
+ *
+ * @tparam MEM_DATA_WIDTH The bit-width of each stream element.
+ * @tparam NUM_BANKS The total number of physical memory banks/streams. Must be a power of two.
+ * @tparam IN_ITR Initiation interval for the pipeline (default: 2).
+ *
+ * @param[in] strm_in Reference to the sequential input HLS stream returning from the compute kernel.
+ * @param[out] strm_out Array of output HLS streams corresponding to each interleaved memory bank.
+ * @param[in] config Reference to MemConfigTile configuration guiding the global coordinate bounds.
+ *
+ * @note Enforces a static compile-time check ensuring `NUM_BANKS` is a power of two.
+ */
+template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short IN_ITR=2>
+static void splitStream2D(
+    ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
+    ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out[NUM_BANKS],
+    const ops::hls::MemConfigTile& config)
+{
+#ifndef __SYNTHESIS__
+    static_assert((NUM_BANKS != 0) && ((NUM_BANKS & (NUM_BANKS - 1)) == 0), "NUM_BANKS must be a power of two");
+#endif
+
+#ifdef DEBUG_LOG_PRINT
+	printf("|HLS DEBUG_LOG|%s| Begining \n", __func__);
+#endif 
+	constexpr unsigned short BANK_MASK = NUM_BANKS - 1;
+
+    for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++)
+    {
+        const unsigned short tile_size_x = tile_x == (config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
+        
+        for (unsigned short j = 0; j < config.grid_size_y; j++)
+        {
+            unsigned int bank_id = j & BANK_MASK; 
+            
+            for (unsigned short i = 0; i < tile_size_x; i++)
+            {
+            #pragma HLS PIPELINE II=IN_ITR
+                ap_uint<MEM_DATA_WIDTH> data = strm_in.read();
+#ifdef DEBUG_LOG_PRINT
+				printf("|HLS DEBUG_LOG|%s| Reading and forwaring tile:%u, i: %u, j:%u, bank: %d, val=(\n", __func__, tile_x, i, j, bank_id);
+
+				for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
+				{
+					DataConv conv;
+					conv.i = data.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+					printf("%f,", conv.f);
+				}
+				printf(")\n");
+#endif
+                strm_out[bank_id].write(data);
+            }
+        }
+    }
+#ifdef DEBUG_LOG_PRINT
+	printf("|HLS DEBUG_LOG|%s| Exit \n", __func__);
+#endif 
+}
+
+/**
+ * @brief Splits an input stream into multiple output streams based on row parity for a 3D tiled layout.
+ *
+ * @details This function reads data from an input stream and writes to an array of NUM_BANKS output streams.
+ * Routing is determined by the absolute row index within the tiled 3D region. 
+ * Uses bitwise AND operations for power-of-two NUM_BANKS optimization.
  *
  * @tparam MEM_DATA_WIDTH The bit-width of each stream element
+ * @tparam NUM_BANKS The number of memory banks/streams. Must be a power of two.
  * @tparam IN_ITR Initiation interval for the pipeline (default: 2)
  *
  * @param[in] strm_in Reference to the input HLS stream containing the data to be split
- * @param[out] strm_out_b1 Reference to the first output HLS stream (bank 1)
- * @param[out] strm_out_b2 Reference to the second output HLS stream (bank 2)
+ * @param[out] strm_out Array of output HLS streams corresponding to each bank.
  * @param[in] config Reference to MemConfigTile configuration containing:
- *        - start_z, end_z: Z-dimension range
- *        - tile_size_y, last_tile_size_y: Y-tile dimensions
- *        - tile_size_x, last_tile_size_x: X-tile dimensions
- *        - tile_count_x, tile_count_y: Number of tiles in each dimension
+ * - start_z, end_z: Z-dimension range
+ * - tile_size_y, last_tile_size_y: Y-tile dimensions
+ * - tile_size_x, last_tile_size_x: X-tile dimensions
+ * - tile_count_x, tile_count_y: Number of tiles in each dimension
  *
- * @note Stream selection alternates based on the absolute linearized row index parity
- * @note Debug logging available when DEBUG_LOG is defined
+ * @note Stream selection relies on an unrolled demultiplexer to satisfy HLS dataflow constraints.
+ * @note Debug logging available when DEBUG_LOG_PRINT is defined
  *
  * @see ops::hls::MemConfigTile
- * @see ops::hls::stridedTileMem2stream
- * @see ops::hls::stridedTileStream2mem
+ * @see ops::hls::stridedTileMem2stream3D
+ * @see ops::hls::stridedTileStream2mem3D
  */
-template <unsigned short MEM_DATA_WIDTH, unsigned short IN_ITR=2>
-static void splitStream(
+template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short IN_ITR=2>
+static void splitStream3D(
     ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
-    ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out_b1,
-    ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out_b2,
+    ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out[NUM_BANKS],
     const ops::hls::MemConfigTile& config)
 {
-    // #pragma HLS INLINE off
+#ifndef __SYNTHESIS__
+    static_assert((NUM_BANKS != 0) && ((NUM_BANKS & (NUM_BANKS - 1)) == 0), "NUM_BANKS must be a power of two");
+#endif
+
+#ifdef DEBUG_LOG_PRINT
+    printf("|HLS DEBUG_LOG|%s| Beginning 3D stream split \n", __func__);
+#endif 
+    constexpr unsigned short BANK_SHIFT = LOG2(NUM_BANKS);
+    constexpr unsigned short BANK_MASK = NUM_BANKS - 1;
     const unsigned short z_diff = config.end_z - config.start_z;
-    const unsigned short tile_size_y_mul_z_diff = config.tile_size_y * z_diff;
-    const unsigned short last_tile_size_y_mul_z_diff = config.last_tile_size_y * z_diff;
 
     for (unsigned short tile_y = 0; tile_y < config.tile_count_y; tile_y++)
     {
-        const unsigned short tile_size_y = tile_y == (config.tile_count_y -1) ? config.last_tile_size_y : config.tile_size_y;
-        // const unsigned short realized_tile_size_y_mul_z_diff = tile_y == (config.tile_count_y -1) ? last_tile_size_y_mul_z_diff : tile_size_y_mul_z_diff;
+        const unsigned short tile_size_y = (tile_y == config.tile_count_y -1) ? config.last_tile_size_y : config.tile_size_y;
+        ap_uint<BANK_SHIFT> start_bank = tile_y * config.effective_tile_size_y;
 
         for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++)
         {
-            // const unsigned int abs_row_id_x_offset = tile_x * realized_tile_size_y_mul_z_diff;
+            const unsigned short tile_size_x = (tile_x == config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
 
             for (unsigned short k = 0; k < z_diff; k++)
             {
-                // const unsigned int abs_row_id_y_offset_k = k * realized_tile_size_y_mul_z_diff;
-
                 for (unsigned short j = 0; j < tile_size_y; j++)
                 {
-                    const unsigned short tile_size_x = tile_x == (config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
-                    
-                    unsigned int local_tile_row_id = j;// + abs_row_id_y_offset_k;
+                    ap_uint<BANK_SHIFT> bank_id_init = j & BANK_MASK;
+                    ap_uint<BANK_SHIFT> bank_id = bank_id_init + start_bank;
+
                     for (unsigned short i = 0; i < tile_size_x; i++)
                     {
-                    #pragma HLS PIPELINE //TODO: Check whether this is effective or not. Most probaly not required as mem2stream already has PIPELINE pragma inside.
+                    #pragma HLS PIPELINE II=IN_ITR
                         ap_uint<MEM_DATA_WIDTH> data = strm_in.read();
-#ifdef DEBUG_LOG_PRINT
-                                printf("   |HLS DEBUG_LOG||%s| read data val=(", __func__);
-                                ops::hls::DataConv tmp;
-                                for (unsigned n = 0; n < MEM_DATA_WIDTH; n+=32)
-                                {
-                                    tmp.i = data.range(n + 32 - 1, n);
-                                    printf("%f,", tmp.f);
-                                }
-                                printf(")\n");
-#endif
-                        if (local_tile_row_id % 2 == 0)
+
+        #ifdef DEBUG_LOG_PRINT
+                        printf("|HLS DEBUG_LOG|%s| Reading and forwarding tile_y:%u, tile_x:%u, k:%u, j:%u, i:%u, bank:%u, val=(\n", __func__, tile_y, tile_x, k, j, i, (unsigned int)bank_id);
+
+                        for (unsigned k_idx = 0; k_idx < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k_idx++)
                         {
-#ifdef DEBUG_LOG_PRINT
-                                printf("|HLS DEBUG_LOG|%s| writing to bank 1. tile_y:%u tile_x:%u k:%u j:%u i:%u local_tile_row_id:%u\n",
-                                       __func__,
-                                       (unsigned int)tile_y,
-                                       (unsigned int)tile_x,
-                                       (unsigned int)k,
-                                       (unsigned int)j,
-                                       (unsigned int)i,
-                                       (unsigned int)local_tile_row_id);
-                                printf("|HLS DEBUG_LOG|%s| writing data to bank 1\n", __func__);
-#endif
-                            strm_out_b1.write(data);
+                            DataConv conv;
+                            conv.i = data.range((k_idx+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k_idx * DEBUG_LOG_SIZE_OF * 8);
+                            printf("%f,", conv.f);
                         }
-                        else
-                        {
-#ifdef DEBUG_LOG_PRINT
-                                printf("|HLS DEBUG_LOG|%s| writing to bank 2. tile_y:%u tile_x:%u k:%u j:%u i:%u local_tile_row_id:%u\n",
-                                       __func__,
-                                       (unsigned int)tile_y,
-                                       (unsigned int)tile_x,
-                                       (unsigned int)k,
-                                       (unsigned int)j,
-                                       (unsigned int)i,
-                                       (unsigned int)local_tile_row_id);
-                                printf("|HLS DEBUG_LOG|%s| writing data to bank 2\n", __func__);
-#endif
-                            strm_out_b2.write(data);
-                        }
+                        printf(")\n");
+        #endif
+                        strm_out[bank_id].write(data);
                     }
                 }
             }
         }
     }
+#ifdef DEBUG_LOG_PRINT
+    printf("|HLS DEBUG_LOG|%s| Exit \n", __func__);
+#endif 
 }
 
-/**
- * @brief 	mem2streamTiled reads from a memory location in tiled manner to an hls stream.
- *  		This is optimized to read from AXI4 with burst and to utilize width maximum througput
- *          by utilizing two banks to read from.
- *
- * @tparam MEM_DATA_WIDTH : Data width of the AXI4 port and the hls stream port
- * @tparam IN_ITR: II of the mem read
- * @tparam BURST_SIZE : Burst length of the AXI4 (max beats < 256)
- * 
- *
- * @param mem_in : input memory port
- * @param stream_out : output hls-stream
- * @param config : MemconfigTile to guide reading
- */
-template <unsigned short MEM_DATA_WIDTH,  unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-void mem2streamTiled(ap_uint<MEM_DATA_WIDTH>* mem_in_b1,
-                ap_uint<MEM_DATA_WIDTH>* mem_in_b2,
-				::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out,
-				const ops::hls::MemConfigTile& config)
-{
-#ifdef DEBUG_LOG_PRINT
-	printf("|HLS DEBUG_LOG|%s| starting\n", __func__);
-#endif
-	if (config.isContinous)
-	{
-#ifdef DEBUG_LOG_PRINT
-	printf("|HLS DEBUG_LOG|%s| continuous read\n", __func__);
-#endif
+// /**
+//  * @brief 	mem2streamTiled reads from a memory location in tiled manner to an hls stream.
+//  *  		This is optimized to read from AXI4 with burst and to utilize width maximum througput
+//  *          by utilizing two banks to read from.
+//  *
+//  * @tparam MEM_DATA_WIDTH : Data width of the AXI4 port and the hls stream port
+//  * @tparam IN_ITR: II of the mem read
+//  * @tparam BURST_SIZE : Burst length of the AXI4 (max beats < 256)
+//  * 
+//  *
+//  * @param mem_in : input memory port
+//  * @param stream_out : output hls-stream
+//  * @param config : MemconfigTile to guide reading
+//  */
+// template <unsigned short MEM_DATA_WIDTH,  unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
+// void mem2streamTiled(ap_uint<MEM_DATA_WIDTH>* mem_in_b1,
+//                 ap_uint<MEM_DATA_WIDTH>* mem_in_b2,
+// 				::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out,
+// 				const ops::hls::MemConfigTile& config)
+// {
+// #ifdef DEBUG_LOG_PRINT
+// 	printf("|HLS DEBUG_LOG|%s| starting\n", __func__);
+// #endif
+// 	if (config.isContinous)
+// 	{
+// #ifdef DEBUG_LOG_PRINT
+// 	printf("|HLS DEBUG_LOG|%s| continuous read\n", __func__);
+// #endif
 
-#ifdef DEBUG_LOG_PRINT
-	printf("|HLS DEBUG_LOG|%s| init offset:%d, size_bytes:%d\n", __func__, config.start_offset, config.total_size_bytes);
-#endif
-	ops::hls::mem2stream<MEM_DATA_WIDTH>((ap_uint<MEM_DATA_WIDTH>* )(mem_in_b1 + config.start_offset), strm_out, config.total_xblocks);
-	}
-	else
-	{
-        static ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in_b1;
-        #pragma HLS STREAM variable = strm_in_b1
-        static ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in_b2;
-        #pragma HLS STREAM variable = strm_in_b2
-        #pragma HLS DATAFLOW
-        stridedTileMem2stream<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(mem_in_b1, strm_in_b1, config, 0);
-        stridedTileMem2stream<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(mem_in_b2, strm_in_b2, config, 1);
-        combineSteams<MEM_DATA_WIDTH, IN_ITR>(strm_in_b1, strm_in_b2, strm_out, config);
-	}
-#ifdef DEBUG_LOG_PRINT
-	printf("|HLS DEBUG_LOG|%s| exiting.\n"
-			, __func__);
-#endif
-}
+// #ifdef DEBUG_LOG_PRINT
+// 	printf("|HLS DEBUG_LOG|%s| init offset:%d, size_bytes:%d\n", __func__, config.start_offset, config.total_size_bytes);
+// #endif
+// 	ops::hls::mem2stream<MEM_DATA_WIDTH>((ap_uint<MEM_DATA_WIDTH>* )(mem_in_b1 + config.start_offset), strm_out, config.total_xblocks);
+// 	}
+// 	else
+// 	{
+//         static ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in_b1;
+//         #pragma HLS STREAM variable = strm_in_b1
+//         static ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in_b2;
+//         #pragma HLS STREAM variable = strm_in_b2
+//         #pragma HLS DATAFLOW
+//         stridedTileMem2stream<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(mem_in_b1, strm_in_b1, config, 0);
+//         stridedTileMem2stream<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(mem_in_b2, strm_in_b2, config, 1);
+//         combineSteams<MEM_DATA_WIDTH, IN_ITR>(strm_in_b1, strm_in_b2, strm_out, config);
+// 	}
+// #ifdef DEBUG_LOG_PRINT
+// 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
+// 			, __func__);
+// #endif
+// }
 
-/**
- * @brief 	stream2memTiled writes from a stream to memory in tiled manner.
- *  		This is optimized to write to AXI4 with burst and to utilize maximum throughput
- *          by utilizing two banks to write to.
- *
- * @tparam MEM_DATA_WIDTH : Data width of the AXI4 port and the hls stream port
- * @tparam IN_ITR: II of the mem write
- * @tparam BURST_SIZE : Burst length of the AXI4 (max beats < 256)
- *
- * @param mem_out_b1 : output memory port for bank 1
- * @param mem_out_b2 : output memory port for bank 2
- * @param stream_in : input hls-stream
- * @param config : MemConfigTile to guide writing
- */
-template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-void stream2memTiled(ap_uint<MEM_DATA_WIDTH>* mem_out_b1,
-                ap_uint<MEM_DATA_WIDTH>* mem_out_b2,
-                ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
-				const ops::hls::MemConfigTile& config)
-{
-#ifdef DEBUG_LOG_PRINT
-	printf("|HLS DEBUG_LOG|%s| starting\n", __func__);
-#endif
-	if (config.isContinous)
-	{
-#ifdef DEBUG_LOG_PRINT
-		printf("|HLS DEBUG_LOG|%s| continuous write\n", __func__);
-#endif
+// /**
+//  * @brief 	stream2memTiled writes from a stream to memory in tiled manner.
+//  *  		This is optimized to write to AXI4 with burst and to utilize maximum throughput
+//  *          by utilizing two banks to write to.
+//  *
+//  * @tparam MEM_DATA_WIDTH : Data width of the AXI4 port and the hls stream port
+//  * @tparam IN_ITR: II of the mem write
+//  * @tparam BURST_SIZE : Burst length of the AXI4 (max beats < 256)
+//  *
+//  * @param mem_out_b1 : output memory port for bank 1
+//  * @param mem_out_b2 : output memory port for bank 2
+//  * @param stream_in : input hls-stream
+//  * @param config : MemConfigTile to guide writing
+//  */
+// template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
+// void stream2memTiled(ap_uint<MEM_DATA_WIDTH>* mem_out_b1,
+//                 ap_uint<MEM_DATA_WIDTH>* mem_out_b2,
+//                 ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
+// 				const ops::hls::MemConfigTile& config)
+// {
+// #ifdef DEBUG_LOG_PRINT
+// 	printf("|HLS DEBUG_LOG|%s| starting\n", __func__);
+// #endif
+// 	if (config.isContinous)
+// 	{
+// #ifdef DEBUG_LOG_PRINT
+// 		printf("|HLS DEBUG_LOG|%s| continuous write\n", __func__);
+// #endif
 
-#ifdef DEBUG_LOG_PRINT
-		printf("|HLS DEBUG_LOG|%s| init offset:%d, size_bytes:%d\n", __func__, config.start_offset, config.total_size_bytes);
-#endif
-		ops::hls::stream2mem<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>((ap_uint<MEM_DATA_WIDTH>* )(mem_out_b1 + config.start_offset), strm_in, config.total_xblocks);
-	}
-	else
-	{
-        static ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out_b1;
-        #pragma HLS STREAM variable = strm_out_b1
-        static ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out_b2;
-        #pragma HLS STREAM variable = strm_out_b2
-        #pragma HLS DATAFLOW
-        splitStream<MEM_DATA_WIDTH, IN_ITR>(strm_in, strm_out_b1, strm_out_b2, config);
-        stridedTileStream2mem<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(strm_out_b1, mem_out_b1,  config, 0);
-        stridedTileStream2mem<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(strm_out_b2, mem_out_b2,  config, 1);
-	}
-#ifdef DEBUG_LOG_PRINT
-	printf("|HLS DEBUG_LOG|%s| exiting.\n"
-			, __func__);
-#endif
-}
+// #ifdef DEBUG_LOG_PRINT
+// 		printf("|HLS DEBUG_LOG|%s| init offset:%d, size_bytes:%d\n", __func__, config.start_offset, config.total_size_bytes);
+// #endif
+// 		ops::hls::stream2mem<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>((ap_uint<MEM_DATA_WIDTH>* )(mem_out_b1 + config.start_offset), strm_in, config.total_xblocks);
+// 	}
+// 	else
+// 	{
+//         static ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out_b1;
+//         #pragma HLS STREAM variable = strm_out_b1
+//         static ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out_b2;
+//         #pragma HLS STREAM variable = strm_out_b2
+//         #pragma HLS DATAFLOW
+//         splitStream<MEM_DATA_WIDTH, IN_ITR>(strm_in, strm_out_b1, strm_out_b2, config);
+//         stridedTileStream2mem<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(strm_out_b1, mem_out_b1,  config, 0);
+//         stridedTileStream2mem<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(strm_out_b2, mem_out_b2,  config, 1);
+// 	}
+// #ifdef DEBUG_LOG_PRINT
+// 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
+// 			, __func__);
+// #endif
+// }
 /****************************** END of TILED ops *******************************/
 
 /**

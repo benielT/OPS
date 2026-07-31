@@ -12,6 +12,7 @@ from util import KernelProcess, findIdx, function_name
 import re
 import logging
 from cpp import optimizer
+import os
 
 class CppMPIOpenMP(Scheme):
     lang = Lang.find("cpp")
@@ -62,12 +63,12 @@ class CppHLS(Scheme):
     stencil_device_template = Path("cpp/hls/stencil_dev_hls.hpp.j2")
     master_kernel_template = Path("cpp/hls/master_kernel.cpp.j2")
     common_config_template = Path("cpp/hls/common_config_dev_hls.hpp.j2")
-    host_config_template = Path("cpp/hls/xrt_config.cfg.j2")
+    link_config_template = Path("cpp/hls/xrt_config.cfg.j2")
     
     loop_kernel_extension = "hpp"
     master_kernel_extension = "hpp"
     common_config_extension = "hpp"
-    host_config_extension = "cfg"
+    link_config_extension = "cfg"
     iterloop_device_inc_extension = "hpp"
     iterloop_device_src_extension = "cpp"
     iterloop_datamover_inc_extension = "hpp"
@@ -171,7 +172,8 @@ class CppHLS(Scheme):
                 prog=program,
                 ndim=program.ndim,
                 consts=consts,
-                config=config
+                config=config,
+                target=self.target.name
             ),
             self.iterloop_host_kernelwrap_extension
         )
@@ -460,7 +462,9 @@ class CppHLS(Scheme):
                  widen_stencil_disc_map = widen_stencil_desc_map,
                  widen_read_stencil_desc = widen_read_stencil_desc,
                  isTiling = program.isTiling(),
-                 tiles=program.getTileSizes()
+                 tiles=program.getTileSizes(),
+                 is_list_itr_par = isinstance(config["iter_par_factor"],list),
+                 target = self.target.name
                  ),self.loop_device_PE_extension)]
         )
     
@@ -477,27 +481,32 @@ class CppHLS(Scheme):
             ), self.common_config_extension
         ) 
     
-    def genConfigHost(
+    def genConfigLink(
         self,
         env: Environment,
         config: dict,
         app: Application,
         prog: Program
     ) -> Tuple[str, str]:
-        template = env.get_template(str(self.host_config_template))     
+        template = env.get_template(str(self.link_config_template))     
         
         if (config["HBM_tile_racks"] > 0):
             placer = FPGABankPlacer(config["tile_bank_placement_policy"], 
                                                 config["HBM_banks"], config["HBM_tile_racks"])
         else:
             placer = None
-            
+           
+        ops_install_path = os.getenv("OPS_INSTALL_PATH", None)
+        scripts_path = Path(ops_install_path, "../", "scripts").resolve()
+                                     
         return (template.render(
                 config=config,
                 app=app,
                 FPGABankPlacer = placer,
-                prog = prog
-            ), self.host_config_extension) 
+                prog = prog,
+                target = self.target.name,
+                scripts_path = scripts_path
+            ), self.link_config_extension) 
     
     def genStencilDecl(
         self,
@@ -513,6 +522,113 @@ class CppHLS(Scheme):
             ), self.stencil_device_extension
         )
 
+class CppTapa(CppHLS):
+    lang = Lang.find("cpp")
+    target = Target.find("tapa")
+
+    # loop_host_kernelwrap_template = Path("cpp/hls/loop_kernelwrap.hpp.j2")
+    loop_host_cpu_template = Path("cpp/hls/loop_host_cpu.hpp.j2")
+    # loop_device_inc_template = Path("cpp/hls/loop_dev_inc_hls.hpp.j2")
+    # loop_device_src_template = Path("cpp/hls/loop_dev_src_hls.cpp.j2")
+    # loop_datamover_inc_template = Path("cpp/hls/datamover_dev_inc_hls.hpp.j2")
+    # loop_datamover_src_template = Path("cpp/hls/datamover_dev_src_hls.cpp.j2")
+    loop_device_PE_template = Path("cpp/hls/loop_dev_PE_hls_V2.hpp.j2")
+    
+    iterloop_datamover_inc_template = Path("cpp/hls/tapa/iter_loop_datamover_dev_inc_hls.hpp.j2")
+    iterloop_datamover_src_template = Path("cpp/hls/tapa/iter_loop_datamover_dev_src_hls.cpp.j2")
+    iterloop_device_inc_template = Path("cpp/hls/tapa/iter_loop_dev_inc_hls.hpp.j2")
+    iterloop_device_src_template = Path("cpp/hls/tapa/iter_loop_dev_src_hls.cpp.j2")
+    iterloop_repeater_src_template = Path("cpp/hls/repeater.cpp.j2")
+    iterloop_host_kernelwrap_template = Path("cpp/hls/iter_loop_host_kernelwrap.hpp.j2")
+    sim_super_kernel_inc_template = Path("cpp/hls/tapa/sim_super_kernel.hpp.j2")
+    sim_super_kernel_src_template = Path("cpp/hls/tapa/sim_super_kernel.cpp.j2")
+    
+    # stencil_device_template = Path("cpp/hls/stencil_dev_hls.hpp.j2")
+    master_kernel_template = Path("cpp/hls/master_kernel.cpp.j2")
+    common_config_template = Path("cpp/hls/common_config_dev_hls.hpp.j2")
+    link_config_template = Path("cpp/hls/xrt_config.cfg.j2")
+    
+    loop_kernel_extension = "hpp"
+    master_kernel_extension = "hpp"
+    common_config_extension = "hpp"
+    link_config_extension = "cfg"
+    iterloop_device_inc_extension = "hpp"
+    iterloop_device_src_extension = "cpp"
+    iterloop_datamover_inc_extension = "hpp"
+    iterloop_datamover_src_extension = "cpp"
+    iterloop_repeater_src_extension = "cpp"
+    iterloop_host_kernelwrap_extension = "hpp"
+    loop_device_PE_extension = "hpp"
+    stencil_device_extension = "hpp"
+    sim_super_kernel_inc_extension = "hpp"
+    sim_super_kernel_src_extension = "cpp"
+
+    def genDeviceSimulation(
+        self,
+        env: Environment,
+        iterLoop: ops.IterLoop,
+        program: Program,
+        app: Application,
+        config: dict
+    ) -> Tuple[str, str]:
+        include_tamplate = env.get_template(str(self.sim_super_kernel_inc_template))
+        source_tamplate = env.get_template(str(self.sim_super_kernel_src_template))
+        
+        kernel_processor = KernelProcess()
+        consts = []
+        
+        for df_node in iterLoop.get_active_df_graph().getAllLoopNodes():
+                kernel_idx = df_node.node_uid
+                loop = df_node.loop
+                kernel_func = self.translateKernel(loop, program, app, kernel_idx)
+                kernel_func = kernel_processor.clean_kernel_func_text(kernel_func)
+                kernel_body, kernel_args = kernel_processor.get_kernel_body_and_arg_list(kernel_func)
+                kernel_body = self.hls_replace_accessors(kernel_body, kernel_args, loop, program)
+                kernel_consts = self.find_const_in_kernel(kernel_body, program.consts)
+                consts.extend(x for x in kernel_consts if x not in consts)
+                
+        return (
+            [include_tamplate.render(
+                config = config,
+                prog = program,
+                ilh = iterLoop,
+                consts = consts
+            ), self.sim_super_kernel_inc_extension],
+            [source_tamplate.render(
+                config = config,
+                prog = program,
+                ilh = iterLoop,
+                consts = consts,
+                is_list_itr_par = isinstance(config["iter_par_factor"],list)
+            ), self.sim_super_kernel_src_extension])
+    
+    def genSimLinkConfig(
+        self,
+        env: Environment,
+        config: dict,
+        app: Application
+    ) -> Tuple[str, str]:
+        link_config_template = env.get_template(str(self.link_config_template))
+        
+        if (config["HBM_tile_racks"] > 0):
+            placer = FPGABankPlacer(config["tile_bank_placement_policy"], 
+                                                config["HBM_banks"], config["HBM_tile_racks"])
+        else:
+            placer = None
+           
+        ops_install_path = os.getenv("OPS_INSTALL_PATH", None)
+        scripts_path = Path(ops_install_path, "../", "scripts").resolve()
+        
+        return([link_config_template.render(
+                app = app,
+                FPGABankPlacer = placer,
+                sim = True,
+                config = config,
+                target = self.target.name,
+                scripts_path = scripts_path
+            ), self.link_config_extension])
+        
+        
 class CppCuda(Scheme):
     lang = Lang.find("cpp")
     target = Target.find("cuda")
@@ -658,5 +774,6 @@ Scheme.register(CppMPIOpenMP)
 Scheme.register(CppCuda)
 Scheme.register(CppHip)
 Scheme.register(CppHLS)
+Scheme.register(CppTapa)
 Scheme.register(CppOpenMPOffload)
 Scheme.register(CppSycl)

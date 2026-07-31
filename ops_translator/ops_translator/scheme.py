@@ -51,7 +51,7 @@ class Scheme(Findable):
     ) -> List[Tuple[str, str]]:
         return None
     
-    def genConfigHost(
+    def genConfigLink(
         self,
         env: Environment,
         config: dict,

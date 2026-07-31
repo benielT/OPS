@@ -1,0 +1,13 @@
+hls/build/sw_emu
+hls/build/sw_emu/*
+hls/build/hw_emu
+hls/build/hw_emu/*
+_x
+_x/*
+.Xil
+.Xil/*
+*.log
+perf_profile.csv
+emconfig.json
+*.txt
+*.out

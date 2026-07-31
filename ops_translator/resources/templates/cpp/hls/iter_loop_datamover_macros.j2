@@ -1,0 +1,15 @@
+{% macro axis_name(arg) -%}
+    {%- if arg is not ops_rw -%}
+arg{{arg.id}}_axis_{{"out" if (arg is ops_read) else ("in" if (arg is ops_write))}}
+    {%- endif -%}
+{%- endmacro -%}
+{% macro axis_name_t2(arg, suffix) -%}
+arg{{arg.id}}_axis_{{suffix}}
+{%- endmacro -%}
+{% macro axis_name_t3(arg, infix, suffix=none) -%}
+    {%- if arg is not ops_rw and suffix==none -%}
+arg{{arg.id}}_{{infix}}_axis_{{"out" if (arg is ops_read) else ("in" if (arg is ops_write))}}
+    {%- else -%}
+arg{{arg.id}}_{{infix}}_axis_{{suffix}}
+    {%- endif -%}
+{%- endmacro -%}

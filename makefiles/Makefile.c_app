@@ -72,10 +72,20 @@ DEFINES += $(filter -D%, $(CXXFLAGS))
 	@echo "OPS_EXTENTIONS: ${OPS_GENERATED_SUFFIX}_hls"
 	@echo "OPS_GENERATED: ${OPS_GENERATED_HLS}"
 	which python3
-	python3 $(OPS_INSTALL_PATH)/../ops_translator/ops_translator $(VERBOSE) $(DUMP) $(DUMP_AST) $(OPS_GEN_DEBUG) --fpga $(OPS_TARGET_CONFIG_JSON) $(DEFINES) -DOPS_FPGA -I $(OPS_INSTALL_PATH)/c/include/ --file_paths $(OPS_FILES) -dff $(OPS_GEN_ISL_DF_FORMAT)
+	python3 $(OPS_INSTALL_PATH)/../ops_translator/ops_translator $(VERBOSE) $(DUMP) $(DUMP_AST) $(OPS_GEN_DEBUG) --hls $(OPS_TARGET_CONFIG_JSON) $(DEFINES) -DOPS_FPGA -I $(OPS_INSTALL_PATH)/c/include/ --file_paths $(OPS_FILES) -dff $(OPS_GEN_ISL_DF_FORMAT)
 	@echo ""
 	rm -f .generated_hls
 	touch .generated_hls
+
+.generated_tapa: $(HEADERS) $(OPS_FILES) $(OPS_INSTALL_PATH)/../ops_translator/ops_translator/*.py
+	@echo "generating translations for ${OPS_FILES}"
+	@echo "OPS_EXTENTIONS: ${OPS_GENERATED_SUFFIX}_hls"
+	@echo "OPS_GENERATED: ${OPS_GENERATED_HLS}"
+	which python3
+	python3 $(OPS_INSTALL_PATH)/../ops_translator/ops_translator $(VERBOSE) $(DUMP) $(DUMP_AST) $(OPS_GEN_DEBUG) --tapa $(OPS_TARGET_CONFIG_JSON) $(DEFINES) -DOPS_FPGA -I $(OPS_INSTALL_PATH)/c/include/ --file_paths $(OPS_FILES) -dff $(OPS_GEN_ISL_DF_FORMAT)
+	@echo ""
+	rm -f .generated_tapa
+	touch .generated_tapa
     
 # check what targets can not be built with current environment setting and give warnings
 ifneq ($(strip $(TARGETS)),)
@@ -482,6 +492,159 @@ run_hls_app:
 # 		test -d hls/build/$(HLS_TARGET_MODE)/temp_dir/ || mkdir -p hls/build/$(HLS_TARGET_MODE)/temp_dir/
 # 		$(VPP) $(VPP_FLAGS) --temp_dir hls/build/$(HLS_TARGET_MODE)/temp_dir/ --compile $(OPS_HLS_DEVICE_INC) -I./hls/device/include/ -k $(basename $(notdir $@)) -o $@ $<
 
+
+#=====================================================================================================================================================================
+#
+# TAPA version
+#
+TAPA_TOP_MODULE_CPPS=$(wildcard ./tapa/device/src/*.cpp)
+
+ifneq (,$(filter $(HLS_TARGET_MODE), tapa_sw_emu))
+	# If mode is tapa_sw_emu
+	TAPA_DEVICE_TARGET := 
+	OPS_FILES_GEN_HLS += $(wildcard ./tapa/sim/*.cpp) $(TAPA_TOP_MODULE_CPPS)
+	TAPA_CXXFLAGS += -I./tapa/sim/ $(TAPA_HLS_DEVICE_INC) -I./tapa/device/include/
+	CXX = tapa -w $(TAPA_WORK_DIR) g++ --
+else ifneq (,$(filter $(HLS_TARGET_MODE), tapa_hw_emu))
+    # If mode is  TAPA_HW_EMU
+	OPS_FILES_GEN_HLS += $(wildcard ./tapa/sim/*.cpp) $(TAPA_TOP_MODULE_CPPS)
+	TAPA_CXXFLAGS += -I./tapa/sim/ $(TAPA_HLS_DEVICE_INC) -I./tapa/device/include/
+	CXX = tapa -w $(TAPA_WORK_DIR) g++ --
+    TAPA_DEVICE_TARGET := ./tapa/build/$(HLS_TARGET_MODE)/sim_$(APP).xclbin
+else
+    # Default for standard hw or hw_emu
+    TAPA_DEVICE_TARGET := ./tapa/build/$(HLS_TARGET_MODE)/$(APP).xclbin
+endif
+
+$(APP)_tapa: Makefile .generated_tapa ./tapa/build/$(HLS_TARGET_MODE)/$(APP)_host $(TAPA_DEVICE_TARGET)
+		@echo ""
+		@echo ""
+		@echo "Building ${APP}_tapa"
+		@echo ""
+
+./tapa/build/$(HLS_TARGET_MODE)/$(APP)_host: .generated_tapa $(OPS_INSTALL_PATH)/hls/lib/$(OPS_COMPILER)/libops_hls.a $(OPS_INSTALL_PATH)/hls/lib/$(OPS_COMPILER)/libops_seq.a 
+		@echo ""
+		@echo "Building ${APP}_tapa_host"
+		@echo "Files used ${OPS_FILES_GEN_HLS}"
+		@echo "Tapa TAPA_CXXFLAGS: ${TAPA_CXXFLAGS}"
+		@echo "TAPA_TOP_MODULE_CPPS: ${TAPA_TOP_MODULE_CPPS}\n"
+		@echo "HLS TARGET MODE: |${HLS_TARGET_MODE}|\n"
+		test -d ./tapa/build/$(HLS_TARGET_MODE) || mkdir -p ./tapa/build/$(HLS_TARGET_MODE)
+		$(CXX) -o $@ $(OPS_FILES_GEN_HLS) $(CXXFLAGS) $(TAPA_CXXFLAGS) -I./ -I./tapa/host/kernel_wrappers/ $(TAPA_LDFLAGS)
+
+#./tapa/build/$(HLS_TARGET_MODE)/sim_$(APP).xo: .generated_tapa
+#		@echo ""
+#		@echo "Generating Simulation TAPA XO for ${APP}"
+#		test -d ./tapa/build/$(HLS_TARGET_MODE) || mkdir -p ./tapa/build/$(HLS_TARGET_MODE)
+#		$(TAPA) -w $(TAPA_WORK_DIR) --verbose compile \
+#			--top sim_mega_kernel \
+#			$(TAPA_FLAGS) \
+#			-o $@ \
+#			$(foreach flag,$(TAPA_ADDITIONAL_FLAGS) ,--cflags $(flag)) \
+#			-f ./tapa/sim/sim_mega_kernel.cpp \
+#			$(foreach src,$(TOP_MODULE_CPPS),-f $(src)) \
+#			$(foreach flag, $(TAPA_HLS_DEVICE_INC) -I./tapa/device/include/ -I./tapa/sim/,--cflags $(flag));
+
+# tapacc segfaults analyzing a top-level task (e.g. the tapa_hw_emu sim_mega_kernel_0
+# wrapper) that only sees forward declarations of the tasks it invokes. Mirroring each
+# device/src/*.cpp as a full-definition header lets the sim wrapper's `#include <name.hpp>`
+# resolve to the full task body (via an extra -I path shadowing tapa/device/include/),
+# instead of the declaration-only header, avoiding the crash.
+#
+# This list is generated with a plain shell loop in the recipe below (not a Make
+# pattern rule keyed off $(wildcard ./tapa/device/src/*.cpp)): GNU Make caches
+# $(wildcard) results for the lifetime of one invocation, so computing this as a
+# static prerequisite list would freeze an empty result on a fresh build, where
+# device/src/*.cpp don't exist yet until .generated_tapa's recipe creates them.
+TAPA_SIM_ONLY_HEADERS_DIR := ./tapa/sim_only_headers
+
+./tapa/build/$(HLS_TARGET_MODE)/sim_$(APP).xclbin:
+		@echo ""
+		@echo ""
+		@echo "Building sim_${APP}.xclbin"
+		@echo ""
+		test -d $(TAPA_WORK_DIR) || mkdir -p $(TAPA_WORK_DIR)
+		test -d ./tapa/build/$(HLS_TARGET_MODE)/temp_dir/link || mkdir -p ./tapa/build/$(HLS_TARGET_MODE)/temp_dir/link
+		test -d ./tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/logs || mkdir -p ./tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/logs
+
+		@mkdir -p $(TAPA_SIM_ONLY_HEADERS_DIR)
+		@for src_file in ${shell ls ./tapa/device/src/*.cpp}; do \
+			name=$$(basename $${src_file} .cpp); \
+			hdr=$(TAPA_SIM_ONLY_HEADERS_DIR)/$${name}.hpp; \
+			if [ ! -f "$${hdr}" ] || [ "$${src_file}" -nt "$${hdr}" ]; then \
+				{ \
+					echo "#pragma once"; \
+					echo "#include \"../device/include/$${name}.hpp\""; \
+					grep -vE "^[[:space:]]*#include[[:space:]]*[<\"]$${name}\.hpp[>\"]" "$${src_file}"; \
+				} > "$${hdr}"; \
+			fi \
+		done
+
+		@for xo_file in ${basename ${notdir ${shell ls ./tapa/sim/*.cpp}}}; do \
+			if [ ! -f "tapa/build/$(HLS_TARGET_MODE)/$${xo_file}.xo" ]; then \
+				test -d $(TAPA_WORK_DIR)/$${xo_file} || mkdir -p $(TAPA_WORK_DIR)/$${xo_file}; \
+				echo "Analyzing $${xo_file}" && \
+				$(TAPA) -w $(TAPA_WORK_DIR)/$${xo_file} analyze --top $${xo_file} -f ./tapa/sim/$${xo_file}.cpp --cflags -std=c++17 $(foreach flag,$(TAPA_KERNEL_DEFINES),--cflags $(flag)) $(foreach flag,-I$(TAPA_SIM_ONLY_HEADERS_DIR) $(TAPA_HLS_DEVICE_INC) -I./tapa/device/include/ -I./tapa/sim/,--cflags $(flag)) && \
+				echo "Synthesizing $${xo_file}" && \
+				$(TAPA) -w $(TAPA_WORK_DIR)/$${xo_file} synth --platform $(PLATFORM_PATH)/$(PLATFORM) --clock-period $(TAPA_CLOCK_PERIOD) -j $(HLS_JOBS) $(if $(filter 1,$(TAPA_POST_SYNTH_REPORT)),--enable-synth-util) && \
+				echo "Packing $${xo_file}" && \
+				$(TAPA) -w $(TAPA_WORK_DIR)/$${xo_file} pack -o tapa/build/$(HLS_TARGET_MODE)/$${xo_file}.xo; \
+			fi \
+		done
+
+		@XO_FILES="${patsubst %.cpp, %.xo, ${patsubst ./tapa/sim/%, ./tapa/build/$(HLS_TARGET_MODE)/%, $(shell ls ./tapa/sim/*.cpp)}}"; \
+		if [ -z "$$XO_FILES" ]; then \
+			echo "ERROR: No .xo files found to link! Check your tapa/sim directory."; \
+			exit 1; \
+		fi; \
+		if [ -n "$(OPS_HLS_XSA_PLATFORM)" ]; then \
+			echo "Building XSA platform"; \
+			$(VPP) -s -O3 $(VPP_LINK_FLAGS) --temp_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/ --log_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/logs/ --config --link tapa/sim/xrt_sim.cfg -o ./tapa/build/$(HLS_TARGET_MODE)/$(APP).xsa $$XO_FILES; \
+			$(VPP) -s -O3 --target $(VPP_TARGET) --platform $(PLATFORM) --temp_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/ --log_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/logs/ --package ./tapa/build/$(HLS_TARGET_MODE)/$(APP).xsa -o "$@"; \
+		else \
+			echo "Building non-XSA platform"; \
+			$(VPP) -s -O3 $(VPP_LINK_FLAGS) --temp_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/ --log_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/logs/ --link --config tapa/sim/xrt_sim.cfg -o "$@" $$XO_FILES; \
+		fi
+
+./tapa/build/$(HLS_TARGET_MODE)/$(APP).xclbin:
+		@echo ""
+		@echo ""
+		@echo "Building ${APP}.xclbin"
+		@echo ""
+		test -d $(TAPA_WORK_DIR) || mkdir -p $(TAPA_WORK_DIR)
+		test -d ./tapa/build/$(HLS_TARGET_MODE)/temp_dir/link || mkdir -p ./tapa/build/$(HLS_TARGET_MODE)/temp_dir/link
+		test -d ./tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/logs || mkdir -p ./tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/logs
+
+		@for xo_file in ${basename ${notdir ${shell ls ./tapa/device/src/*.cpp}}}; do \
+			if [ ! -f "tapa/build/$(HLS_TARGET_MODE)/$${xo_file}.xo" ]; then \
+				echo "Compiling $${xo_file}"; \
+				$(TAPA) -w $(TAPA_WORK_DIR) compile --top $${xo_file} $(TAPA_FLAGS) -o tapa/build/$(HLS_TARGET_MODE)/$${xo_file}.xo -f ./tapa/device/src/$${xo_file}.cpp $(foreach flag,$(TAPA_HLS_DEVICE_INC) -I./tapa/device/include/,--cflags $(flag)); \
+			fi \
+		done
+
+		@XO_FILES="${patsubst %.cpp, %.xo, ${patsubst ./tapa/device/src/%, ./tapa/build/$(HLS_TARGET_MODE)/%, $(shell ls ./tapa/device/src/*.cpp)}}"; \
+		if [ -z "$$XO_FILES" ]; then \
+			echo "ERROR: No .xo files found to link! Check your tapa/device/src directory."; \
+			exit 1; \
+		fi; \
+		if [ -n "$(OPS_HLS_XSA_PLATFORM)" ]; then \
+			echo "Building XSA platform"; \
+			$(VPP) -s -O3 $(VPP_LINK_FLAGS) --temp_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/ --log_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/logs/ --config --link tapa/host/xrt.cfg -o ./tapa/build/$(HLS_TARGET_MODE)/$(APP).xsa $$XO_FILES; \
+			$(VPP) -s -O3 --target $(VPP_TARGET) --platform $(PLATFORM) --temp_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/ --log_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/logs/ --package ./tapa/build/$(HLS_TARGET_MODE)/$(APP).xsa -o "$@"; \
+		else \
+			echo "Building non-XSA platform"; \
+			$(VPP) -s -O3 $(VPP_LINK_FLAGS) --temp_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/ --log_dir=tapa/build/$(HLS_TARGET_MODE)/temp_dir/link/logs/ --link --config tapa/host/xrt.cfg -o "$@" $$XO_FILES; \
+		fi
+
+.PHONY: build_tapa_host
+build_tapa_host: 
+	rm -f ./tapa/build/$(HLS_TARGET_MODE)/$(APP)_host
+	make ./tapa/build/$(HLS_TARGET_MODE)/$(APP)_host
+
+#.PHONY: run_tapa_app
+#run_tapa_app:
+#	bash ./run_script_tapa.sh $(HLS_TARGET_MODE) $(APP) $(PLATFORM) $(CXXFLAGS)
+
 #=====================================================================================================================================================================
 #
 # cleanup
@@ -523,8 +686,8 @@ clean:
 	rm -f $(APP)_mpi_openacc
 	rm -f $(APP)_mpi_openacc_tiled
 	rm -f $(OPS_GENERATED)
-	rm -f .generated constants_list.txt cudafe .generated_hls
-	rm -rf ./mpi_openmp ./cuda ./hip ./openmp_offload ./sycl ./openacc ./hls
+	rm -f .generated constants_list.txt cudafe .generated_hls .generated_tapa
+	rm -rf ./mpi_openmp ./cuda ./hip ./openmp_offload ./sycl ./openacc ./hls ./tapa
 	rm -f *_ops_hls.cpp
 	rm -rf _x .Xil xcd.log
 	rm -f ops_translator_run.log source_pp.txt

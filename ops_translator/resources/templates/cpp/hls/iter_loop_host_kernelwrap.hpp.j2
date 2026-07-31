@@ -5,14 +5,31 @@
 
 {% block prologue %}
 #pragma once 
+{% if target == "tapa" %}
+#if !defined(TAPA_SW_EMU) && !defined(TAPA_HW_EMU)
+{% endif %}
 #include <ops_hls_rt_support.h>
+{% if target == "tapa" %}
+#else
+#include <ops_tapa_rt_support.h>
+#endif
+{% endif %}
 #include "../../common/include/common_config.hpp"
 
+{% if target == "tapa" %}
+#if defined(TAPA_SW_EMU) || defined(TAPA_HW_EMU)
+#include <tapa.h>
+#include "../../sim/sim_mega_kernel_{{ilh.id}}.hpp"
+#endif
+{% endif %}
 {% endblock %}
 
 {% block loopback_checker %}
 {% endblock %}
 {% block host_kernel_wrapper_class %}
+{% if target == "tapa" %}
+#if !defined(TAPA_SW_EMU) && !defined(TAPA_HW_EMU)
+{% endif %}
 class KernelWrapper_outerloop_{{ilh.id}} : public ops::hls::Kernel
 {
 public:
@@ -50,6 +67,7 @@ public:
             {% set last_check = False %}
         {% endif %}
         {% if arg is ops_dat %}
+            //{{ilh.dats[arg.dat_id][0].ptr}}
             ops::hls::Grid<{{ilh.dats[arg.dat_id][0].typ}}>& arg{{arg.id}}{{"," if not last_check}}
         {% elif arg is ops_gbl %}
             const {{arg.typ}}* {{get_arg_gbl_name(arg)}}{{"," if not last_check}}
@@ -73,6 +91,13 @@ public:
         auto read_stencilConfig = getStencilConfig(arg0.originalProperty, range, vector_factor, mem_vector_factor, read_stencil_d_m, read_stencil_d_p);
         ops::hls::AccessRange read_range;
         getAdjustedRange(arg0.originalProperty, range, read_range, read_stencil_d_m, read_stencil_d_p);
+    {% if target == "tapa" %}
+        ops::hls::MemConfig memconfig;
+        ops::hls::genMemConfig<mem_data_width, axis_data_width, data_width>(arg0.originalProperty.grid_size, read_range, memconfig);
+        const unsigned int num_beats = memconfig.total_xblocks * arg0.originalProperty.batch_size;
+        const unsigned int num_of_pkts_per_beat = mem_data_width / axis_data_width;
+        const unsigned int num_of_pkts = num_beats * num_of_pkts_per_beat;
+    {% endif %}
 #ifdef OPS_TILING
         ops::hls::SizeType original_gridSize_copy = {arg0.originalProperty.grid_size[0], arg0.originalProperty.grid_size[1], arg0.originalProperty.grid_size[2]};
         ops::hls::AccessRange read_range_copy;
@@ -171,7 +196,7 @@ public:
         {% for i in range(ndim)%}
         OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, read_stencilConfig.upper_limit[{{i}}]));
         {% endfor %}
- #endif
+#endif
         OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, read_stencilConfig.outer_loop_limit));
 #ifndef OPS_TILING
         OCL_CHECK(err, err = m_kernel_{{slr_id}}.setArg(narg++, read_stencilConfig.batch_size));
@@ -205,25 +230,32 @@ public:
         bool loopback_enbl = false;
 #endif 
         narg = 0;
+    
     {% if config["datamover_mode"] == 3 %}
         OCL_CHECK(err, err = m_datamover.setArg(narg++, loopback_enbl));
     {% endif %}
-    {% for i in range(ndim)%}
+    {% if target == "hls" %}
+        {% for i in range(ndim)%}
         OCL_CHECK(err, err = m_datamover.setArg(narg++, read_range.start[{{i}}]));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, read_range.end[{{i}}]));
-    {% endfor %}
-    {% for arg in ilh.joint_args|ops_dat %}
-        {% if loop.first %}
-            {% for idx in range(ndim)%}
+        {% endfor %}
+        {% for arg in ilh.joint_args|ops_dat %}
+            {% if loop.first %}
+                {% for idx in range(ndim)%}
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.originalProperty.grid_size[{{idx}}]));
-            {% endfor %}
-        {% endif %}
-    {% endfor %} 
+                {% endfor %}
+            {% endif %}
+        {% endfor %} 
+    {% else %}
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, num_beats));
+        OCL_CHECK(err, err = m_datamover.setArg(narg++, num_of_pkts));
+    {% endif %}
         OCL_CHECK(err, err = m_datamover.setArg(narg++, adjusted_outer_iter));
+    {% if target == "hls" %}
 #ifndef OPS_TILING
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg0.originalProperty.batch_size)); 
 #else
-    {% if ndim == 3 %}   
+        {% if ndim == 3 %}   
         OCL_CHECK(err, err = m_datamover.setArg(narg++, tile_size[0]));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, tile_size[1]));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, overlap_size[0]));
@@ -235,15 +267,16 @@ public:
         OCL_CHECK(err, err = m_datamover.setArg(narg++, tile_count[0]));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, tile_count[1]));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, total_xblocks_widen));
-    {% else %}
+        {% else %}
         OCL_CHECK(err, err = m_datamover.setArg(narg++, tile_size[0]));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, overlap_size[0]));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, effective_tile_size[0]));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, last_tile_size[0]));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, tile_count[0]));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, total_xblocks_widen));
-    {% endif %}
+        {% endif %}
 #endif
+    {% endif %}
         {#OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.start_x));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.end_x));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.start_y));    
@@ -262,22 +295,21 @@ public:
         OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.total_xblocks));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, memconfig.total_size_bytes));
         OCL_CHECK(err, err = m_datamover.setArg(narg++, adjusted_outer_iter));#}
-    {% for arg in ilh.joint_args %}
-        {% if arg is ops_dat %}
+    {% for arg in ilh.joint_args|ops_dat %}
+    //{{ilh.dats[arg.dat_id][0].ptr}}
 #ifdef OPS_TILING
-    printf("Tiles per grid: %d \n", arg0.alt_banks);
-    {% if config["tile_banks"] > 1 and config["datamover_lib"] == 1 %}
-        {% for i in range(config["tile_banks"]) %}
+    //printf("Tiles per grid: %d \n", arg0.alt_banks);
+        {% if config["tile_banks"] > 1 and config["datamover_lib"] == 1 %}
+            {% for i in range(config["tile_banks"]) %}
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.deviceBuffer[{{i}}]));
-        {% endfor %}
-    {% else %}
+            {% endfor %}
+        {% else %}
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.deviceBuffer[0]));
-    {% endif %}
+        {% endif %}
         {#OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.deviceBuffer[1]));#}
 #else
         OCL_CHECK(err, err = m_datamover.setArg(narg++, arg{{arg.id}}.deviceBuffer));
 #endif
-        {% endif%}
     {% endfor %}
 
         std::vector<cl::Event> h2d_events;
@@ -410,6 +442,138 @@ private:
 {% endfor %}
     cl::Kernel m_datamover;
 };
+{% if target == "tapa" %}
+#else
+
+void tapa_kernelwrapper_outerloop_{{ilh.id}}(
+        ops::hls::AccessRange& range, unsigned int outer_iter,
+    {% for arg in ilh.joint_args %}
+        {% if loop.last %}
+            {% if consts %}
+                {% set last_check = False %}
+            {% else %}
+                {% set last_check = True %}
+            {% endif %}
+        {% else %}
+            {% set last_check = False %}
+        {% endif %}
+        {% if arg is ops_dat %}
+        ops::hls::Grid<{{ilh.dats[arg.dat_id][0].typ}}>& arg{{arg.id}}{{"," if not last_check}}
+        {% elif arg is ops_gbl %}
+        const {{arg.typ}}* {{get_arg_gbl_name(arg)}}{{"," if not last_check}}
+        {% endif %}
+    {% endfor %}
+    {% for const in consts %}
+        const {{const.typ}} {{const.ptr}}{{"," if not loop.last}}
+    {% endfor %}
+){
+    {% set read_stencil = ilh.getReadStencil(prog) %}
+    {% if read_stencil %}    
+    ops::hls::SizeType read_stencil_d_m = { {{read_stencil.d_m[0]}}, {{read_stencil.d_m[1]}}, {{read_stencil.d_m[2]}} };
+    ops::hls::SizeType read_stencil_d_p = { {{read_stencil.d_p[0]}}, {{read_stencil.d_p[1]}}, {{read_stencil.d_p[2]}} };
+    ops::hls::SizeType write_stencil_d_m = {0,0,0};
+    ops::hls::SizeType write_stencil_d_p = {0,0,0};
+    {% else %}
+    //ERROR: No read_stencil
+    {% endif %}
+    auto read_stencilConfig = getStencilConfig(arg0.originalProperty, range, vector_factor, mem_vector_factor, read_stencil_d_m, read_stencil_d_p);
+    ops::hls::AccessRange read_range;
+    getAdjustedRange(arg0.originalProperty, range, read_range, read_stencil_d_m, read_stencil_d_p);
+    {% if target == "tapa" %}
+    ops::hls::MemConfig memconfig;
+    ops::hls::genMemConfig<mem_data_width, axis_data_width, data_width>(arg0.originalProperty.grid_size, read_range, memconfig);
+    const unsigned int num_beats = memconfig.total_xblocks * arg0.originalProperty.batch_size;
+    const unsigned int num_of_pkts_per_beat = mem_data_width / axis_data_width;
+    const unsigned int num_of_pkts = num_beats * num_of_pkts_per_beat;
+    {% endif %}
+#ifdef DEBUG_LOG
+    printAccessRange(range, "common access range");
+    printGridProp(arg0.originalProperty, "arg0_originalGridProp");
+    printStencilConfig(read_stencilConfig, "read_stencilConfig");
+#endif
+
+    unsigned int total_iter_par_factor = {{get_total_PEs(config["SLR_count"],config["iter_par_factor"])}};
+    unsigned int adjusted_outer_iter = (outer_iter + total_iter_par_factor - 1) / total_iter_par_factor;
+
+#ifdef DEBUG_LOG
+    std::cout << "[DEBUG] Invoking TAPA mega-kernel in simulation mode..." << std::endl;
+#endif
+
+#ifdef DEBUG_LOG
+    printf("==================================\n");
+    printf("Invoke Parameters\n");
+    printf("==================================\n");
+    printf("num_beats: %d\n", num_beats);
+    printf("num_of_pkts: %d\n", num_of_pkts);
+    printf("loopback_itr: %d\n", adjusted_outer_iter-1);
+    printf("adjusted_outer_iter: %d\n", adjusted_outer_iter);
+    {% for idx in range(ndim)%}
+    printf("read_stencilConfig.grid_size[{{idx}}]: %d\n", read_stencilConfig.grid_size[{{idx}}]);
+    {% endfor %}
+    printf("read_stencilConfig.dim: %d\n", read_stencilConfig.dim);
+    printf("read_stencilConfig.total_itr: %d\n", read_stencilConfig.total_itr);
+    {% for idx in range(ndim)%}
+    printf("read_stencilConfig.lower_limit[{{idx}}]: %d\n", read_stencilConfig.lower_limit[{{idx}}]);
+    {% endfor %}
+    {% for idx in range(ndim)%}
+    printf("read_stencilConfig.upper_limit[{{idx}}]: %d\n", read_stencilConfig.upper_limit[{{idx}}]);
+    {% endfor %}
+    printf("read_stencilConfig.outer_loop_limit: %d\n", read_stencilConfig.outer_loop_limit);
+    printf("read_stencilConfig.batch_size: %d\n", read_stencilConfig.batch_size);
+    printf("==================================\n");
+#endif 
+
+    //Initiating split for tiled altHostBuffers
+    {% for arg in ilh.joint_args|ops_dat %}
+    {% if arg is ops_read_or_rw %}
+    //arg{{arg.id}}.set_as_arg();
+    {% endif %}
+    {% endfor %}
+
+    ::tapa::invoke(sim_mega_kernel_{{ilh.id}}, ops::hls::FPGA::getInstance()->getProgramName().c_str(),
+            num_beats, num_of_pkts, adjusted_outer_iter-1, adjusted_outer_iter,
+        {% for idx in range(ndim)%}
+            read_stencilConfig.grid_size[{{idx}}],
+        {% endfor %}
+            read_stencilConfig.dim,
+            read_stencilConfig.total_itr,
+        {% for idx in range(ndim)%}
+            read_stencilConfig.lower_limit[{{idx}}],
+        {% endfor %}
+        {% for idx in range(ndim)%}
+            read_stencilConfig.upper_limit[{{idx}}],
+        {% endfor %}
+            read_stencilConfig.outer_loop_limit,
+            read_stencilConfig.batch_size,
+        {% for arg in ilh.joint_args|ops_gbl%}
+            *{{get_arg_gbl_name(arg)}},
+        {% endfor %}
+        {% for const in consts %}
+            {{const.ptr}},
+        {% endfor %}
+        {% for arg in ilh.joint_args|ops_dat %}
+#ifdef OPS_TILING
+            {% if config["tile_banks"] > 1 and config["datamover_lib"] == 1 %}
+                {% for i in range(config["tile_banks"]) %}
+            ::tapa::read_write_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>>(
+                reinterpret_cast<::tapa::vec_t<stencil_type, mem_vector_factor>*>(arg{{arg.id}}.altHostBuffers[{{i}}].data()),
+                arg{{arg.id}}.altHostBuffers[{{i}}].size() / mem_vector_factor){{", " if not loop.last}}
+                {% endfor %}
+            {% else %}
+            ::tapa::read_write_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>>(
+                    reinterpret_cast<::tapa::vec_t<stencil_type, mem_vector_factor>*>(arg{{arg.id}}.altHostBuffers[0].data()),
+                    arg{{arg.id}}.altHostBuffers[0].size() / mem_vector_factor){{", " if not loop.last}}
+            {% endif %}
+#else
+            ::tapa::read_write_mmap<::tapa::vec_t<stencil_type, mem_vector_factor>>(
+                    reinterpret_cast<::tapa::vec_t<stencil_type, mem_vector_factor>*>(arg{{arg.id}}.hostBuffer.data()),
+                    arg{{arg.id}}.hostBuffer.size() / mem_vector_factor){{", " if not loop.last}}
+#endif
+        {% endfor %}
+    );
+}
+#endif
+{% endif %}
 {% endblock %}
 
 {% block par_loop %}
@@ -426,6 +590,7 @@ void {{ilh.unique_name}}(int outer_iter, int* ops_range,
             {% set last_check = False %}
         {% endif %}
         {% if arg is ops_dat %}
+            //{{ilh.dats[arg.dat_id][0].ptr}}
             ops::hls::Grid<{{ilh.dats[arg.dat_id][0].typ}}>& arg{{arg.id}}{{"," if not last_check}}
         {% elif arg is ops_gbl %}
             const {{arg.typ}}* {{get_arg_gbl_name(arg)}}{{"," if not last_check}}
@@ -436,9 +601,12 @@ void {{ilh.unique_name}}(int outer_iter, int* ops_range,
     {% endfor %} #}
 )
 {
-    static  KernelWrapper_outerloop_{{ilh.id}} kernelWrapper_inst;
     ops::hls::AccessRange range;
     opsRange2hlsRange({{ndim}}, ops_range, range, arg{{ilh.joint_args[0].id}}.originalProperty);
+    {% if target == "tapa" %}
+#if !defined(TAPA_SW_EMU) && !defined(TAPA_HW_EMU)
+    {% endif %}
+    static  KernelWrapper_outerloop_{{ilh.id}} kernelWrapper_inst;
     {% for arg in ilh.joint_args|ops_dat %}
         {% if arg is ops_read %}
     sendGrid(arg{{ilh.getArg(arg.dat_id).id}});
@@ -457,6 +625,7 @@ void {{ilh.unique_name}}(int outer_iter, int* ops_range,
             {% set last_check = False %}
         {% endif %}
         {% if arg is ops_dat %}
+            //{{ilh.dats[arg.dat_id][0].ptr}}
             arg{{arg.id}}{{"," if not last_check}}
         {% elif arg is ops_gbl %}
             {{get_arg_gbl_name(arg)}}{{"," if not last_check}}
@@ -466,5 +635,32 @@ void {{ilh.unique_name}}(int outer_iter, int* ops_range,
             {{const.ptr}}{{"," if not loop.last}}
     {% endfor %}
     );
+    {% if target == "tapa" %}
+#else
+    tapa_kernelwrapper_outerloop_{{ilh.id}}(range, outer_iter,
+        {% for arg in ilh.joint_args %}
+            {% if loop.last %}
+                {% if consts %}
+                    {% set last_check = False %}
+                {% else %}
+                    {% set last_check = True %}
+                {% endif %}
+            {% else %}
+                {% set last_check = False %}
+            {% endif %}
+            {% if arg is ops_dat %}
+            //{{ilh.dats[arg.dat_id][0].ptr}}
+            arg{{arg.id}}{{"," if not last_check}}
+            {% elif arg is ops_gbl %}
+            {{get_arg_gbl_name(arg)}}{{"," if not last_check}}
+            {% endif %}
+        {% endfor %}
+        {% for const in consts %}
+            {{const.ptr}}{{"," if not loop.last}}
+        {% endfor %}
+    );
+#endif
+    {% endif %}
+
 }
 {% endblock %}

@@ -153,6 +153,8 @@ env.globals.update(get_plane_buff_size = lambda x_size, y_size, half_span, vec_f
 env.globals.update(get_overlap_tile_size = lambda n_slr, p_slr, half_span, mem_vec_fac: getOverlapTileSize(n_slr, p_slr, half_span, mem_vec_fac))
 env.globals.update(get_total_PEs = lambda n_slr, p_slr: getTotalPEs(n_slr, p_slr))
 env.globals.update(log2 = lambda arg: log2(arg))
+env.globals.update(max = lambda arg1, arg2: max(arg1,arg2))
+env.globals.update(islist = lambda arg: isinstance(arg, list))
 
 def unpack(tup):
     if not isinstance(tup, tuple):

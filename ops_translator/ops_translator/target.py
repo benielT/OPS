@@ -306,6 +306,7 @@ class HLS(Target):
             "max_SLR_count" : 1,
             "platform_is_multi_slr" : False,
             "platform_is_sb_selectable" : False,
+            "supported_internal_storage" : ["URAM",  "BRAM"],
             "max_global_clock" : 300000000,
             "HBM_tile_racks" : 0
         }
@@ -392,7 +393,9 @@ class HLS(Target):
                 raise CodegenError(f"Target {self.name} config error: internal_storage={internal_storage} not supported on platform {platform}. Supported: {supported_storage}") 
             
 
-            
+class TAPA(HLS):
+    name = "tapa"
+    kernel_translation = True       
 
 Target.register(MPIOpenMP)
 Target.register(F2CMPIOpenMP)
@@ -405,3 +408,5 @@ Target.register(OpenMPOffload)
 Target.register(Sycl)
 Target.register(F2CSycl)
 Target.register(HLS)
+Target.register(TAPA)
+

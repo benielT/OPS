@@ -36,7 +36,7 @@ capture_power() {
         exit 1
     fi
 
-    xbutil examine -r electrical -d "$DEVICE_BDF" -f JSON -o "$TEMP_JSON_FILE"
+    # xbutil examine -r electrical -d "$DEVICE_BDF" -f JSON -o "$TEMP_JSON_FILE"
 
     # if [[ -f "$TEMP_JSON_FILE" ]]; then
     local power_val
