@@ -23,14 +23,39 @@
   * @details This class manage FPGA platform interaction with XOCL API and wrapping related objects.
   */
 
+#ifdef OPS_HLS_AURORA
+#include "../include/ops_hls_aurora.hpp"
+#endif 
 #include "../include/ops_hls_fpga.hpp"
 
 ops::hls::FPGA* ops::hls::FPGA::FPGA_ = nullptr;
 
 ops::hls::FPGA::~FPGA() {
     m_bufferMaps.clear();
-    if (FPGA_)
-        delete(FPGA_);
+}
+
+ops::hls::FPGA::FPGA(unsigned int p_id, std::string deviceName)
+{
+    OPS_tiling        = false;
+    OPS_tiling_size_x = 0;
+    OPS_tiling_size_y = 0;
+    OPS_batch_size    = 1;
+    m_id              = p_id;
+    getDevices(deviceName);
+    // Device selection deferred to ops_init_backend(): the MPI context is not
+    // known at construction time.
+}
+
+ops::hls::FPGA::FPGA(std::string deviceName) : FPGA(0, deviceName) {}
+
+ops::hls::FPGA::FPGA(unsigned int p_id, const std::vector<cl::Device>& devices)
+{
+    OPS_tiling        = false;
+    OPS_tiling_size_x = 0;
+    OPS_tiling_size_y = 0;
+    OPS_batch_size    = 1;
+    m_id              = p_id;
+    m_devices         = devices;
 }
 
 ops::hls::FPGA* ops::hls::FPGA::getInstance() {
@@ -72,12 +97,24 @@ void _FPGA_set_args(ops::hls::FPGA *instance, const char *argv) {
     }
 }
 
+
+unsigned int ops::hls::FPGA::resolveDeviceId(unsigned int requested) const
+{
+    if (m_mpi_world_size <= 1) return requested;
+    if (requested != 0)
+        std::cerr << "[WARNING] device id " << requested
+                  << " ignored under MPI; using node-local rank "
+                  << m_mpi_local_rank << std::endl;
+    return static_cast<unsigned int>(m_mpi_local_rank % m_devices.size());
+}
+
 void ops::hls::FPGA::setID(uint32_t id) {
         m_id = id;
         if (m_id >= m_devices.size()) {
-            std::cout << "Device specified by id = " << m_id << " is not found." << std::endl;
+            std::runtime_error("Device specified by id =  " + std::to_string(m_id) + "  is not found. In Local_rank: " 
+                    + std::to_string(m_mpi_local_rank) + " Global_rank: " + std::to_string(m_mpi_local_rank));
             throw;
-        }
+            }
         m_device = m_devices[m_id];
 }
 
@@ -163,6 +200,89 @@ void ops::hls::FPGA::deleteDeviceBuffer(const host_buffer_t<T>& p_buffer)
 		}
 #endif
     }
+//************************************** Muti-FPGA Components *************************/
+bool ops::hls::FPGA::isRootRank() const {
+    if (!m_mpi_initialised)
+        std::cerr << "[WARNING] isRootRank() before setMPIContext()\n";
+    return is_root_mpi_rank;
+}
+
+void ops::hls::FPGA::setMPIContext(int global_rank, int world_size, int local_rank, int local_size) {
+        m_mpi_global_rank = global_rank;
+        m_mpi_world_size  = world_size;
+        m_mpi_local_rank  = local_rank;
+        m_mpi_local_size  = local_size;
+        is_root_mpi_rank  = (global_rank == 0);
+        m_mpi_initialised = true;
+    }
+
+//************************************ Aurora Handler Components ****************************/
+
+
+bool ops::hls::FPGA::initAurora(int rank, int world_size, bool periodic){
+#ifdef OPS_HLS_AURORA
+    m_aurora.reset(new AuroraHandler(m_device, m_program,
+                                     rank, world_size, periodic));
+    if (!m_aurora->available()) m_aurora.reset();   // no aurora IPs in this xclbin
+    return m_aurora != nullptr;
+#else
+    (void)rank; (void)world_size; (void)periodic;
+    std::cerr << "[WARNING][AURORA] library built without OPS_HLS_AURORA; "
+                 "QSFP links unavailable" << std::endl;
+    return false;
+#endif
+}
+
+void ops::hls::AuroraHandlerDeleter::operator()(AuroraHandler* p) const noexcept
+{
+#ifdef OPS_HLS_AURORA
+    delete p;                 
+#else
+    (void)p;                  
+#endif
+}
+
+bool ops::hls::FPGA::auroraLinkCheck(int timeout_ms) {
+#ifdef OPS_HLS_AURORA
+    return m_aurora ? m_aurora->linkCheck(timeout_ms) : true;
+#else
+    (void)timeout_ms; return true;
+#endif
+}
+
+void ops::hls::FPGA::auroraResetCounters()
+{
+#ifdef OPS_HLS_AURORA
+    if (m_aurora) m_aurora->resetCounters();
+#endif
+}
+
+bool ops::hls::FPGA::auroraInstanceInUse(unsigned instance) const
+{
+#ifdef OPS_HLS_AURORA
+    return m_aurora ? m_aurora->instanceInUse(instance) : false;
+#else
+    (void)instance; return false;
+#endif
+}
+
+ops::hls::LinkStats ops::hls::FPGA::auroraSnapshot(LinkDirection dir) const
+{
+#ifdef OPS_HLS_AURORA
+    return m_aurora ? m_aurora->snapshot(dir) : LinkStats{};
+#else
+    (void)dir; return LinkStats{};
+#endif
+}
+
+int ops::hls::FPGA::auroraNeighbourRank(LinkDirection dir) const
+{
+#ifdef OPS_HLS_AURORA
+    return m_aurora ? m_aurora->neighbourRank(dir) : -1;
+#else
+    (void)dir; return -1;
+#endif
+}
 
 //************************************** Runtime Related Components *************************/
 
@@ -195,7 +315,7 @@ void ops::hls::FPGA::getDevices(std::string deviceName) {
         if (regex_match(cl_device_name, regexStr)) m_devices.push_back(device);
     }
     if (0 == m_devices.size()) {
-        std::cout << "Device specified by name == " << deviceName << " is not found." << std::endl;
+        std::runtime_error("No device found in Local_Rank: " + std::to_string(m_mpi_local_rank) + " Global_rank: " + std::to_string(m_mpi_local_rank));
         throw;
     }
 }
@@ -215,7 +335,7 @@ void ops_init_backend(int argc, char** argv, unsigned int devId)
 
 #if !defined(TAPA_SW_EMU) && !defined(TAPA_HW_EMU)
     std::string xclbinFile = argv[1];
-    fpga->setID(deviceId);
+    fpga->setID(fpga->resolveDeviceId(devId));
 
     if(!fpga->xclbin(xclbinFile))
     {

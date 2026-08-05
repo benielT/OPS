@@ -29,6 +29,9 @@
 MPI_Comm OPS_MPI_GLOBAL;
 int ops_comm_global_size;
 int ops_my_global_rank;
+MPI_Comm OPS_MPI_LOCAL;
+int ops_my_local_rank;
+int ops_local_size;
 
 void ops_init_hls(int argc, char** argv)
 {
@@ -57,10 +60,39 @@ void ops_init_hls(int argc, char** argv)
     MPI_Comm_size(OPS_MPI_GLOBAL, &ops_comm_global_size);
     MPI_Comm_rank(OPS_MPI_GLOBAL, &ops_my_global_rank);
 
+    MPI_Comm_split_type(OPS_MPI_GLOBAL, MPI_COMM_TYPE_SHARED,
+            ops_my_global_rank, MPI_INFO_NULL, &OPS_MPI_LOCAL);
+    MPI_Comm_rank(OPS_MPI_LOCAL, &ops_my_local_rank);
+    MPI_Comm_size(OPS_MPI_LOCAL, &ops_local_size);
+
+#ifdef DEBUG_LOG
+    printf("[DEBUG][MPI] rank=%d size=%d\n", ops_my_global_rank, ops_comm_global_size);
+#endif
+
+    ops::hls::FPGA::getInstance()->setMPIContext(ops_my_global_rank, ops_comm_global_size, 
+        ops_my_local_rank, ops_local_size);
     ops_init_backend(argc, argv);
+
+    auto* fpga = ops::hls::FPGA::getInstance();
+    fpga->initAurora(ops_my_global_rank, ops_comm_global_size);
+
+        int local_ok = fpga->auroraLinkCheck(3000) ? 1 : 0;
+    int all_ok = 0;
+
+    MPI_Allreduce(&local_ok, &all_ok, 1, MPI_INT, MPI_MIN, OPS_MPI_GLOBAL); //using allreduce insted of barrier
+
+    if (!all_ok) {
+        if (ops_my_global_rank == MPI_ROOT)
+            std::cerr << "[ERROR][AURORA] link bring-up failed, aborting\n";
+        MPI_Abort(OPS_MPI_GLOBAL, 1);
+    }
+
+    fpga->auroraResetCounters();
+    MPI_Barrier(OPS_MPI_GLOBAL);
 }
 
 void ops_exit_hls() {
+    MPI_Comm_free(&OPS_MPI_LOCAL);
     MPI_Comm_free(&OPS_MPI_GLOBAL);
     ops_exit_backend();
 }

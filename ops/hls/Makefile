@@ -24,7 +24,13 @@ OPS_HLS_L1_INC = $(OPS_HLS)/L1/include
 OPS_HLS_L2_INC = $(OPS_HLS)/L2/include
 OPS_HLS_EXT_INC = $(OPS_HLS)/ext/xcl2
 OPS_HLS_INC = -I$(OPS_HLS)/include -I$(OPS_HLS_L1_INC) -I$(OPS_HLS_L2_INC) -I$(OPS_HLS_EXT_INC)
+CXXFLAGS += -std=c++17
 
+ifndef XILINX_XRT
+  $(error XILINX_XRT not set - source /opt/xilinx/xrt/setup.sh or module load xrt)
+endif
+  OPS_HLS_INC += -I$(XILINX_XRT)/include $(AURORA_FLOW_INCLUDE)
+  OPS_HLS_LIB += -L$(XILINX_XRT)/lib -lxrt_coreutil -luuid
 
 ifdef HDF5_INSTALL_PATH
   HDF5_INC 	  	:= -I$(HDF5_INSTALL_PATH)/include
@@ -39,14 +45,29 @@ else
   CHKCXX		:= $(CXX)
 endif
 
+TARGETS=seq 
+
+ifdef XILINX_VITIS
+	TARGETS += hls
+endif
+
 $(info MPI_INSTALL_PATH is detected: $(MPI_INSTALL_PATH))
 ifneq ($(strip $(MPI_INSTALL_PATH)),)
-ifneq (,$(wildcard $(MPI_INC)))
+CXXFLAGS += -DOPS_MULTI_FPGA
+TARGETS += mpi
+	ifdef XILINX_VITIS
+TARGETS += hls_mpi
+	endif
+	ifdef AURORA_FLOW_INSTALL_PATH
+CXXFLAGS += -DOPS_HLS_AURORA -I$(AURORA_FLOW_INSTALL_PATH)/include
+OPS_HLS_INC += -I$(AURORA_FLOW_INSTALL_PATH)/include
+	endif
+	ifneq (,$(wildcard $(MPI_INC)))
 I_MPI_INC = -I$(MPI_INC)
-endif
-ifneq (,$(wildcard $(MPI_LIB)))
+	endif
+	ifneq (,$(wildcard $(MPI_LIB)))
 L_MPI_LIB = -L$(MPI_LIB)
-endif
+	endif
 else
 I_MPI_INC = $(foreach dir,$(shell $(MPICC) --showme:incdirs),-I$(dir))
 endif
@@ -55,7 +76,6 @@ MPI_INC = $(foreach dir,$(shell $(MPICC) --showme:incdirs),-I$(dir))
 
 .PHONY: mklib
 
-TARGETS=seq mpi
 # ifdef CUDA_INSTALL_PATH
 # 	TARGETS += cuda mpi_cuda
 # 	C_OPS_INC += -I$(CUDA_INC)
@@ -82,10 +102,6 @@ TARGETS=seq mpi
 # ifdef SYCL_INSTALL_PATH
 # 	TARGETS += sycl mpi_sycl
 # endif
-
-ifdef XILINX_VITIS
-	TARGETS += hls hls_mpi
-endif
 
 all: $(TARGETS)
 

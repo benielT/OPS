@@ -35,8 +35,6 @@
 #endif
 #define MPI_ROOT 0
 
-#define OPS_MULTI_FPGA
-
 //
 // MPI Communicator for halo creation and exchange
 //
@@ -44,6 +42,9 @@
 extern MPI_Comm OPS_MPI_GLOBAL;
 extern int ops_comm_global_size;
 extern int ops_my_global_rank;
+extern MPI_Comm OPS_MPI_LOCAL;
+extern int ops_my_local_rank;
+extern int ops_local_size;
 
 void ops_init_hls(int argc, char** argv);
 void ops_exit_hls();

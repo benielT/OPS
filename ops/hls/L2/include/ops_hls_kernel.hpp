@@ -540,10 +540,32 @@ class Kernel
             m_fpga->getCommandQueue().enqueueMarkerWithWaitList(&events, &m_exec_event);
         }
 
-		void registerProfileEvents() 
-		{
+		void registerProfileEvents() {
             m_fpga->registerRuntimeEvents(m_kernel_name, m_h2d_event, m_exec_event);
 		}
+
+        void beginLinkWindow()
+        {
+            if (m_fpga->hasAurora())
+                m_fpga->auroraResetCounters();
+        }
+
+        void endLinkWindow()
+        {
+            if (!m_fpga->hasAurora()) return;
+
+            for (unsigned i = 0; i < 2; ++i)
+            {
+                if (!m_fpga->auroraInstanceInUse(i)) continue;
+
+                auto s = m_fpga->auroraSnapshot(static_cast<LinkDirection>(i));
+                if (s.frames_with_errors || s.fifo_rx_overflows || !s.channel_up)
+                    std::cerr << "[AURORA][" << m_kernel_name << "] port " << i
+                              << " crc_err=" << s.frames_with_errors
+                              << " rx_ovf="  << s.fifo_rx_overflows
+                              << " up="      << s.channel_up << std::endl;
+            }
+        }
 
 	protected:
 		FPGA* m_fpga;

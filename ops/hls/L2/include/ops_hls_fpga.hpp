@@ -38,6 +38,9 @@
 // #include "CL/cl_ext_xilinx.h"
 // This file is required for OpenCL C++ wrapper APIs
 #include "../../ext/xcl2/xcl2.hpp"
+// #include "ops_hls_aurora.hpp"
+#include "ops_hls_aurora_link_types.hpp"
+
 #define OPS_HLS_TILE_INTERLEAVE_V2
 
 template <typename T>
@@ -91,10 +94,15 @@ public:
 //  virtual const char* what() const throw();
 //};
 
+class AuroraHandler;    // fwd decl for aororaflow integration
+
+struct AuroraHandlerDeleter { // Added to avoid default unique_ptr to delete which fails on non OPS_HLS_AURORA scenario
+    void operator()(AuroraHandler* p) const noexcept;   // declaration only
+};
+
 /**
  * @brief This is a singleton class indended to use for single FPGA device handlings with 
  * thread local usage. 
- * TODO: This can be further extended to support multi FPGAs.
 */
 class FPGA {
    public:
@@ -103,11 +111,8 @@ class FPGA {
     FPGA(FPGA &other) = delete;
     // Preventing assignment
     void operator=(const FPGA &) = delete;
-
     ~FPGA();
-
     static FPGA* getInstance();
-
 //    const uint32_t next() const {
 //        if (m_id == m_devices.size() - 1) {
 //            return 0;
@@ -116,34 +121,20 @@ class FPGA {
 //        setID(m_id + 1);
 //        return (m_id + 1);
 //    }
-
     void setID(uint32_t id);  //Selecting device explicity through logical device ID orer
-
     bool xclbin(std::string binaryFile); // Programing device, seting device first and calling this would be preferable
-
     const cl::Context& getContext() const { return m_context; }
     const cl::CommandQueue& getCommandQueue() const { return m_queue; }
     cl::CommandQueue& getCommandQueue() { return m_queue; }
-
     const cl::Program& getProgram() const { return m_program; }
-
     void finish() const { m_queue.finish(); }
-
-    template <typename T>
-    cl::Buffer createDeviceBuffer(cl_mem_flags p_flags, const host_buffer_t<T>& p_buffer); // Create device buffer from given host buffer
-
-    template <typename T>
-    std::vector<cl::Buffer> createDeviceBuffer(cl_mem_flags p_flags, const std::vector<host_buffer_t<T> >& p_buffer); // Create device buffers for multiple host buffers
-
-    template <typename T>
-    void deleteDeviceBuffer(const host_buffer_t<T>& p_buffer); // Delete device buffer of the given host buffer
-
+    template <typename T> cl::Buffer createDeviceBuffer(cl_mem_flags p_flags, const host_buffer_t<T>& p_buffer); // Create device buffer from given host buffer
+    template <typename T> std::vector<cl::Buffer> createDeviceBuffer(cl_mem_flags p_flags, const std::vector<host_buffer_t<T> >& p_buffer); // Create device buffers for multiple host buffers
+    template <typename T> void deleteDeviceBuffer(const host_buffer_t<T>& p_buffer); // Delete device buffer of the given host buffer
     void registerRuntimeEvents(const std::string& kernel_name, cl::Event& h2d_event, cl::Event& exec_event);
-
     bool runtimeEventRecExists(const std::string& kernel_name) const { auto it = m_runtimeEvents.find(kernel_name); return it != m_runtimeEvents.end();}
 
-    template<typename DurationType>
-    double getExecutionRuntime(const std::string& kernel_name, const int execId = 0) const{
+    template<typename DurationType> double getExecutionRuntime(const std::string& kernel_name, const int execId = 0) const{
         if (not runtimeEventRecExists(kernel_name))
             throw std::runtime_error((std::string("bad_runtime_record. Record do not exists for ") + kernel_name).c_str());
         else if (execId >= m_runtimeEvents.at(kernel_name).size())
@@ -155,8 +146,7 @@ class FPGA {
         
     }
 
-    template<typename DurationType> 
-    double getTotalExecutionRuntime(const std::string& kernel_name) const {
+    template<typename DurationType> double getTotalExecutionRuntime(const std::string& kernel_name) const {
         if (not runtimeEventRecExists(kernel_name))
             throw std::runtime_error((std::string("bad_runtime_record. Record do not exists for ") + kernel_name).c_str());
         
@@ -182,8 +172,7 @@ class FPGA {
         return total_runtime;
     }
 
-    template<typename DurationType>
-    double getHtoDRuntime(const std::string& kernel_name, const int execId = 0) const
+    template<typename DurationType> double getHtoDRuntime(const std::string& kernel_name, const int execId = 0) const
     {
         if (not runtimeEventRecExists(kernel_name))
             throw std::runtime_error((std::string("bad_runtime_record. Record do not exists for ") + kernel_name).c_str());
@@ -195,14 +184,10 @@ class FPGA {
                                                         m_runtimeEvents.at(kernel_name)[execId].data_HtD_event.getProfilingInfo<CL_PROFILING_COMMAND_START>())).count();
     }
 
-    void setOPSTiling() { OPS_tiling = true;}
-
-    bool isOPSTiling() { return OPS_tiling;}
-
+    void setOPSTiling() { OPS_tiling = true; }
+    bool isOPSTiling() { return OPS_tiling; }
     void setOPSTileSizeX(unsigned short tile_x) { OPS_tiling_size_x = tile_x; }
-
     void setOPSTileSizeY(unsigned short tile_y) { OPS_tiling_size_y = tile_y; }
-
     void setOPSBatchSize(unsigned int batch_size) { OPS_batch_size = batch_size; }
 
     unsigned short getOPSTileSizeX() {
@@ -220,69 +205,84 @@ class FPGA {
     }
 
     std::string getProgramName() { return m_programName; }
-
     unsigned int getOPSBatchSize() { return OPS_batch_size; }
 
-
-#ifdef OPS_MULTI_FPGA
+//**************** OPS_MULTI_FPGA ********************/
     int getLocalRank() { return m_mpi_local_rank; }
-
     int getWorldSize() { return m_mpi_world_size; }
+    bool isRootRank() const;
+    unsigned int resolveDeviceId(unsigned int requested) const;
+    void setMPIContext(int global_rank, int world_size, int local_rank, int local_size);
+ 
+//**************** OPS_HLS_AURORA ********************/
 
-    bool isRootRank() { return is_root_mpi_rank; }
-#endif
+    bool initAurora(int rank, int world_size, bool periodic = false);
+    bool hasAurora() const  { return m_aurora != nullptr; }
+    bool auroraLinkCheck(int timeout_ms = 3000);
+    void auroraResetCounters();
+    bool auroraInstanceInUse(unsigned instance) const;
+    LinkStats auroraSnapshot(LinkDirection dir) const;
+    int auroraNeighbourRank(LinkDirection dir) const;
+
+//***************************************************/
+
+//***************************************************/
 
 protected:
+
     bool bufferExists(const void* p_ptr) const { auto it = m_bufferMaps.find(p_ptr); return it != m_bufferMaps.end(); }
     void getDevices(std::string deviceName);
 
-    FPGA (std::string deviceName) {
-        getDevices(deviceName);
-    #ifndef OPS_MULTI_FPGA
-        m_device = m_devices[0];
-        m_id = 0;
-    #else
-        extern int ops_comm_global_size;
-        extern int ops_my_global_rank;
-        m_id = ops_my_global_rank % m_devices.size();
-        m_device = m_devices[m_id];
-    #endif
-        setID(m_id);
-        OPS_tiling = false;
-        OPS_tiling_size_x = 0;
-        OPS_tiling_size_y = 0;
-        OPS_batch_size = 1;
-    }
+    FPGA (std::string deviceName);
+    // {
+    //     getDevices(deviceName);
+    // #ifndef OPS_MULTI_FPGA
+    //     m_device = m_devices[0];
+    //     m_id = 0;
+    // #else
+    //     extern int ops_comm_global_size;
+    //     extern int ops_my_global_rank;
+    //     m_id = ops_my_global_rank % m_devices.size();
+    //     m_device = m_devices[m_id];
+    // #endif
+    //     setID(m_id);
+    //     OPS_tiling = false;
+    //     OPS_tiling_size_x = 0;
+    //     OPS_tiling_size_y = 0;
+    //     OPS_batch_size = 1;
+    // }
 
-    FPGA(unsigned int p_id = 0, std::string deviceName = "") {
-        getDevices(deviceName);
-    #ifndef OPS_MULTI_FPGA
-        setID(p_id);
-    #else
-        extern int ops_my_global_rank;
-        setID(ops_my_global_rank % m_devices.size());
-    #endif   
-        m_device = m_devices[m_id];
-        OPS_tiling = false;
-        OPS_tiling_size_x = 0;
-        OPS_tiling_size_y = 0;
-        OPS_batch_size = 1;
-    }
+    FPGA(unsigned int p_id = 0, std::string deviceName = "");
+    //  {
+    //     getDevices(deviceName);
+    // #ifndef OPS_MULTI_FPGA
+    //     setID(p_id);
+    // #else
+    //     extern int ops_my_global_rank;
+    //     setID(ops_my_global_rank % m_devices.size());
+    // #endif   
+    //     m_device = m_devices[m_id];
+    //     OPS_tiling = false;
+    //     OPS_tiling_size_x = 0;
+    //     OPS_tiling_size_y = 0;
+    //     OPS_batch_size = 1;
+    // }
 
-    FPGA(unsigned int p_id, const std::vector<cl::Device>& devices) {
-        m_devices = devices;
-    #ifndef OPS_MULTI_FPGA
-        setID(p_id);
-    #else
-        extern int ops_my_global_rank;
-        setID(ops_my_global_rank % m_devices.size());
-    #endif
-        m_device = m_devices[m_id];
-        OPS_tiling = false;
-        OPS_tiling_size_x = 0;
-        OPS_tiling_size_y = 0;
-        OPS_batch_size = 1;
-    }
+    FPGA(unsigned int p_id, const std::vector<cl::Device>& devices);
+    //  {
+    //     m_devices = devices;
+    // #ifndef OPS_MULTI_FPGA
+    //     setID(p_id);
+    // #else
+    //     extern int ops_my_global_rank;
+    //     setID(ops_my_global_rank % m_devices.size());
+    // #endif
+    //     m_device = m_devices[m_id];
+    //     OPS_tiling = false;
+    //     OPS_tiling_size_x = 0;
+    //     OPS_tiling_size_y = 0;
+    //     OPS_batch_size = 1;
+    // }
 
     static FPGA* FPGA_;
 
@@ -300,11 +300,14 @@ protected:
     unsigned short OPS_tiling_size_y;
     unsigned int OPS_batch_size;
 
-#ifdef OPS_MULTI_FPGA
-    int m_mpi_local_rank;
-    int m_mpi_world_size;
-    bool is_root_mpi_rank;
-#endif
+    int  m_mpi_global_rank = 0;
+    int  m_mpi_local_rank  = 0;
+    int  m_mpi_world_size  = 1;
+    int  m_mpi_local_size  = 1;
+    bool is_root_mpi_rank  = true;   // a single-process run is its own root
+    bool m_mpi_initialised = false;
+
+    std::unique_ptr<AuroraHandler, AuroraHandlerDeleter> m_aurora;
 };
 
 }
