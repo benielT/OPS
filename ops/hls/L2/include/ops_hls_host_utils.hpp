@@ -359,7 +359,12 @@ ops::hls::GridPropertyCore createGridPropery(const unsigned short dim,
 	// gridProp.grid_size[0] = gridProp.xblocks * adj_mem_vector_factor;
 	gridProp.grid_size[0] = getInterleaveGridSizeX(gridProp.actual_size[0], gridProp.d_p[0], vector_factor, mem_vector_factor, total_PEs);
 	printf("[WARNING]  OPS_HLS_TILE_INTERLEAVE based grid_size_x adjustment. Original size_x: %d, actual size_x: %d, mem_vector_factor: %d, bank_size: %d, adjusted grid size_x:%d, total_PEs: %d\n", gridProp.size[0], gridProp.actual_size[0], mem_vector_factor, OPS_HLS_TILE_BANKS, gridProp.grid_size[0], total_PEs);
-#else
+// #elif defined(OPS_HLS_TILE_BANKS)
+// 	gridProp.xblocks = (gridProp.actual_size[0] + mem_vector_factor - 1) / mem_vector_factor;
+// 	gridProp.grid_size[0] = gridProp.xblocks * mem_vector_factor;
+// 	//making sure, grid_size[1] >= banks
+// 	gridProp.grid_size[1] = ((gridProp.grid_size[1] + OPS_HLS_TILE_BANKS - 1) / OPS_HLS_TILE_BANKS) * OPS_HLS_TILE_BANKS;
+#else 
 	gridProp.xblocks = (gridProp.actual_size[0] + mem_vector_factor - 1) / mem_vector_factor;
 	gridProp.grid_size[0] = gridProp.xblocks * mem_vector_factor;
 #endif
@@ -406,8 +411,14 @@ ops::hls::GridPropertyCoreV2 createGridPropery(const unsigned short dim,
 	// unsigned short xblocks = (gridProp.actual_size[0] + adj_mem_vector_factor - 1) / adj_mem_vector_factor;
 	// gridProp.grid_size[0] = xblocks * adj_mem_vector_factor;
 	gridProp.grid_size[0] = getInterleaveGridSizeX(gridProp.actual_size[0], gridProp.d_p[0], vector_factor, mem_vector_factor, total_PEs);
-	printf("[WARNING]  OPS_HLS_TILE_INTERLEAVE based grid_size_x adjustment. Original size_x: %d, actual size_x: %d, mem_vector_factor: %d, bank_size: %d, adjusted grid size_x:%d, total_PEs: %d\n", gridProp.size[0], gridProp.actual_size[0], mem_vector_factor, OPS_HLS_TILE_BANKS, gridProp.grid_size[0], total_PEs);
-#else
+	printf("[INFO]  OPS_HLS_TILE_INTERLEAVE based grid_size_x adjustment. Original size_x: %d, actual size_x: %d, mem_vector_factor: %d, bank_size: %d, adjusted grid size_x:%d, total_PEs: %d\n", gridProp.size[0], gridProp.actual_size[0], mem_vector_factor, OPS_HLS_TILE_BANKS, gridProp.grid_size[0], total_PEs);
+// #elif defined(OPS_HLS_TILE_BANKS)
+// 	unsigned short xblocks = (gridProp.actual_size[0] + mem_vector_factor - 1) / mem_vector_factor;
+// 	gridProp.grid_size[0] = xblocks * mem_vector_factor;
+// 	//making sure, grid_size[1] >= banks
+// 	gridProp.grid_size[1] = ((gridProp.grid_size[1] + OPS_HLS_TILE_BANKS - 1) / OPS_HLS_TILE_BANKS) * OPS_HLS_TILE_BANKS;
+// 	printf("[INFO]  ROW_TILING based grid_size_x adjustment. original size_x: %d, actual size_x: %d, actual size_y: %d, mem_vector_factor: %d, bank_size: %d, adjusted grid size_x:%d, adjusted grid size_y:%d, total_PEs: %d\n", gridProp.size[0], gridProp.actual_size[0], gridProp.actual_size[1], mem_vector_factor, OPS_HLS_TILE_BANKS, gridProp.grid_size[0],  gridProp.grid_size[1], total_PEs);
+#else 
 	unsigned short xblocks = (gridProp.actual_size[0] + mem_vector_factor - 1) / mem_vector_factor;
 	gridProp.grid_size[0] = xblocks * mem_vector_factor;
 #endif

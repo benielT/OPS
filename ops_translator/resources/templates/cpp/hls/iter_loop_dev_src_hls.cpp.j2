@@ -402,7 +402,7 @@ static void kernel_outerloop_{{ilh.id}}_dataflow_region(const unsigned short slr
     {%- endfor -%}); */
 
     {% if slr_iter_par_fact is defined  %}
-    {% set iter_par_factor_tmp = slr_iter_par_fact %}
+    {% set iter_par_factor_tmp = config["iter_par_factor"][slr_iter_par_fact] %}
     {% else %}
     {% set iter_par_factor_tmp = config["iter_par_factor"]%}
     {% endif %}
