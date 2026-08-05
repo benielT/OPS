@@ -19,9 +19,13 @@
 #include "../../L1/include/ops_hls_datamover.hpp"
 #include "../../L1/include/ops_hls_stencil_core_v2.hpp"
 
-
+#ifdef OPS_MULTI_FPGA
 #include "../../L2/include/ops_hls_mpi.hpp"
+#endif
 #include "../../L2/include/ops_hls_fpga.hpp"
+#ifdef OPS_HLS_AURORA
+#include "../../L2/include/ops_hls_aurora.hpp"
+#endif
 #include "../../L2/include/ops_hls_host_utils.hpp"
 #include "../../L2/include/ops_hls_kernel.hpp"
 // typedef struct ops_hls_core
