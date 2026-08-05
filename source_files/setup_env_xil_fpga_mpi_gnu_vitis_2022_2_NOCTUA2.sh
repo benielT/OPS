@@ -34,7 +34,10 @@ export CPP_INCLUDE_PATH=${OPS_INSTALL_PATH}c/include/:$CPP_INCLUDE_PATH
 export MPI_INSTALL_PATH=${EBROOTOPENMPI}
 echo "MPI path: ${MPI_INSTALL_PATH}"
 
-# 3: ############ PYTHON VIRTUAL ENV SETUP #############
+# 3: ############# AURORA FLOW SETUP ##################
+export AURORA_FLOW_INSTALL_PATH=~/repos/AuroraFlow
+
+# 4: ############ PYTHON VIRTUAL ENV SETUP #############
 
 if [ -f ${OPS_INSTALL_PATH}/../ops_translator/ops_venv/bin/activate ]; then
     source ${OPS_INSTALL_PATH}/../ops_translator/ops_venv/bin/activate
@@ -42,6 +45,6 @@ else
     source ${OPS_INSTALL_PATH}/../ops_translator/setup_venv.sh
 fi
 
-# 4: ############ GRAPHVIZ SETUP #############
+# 5: ############ GRAPHVIZ SETUP #############
 
 module load vis/Graphviz/5.0.0-GCCcore-11.3.0
