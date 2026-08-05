@@ -2,13 +2,33 @@ import os
 import pandas as pd
 import argparse
 
-def process_power_profiles(directory, p_batches):
+def parse_tile_sizes(filename, tile):
+    basename = filename.replace("_hls_power_profile.csv", "")
+    parts = basename.split("_")
+
+    if tile == 0:
+        return None, None
+
+    if len(parts) < tile:
+        raise ValueError(
+            f"Filename '{filename}' does not contain {tile} tile dimension(s) before '_perf_profile.csv'."
+        )
+
+    # Extract the last `tile` parts before the _perf_profile.csv suffix.
+    tile_parts = parts[-tile:]
+    if tile == 1:
+        return int(tile_parts[0]), None
+    return int(tile_parts[0]), int(tile_parts[1])
+
+def process_power_profiles(directory, p_batches, tile):
     summary_data = []
 
     # Iterate through all files in the directory
     for filename in os.listdir(directory):
         if filename.endswith("power_profile.csv"):
             file_path = os.path.join(directory, filename)
+            
+            tile_x_size, tile_y_size = parse_tile_sizes(filename, tile)
             
             # Read the CSV file
             with open(file_path, 'r') as file:
@@ -64,8 +84,7 @@ def process_power_profiles(directory, p_batches):
             # Calculate estimated energy for p batches
             estimated_energy_kj = energy_per_batch_kj * p_batches
             
-            # Append the results to the summary
-            summary_data.append({
+            record = {
                 "File": filename,
                 "Grid Size X": sizex,
                 "Grid Size Y": sizey,
@@ -77,13 +96,26 @@ def process_power_profiles(directory, p_batches):
                 "Total Energy (kJ)": total_energy_kj,
                 "Energy per Batch (kJ)": energy_per_batch_kj,
                 f"Estimated Energy for {p_batches} Batches (kJ)": estimated_energy_kj
-            })
+            }
+            if (tile_x_size != None):
+                record["Tile Size X"] = tile_x_size
+            if (tile_y_size != None ):
+                record["Tile Size Y"] = tile_y_size
+            
+            # Append the results to the summary
+            summary_data.append(record)
 
     # Create a DataFrame for the summary
     summary_df = pd.DataFrame(summary_data)
 
     # Sort the DataFrame by grid sizes
-    summary_df = summary_df.sort_values(by=["Grid Size X", "Grid Size Y", "Grid Size Z", "Batch Size"])
+    if (tile == 0):
+        summary_df = summary_df.sort_values(by=["Grid Size X", "Grid Size Y", "Grid Size Z", "Batch Size"])
+    elif (tile == 1):
+        summary_df = summary_df.sort_values(by=["Tile Size X", "Grid Size X", "Grid Size Y", "Grid Size Z", "Batch Size"])
+    elif (tile == 2):
+        summary_df = summary_df.sort_values(by=["Tile Size X", "Tile Size Y", "Grid Size X", "Grid Size Y", "Grid Size Z", "Batch Size"])
+
 
     # Save the summary to a CSV file
     output_file = os.path.join(directory, "power_profile_summary.csv")
@@ -96,9 +128,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process power profile data and calculate energy metrics.")
     parser.add_argument("-d", "--directory", type=str, required=True, help="Path to the directory containing the power profile CSV files.")
     parser.add_argument("-p", "--p_batches", type=int, required=True, help="Number of batches for energy estimation.")
-    
+    parser.add_argument("-t", "--tile", type=int, help="Tiling dimensions (optional). Default = 0", default=0)
     # Parse arguments
     args = parser.parse_args()
     
     # Process the power profiles
-    process_power_profiles(args.directory, args.p_batches)
+    process_power_profiles(args.directory, args.p_batches, args.tile)
