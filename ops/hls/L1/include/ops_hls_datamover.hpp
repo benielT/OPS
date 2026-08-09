@@ -511,7 +511,11 @@ void mem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in,
 template <unsigned int MEM_DATA_WIDTH, unsigned int IN_ITR=2>
 void mem2streamV2(ap_uint<MEM_DATA_WIDTH>* mem_in,
 				::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out,
-				const unsigned int num_beats)
+				const unsigned int num_beats
+#ifdef DEBUG_LOG_PRINT
+	, const unsigned short bank = 0
+#endif 			
+)
 {
 #ifndef __SYNTHESIS__
 	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
@@ -521,9 +525,9 @@ void mem2streamV2(ap_uint<MEM_DATA_WIDTH>* mem_in,
 	constexpr unsigned int bytes_per_beat = MEM_DATA_WIDTH >> 3;
 
 #ifdef DEBUG_LOG_PRINT
-	print("====================================================================================\n");
-	print("|HLS DEBUG_LOG| mem2stream | num_beats: %d\n", num_beats);
-	print("====================================================================================\n");
+	printf("====================================================================================\n");
+	printf("|HLS DEBUG_LOG|mem2stream %d| num_beats: %d\n", bank, num_beats);
+	printf("====================================================================================\n");
 #endif
 
 	for (unsigned int beat = 0; beat < num_beats; beat++)
@@ -533,8 +537,8 @@ void mem2streamV2(ap_uint<MEM_DATA_WIDTH>* mem_in,
         ap_uint<MEM_DATA_WIDTH> tmp = mem_in[beat];
         strm_out << tmp;
 #ifdef DEBUG_LOG_PRINT
-		print("====================================================================================\n");
-        print("|HLS DEBUG_LOG| mem2stream | reading burst index: %d, val=(\n", beat);
+		printf("====================================================================================\n");
+        printf("|HLS DEBUG_LOG|mem2stream %d| reading burst index: %d, val=(\n", bank, beat);
 
         for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
         {
@@ -542,8 +546,8 @@ void mem2streamV2(ap_uint<MEM_DATA_WIDTH>* mem_in,
             conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
             print("		%f,\n", conv.f);
         }
-        print(")\n\n");
-		print("====================================================================================\n");
+        printf(")\n\n");
+		printf("====================================================================================\n");
 #endif
 	}
 }
@@ -1097,6 +1101,96 @@ void stream2memWithAvoidV2(ap_uint<MEM_DATA_WIDTH>* mem_out,
 			print("====================================================================================\n");
 #endif
 	}
+}
+
+
+/**
+ * @brief   stream2memWithAvoidV3 reads from an hls stream and writes to memory while skipping initial beats.
+ *          Split into a drain loop and an unconditional write loop so that vitis can infer a burst
+ *          on the write (a data-dependent predicate on the store blocks burst inference).
+ *
+ * @tparam MEM_DATA_WIDTH : Data width of the AXI4 port and the hls stream port
+ * @tparam IN_ITR: II configuration of mem write
+ *
+ * @param mem_out : output memory port
+ * @param strm_in : input hls-stream
+ * @param num_beats : Total number of beats to process from the stream
+ * @param avoid_beats : Number of initial beats to skip/discard before writing to memory
+ */
+template <unsigned int MEM_DATA_WIDTH, unsigned int IN_ITR=2>
+void stream2memWithAvoidV3(ap_uint<MEM_DATA_WIDTH>* mem_out,
+                ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
+                const unsigned int num_beats, const unsigned int avoid_beats
+#ifdef DEBUG_LOG_PRINT
+				, const unsigned short bank = 0
+#endif			
+)
+{
+#ifndef __SYNTHESIS__
+    static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
+            "MEM_DATA_WIDTH failed limit check");
+    assert(avoid_beats < num_beats && "avoid_beats must be strictly less than num_beats");
+#endif
+
+    constexpr unsigned int bytes_per_beat = MEM_DATA_WIDTH / 8;
+
+    const unsigned int writing_beats = num_beats - avoid_beats;
+    ap_uint<MEM_DATA_WIDTH>* mem_write = mem_out + avoid_beats;
+
+#ifdef DEBUG_LOG_PRINT
+    printf("====================================================================================\n");
+    printf("|HLS DEBUG_LOG| stream2memWithAvoid %d| num_beats: %d\n", bank, num_beats);
+    printf("|HLS DEBUG_LOG| stream2memWithAvoid %d| writing_beats: %d\n", bank, writing_beats);
+    printf("|HLS DEBUG_LOG| stream2memWithAvoid %d| avoid_beats: %d\n", bank, avoid_beats);
+    printf("====================================================================================\n");
+#endif
+
+avoid_loop:
+	if (avoid_beats) {
+		for (unsigned int beat = 0; beat < avoid_beats; beat++)
+		{
+		#pragma HLS PIPELINE II=IN_ITR
+		#pragma HLS LOOP_TRIPCOUNT min=0 max=64
+
+        	ap_uint<MEM_DATA_WIDTH> tmp = strm_in.read();   // drain, discard
+
+#ifdef DEBUG_LOG_PRINT
+			printf("====================================================================================\n");
+			printf("|HLS DEBUG_LOG| stream2memWithAvoid %d| skipping burst index: %d, val=(\n", bank, beat);
+			for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
+			{
+				DataConv conv;
+				conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+				print("     %f,\n", conv.f);
+			}
+			printf(")%d \n\n",0);
+			printf("====================================================================================\n");
+#endif
+    	}
+	}
+
+write_loop:
+    for (unsigned int beat = 0; beat < writing_beats; beat++)
+    {
+#pragma HLS PIPELINE II=IN_ITR
+#pragma HLS LOOP_TRIPCOUNT min=1 max=256
+
+        ap_uint<MEM_DATA_WIDTH> tmp = strm_in.read();
+        mem_write[beat] = tmp;                          // unconditional, contiguous from 0
+
+#ifdef DEBUG_LOG_PRINT
+        printf("====================================================================================\n");
+        printf("|HLS DEBUG_LOG| stream2memWithAvoid %d| writing burst index: %d, val=(\n", bank, avoid_beats + beat);
+        for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
+        {
+            DataConv conv;
+            conv.i = tmp.range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+            printf("     %f,\n", conv.f);
+        }
+        printf(")%d \n\n",0);
+        printf("====================================================================================\n");
+#endif
+    }
 }
 
 /**
@@ -2053,7 +2147,7 @@ static void stridedTileMem2stream2D(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stre
 
     for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++)
     {
-        const unsigned int tile_x_offset = tile_x * config.effective_tile_size_x; 
+        const unsigned short tile_x_offset = tile_x * config.effective_tile_size_x; 
         const unsigned short tile_size_x = tile_x == (config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
 
         // Traverse the entire Y dimension, dynamically striding by NUM_BANKS
@@ -2138,7 +2232,7 @@ static void stridedTileMem2stream3D(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stre
         
         for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++)
         {
-            const unsigned int tile_x_offset = tile_x * config.effective_tile_size_x; 
+            const unsigned short tile_x_offset = tile_x * config.effective_tile_size_x; 
             const unsigned short tile_size_x = (tile_x == config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
 
             for (unsigned short k = 0; k < z_diff; k++)
@@ -5186,7 +5280,7 @@ static void stridedTileStream2mem2D(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm
     for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++)
     {
 		const unsigned short avoid_x = tile_x == 0 ? 0 : config.tile_overlap_size_x >> 1;
-        const unsigned int tile_x_offset = tile_x * config.effective_tile_size_x; 
+        const unsigned short tile_x_offset = tile_x * config.effective_tile_size_x; 
         const unsigned short tile_size_x = tile_x == (config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
 
         // Traverse the entire Y dimension, dynamically striding by NUM_BANKS
@@ -5275,7 +5369,7 @@ static void stridedTileStream2mem3D(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm
         {
             const unsigned short base_avoid_x = tile_x == 0 ? 0 : config.tile_overlap_size_x >> 1;
             
-            const unsigned int tile_x_offset = tile_x * config.effective_tile_size_x; 
+            const unsigned short tile_x_offset = tile_x * config.effective_tile_size_x; 
             const unsigned short tile_size_x = (tile_x == config.tile_count_x -1) ? config.last_tile_size_x : config.tile_size_x;
 
             for (unsigned short k = 0; k < z_diff; k++)
