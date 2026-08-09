@@ -946,7 +946,7 @@ void hlsTerminate(::hls::stream<ap_uint<HLS_DATA_WIDTH>>& strm_in,
  * @param avoid_beats : Number of initial beats to skip/discard before writing to memory
  */
 template <unsigned int MEM_DATA_WIDTH, unsigned int BURST_SIZE=32, unsigned int IN_ITR=2>
-void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
+DEPRECATED void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
 				::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
 				const unsigned int num_beats, const unsigned int avoid_beats)
 {
@@ -1075,9 +1075,9 @@ void stream2memWithAvoidV2(ap_uint<MEM_DATA_WIDTH>* mem_out,
 
 #ifdef DEBUG_LOG_PRINT
 	print("====================================================================================\n");
-	print("|HLS DEBUG_LOG| stream2memWithAvoid | num_beats: %d\n", num_beats);
-	print("|HLS DEBUG_LOG| stream2memWithAvoid | writing_beats: %d\n", writing_beats);
-	print("|HLS DEBUG_LOG| stream2memWithAvoid | avoid_beats: %d\n", avoid_beats);
+	print("|HLS DEBUG_LOG| stream2memWithAvoidV2 | num_beats: %d\n", num_beats);
+	print("|HLS DEBUG_LOG| stream2memWithAvoidV2 | writing_beats: %d\n", writing_beats);
+	print("|HLS DEBUG_LOG| stream2memWithAvoidV2 | avoid_beats: %d\n", avoid_beats);
 	print("====================================================================================\n");
 #endif
 
@@ -1090,7 +1090,7 @@ void stream2memWithAvoidV2(ap_uint<MEM_DATA_WIDTH>* mem_out,
 				mem_out[beat] = tmp;	
 #ifdef DEBUG_LOG_PRINT
 			print("====================================================================================\n");
-        	print("|HLS DEBUG_LOG| stream2memWithAvoid | writing burst index: %d, val=(\n", beat);
+        	print("|HLS DEBUG_LOG| stream2memWithAvoidV2 | writing burst index: %d, val=(\n", beat);
 			for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
 			{
 				DataConv conv;
@@ -1139,9 +1139,9 @@ void stream2memWithAvoidV3(ap_uint<MEM_DATA_WIDTH>* mem_out,
 
 #ifdef DEBUG_LOG_PRINT
     printf("====================================================================================\n");
-    printf("|HLS DEBUG_LOG| stream2memWithAvoid %d| num_beats: %d\n", bank, num_beats);
-    printf("|HLS DEBUG_LOG| stream2memWithAvoid %d| writing_beats: %d\n", bank, writing_beats);
-    printf("|HLS DEBUG_LOG| stream2memWithAvoid %d| avoid_beats: %d\n", bank, avoid_beats);
+    printf("|HLS DEBUG_LOG| stream2memWithAvoidV3 %d| num_beats: %d\n", bank, num_beats);
+    printf("|HLS DEBUG_LOG| stream2memWithAvoidV3 %d| writing_beats: %d\n", bank, writing_beats);
+    printf("|HLS DEBUG_LOG| stream2memWithAvoidV3 %d| avoid_beats: %d\n", bank, avoid_beats);
     printf("====================================================================================\n");
 #endif
 
@@ -1156,7 +1156,7 @@ avoid_loop:
 
 #ifdef DEBUG_LOG_PRINT
 			printf("====================================================================================\n");
-			printf("|HLS DEBUG_LOG| stream2memWithAvoid %d| skipping burst index: %d, val=(\n", bank, beat);
+			printf("|HLS DEBUG_LOG| stream2memWithAvoidV3 %d| skipping burst index: %d, val=(\n", bank, beat);
 			for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
 			{
 				DataConv conv;
@@ -1180,7 +1180,7 @@ write_loop:
 
 #ifdef DEBUG_LOG_PRINT
         printf("====================================================================================\n");
-        printf("|HLS DEBUG_LOG| stream2memWithAvoid %d| writing burst index: %d, val=(\n", bank, avoid_beats + beat);
+        printf("|HLS DEBUG_LOG| stream2memWithAvoidV3 %d| writing burst index: %d, val=(\n", bank, avoid_beats + beat);
         for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
         {
             DataConv conv;
@@ -1208,7 +1208,7 @@ write_loop:
  * @param avoid_beats : Number of initial MEMORY beats to skip/discard before writing
  */
 template <unsigned int MEM_DATA_WIDTH, unsigned int STREAM_DATA_WIDTH, unsigned int BURST_SIZE=32, unsigned int IN_ITR=2>
-void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
+DEPRECATED void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
                          ::hls::stream<ap_uint<STREAM_DATA_WIDTH>>& strm_in,
                          const unsigned int num_beats, const unsigned int avoid_beats)
 {
@@ -1244,13 +1244,13 @@ void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
 
 #ifdef DEBUG_LOG_PRINT
     print("====================================================================================\n");
-    print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | num_beats: %d\n", num_beats);
-    print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | burst_beats: %d\n", burst_beats);
-    print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | non_burst_beats: %d\n", non_burst_beats);
-    print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | num_burst: %d\n", num_bursts);
-    print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | avoid_beats: %d\n", avoid_beats);
-    print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | pkts_per_beats: %d \n", pkts_per_beats);
-	print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | adjusted_ii: %d \n", ii_adj);
+    print("|HLS DEBUG_LOG| stream2memWithAvoid | num_beats: %d\n", num_beats);
+    print("|HLS DEBUG_LOG| stream2memWithAvoid | burst_beats: %d\n", burst_beats);
+    print("|HLS DEBUG_LOG| stream2memWithAvoid | non_burst_beats: %d\n", non_burst_beats);
+    print("|HLS DEBUG_LOG| stream2memWithAvoid | num_burst: %d\n", num_bursts);
+    print("|HLS DEBUG_LOG| stream2memWithAvoid | avoid_beats: %d\n", avoid_beats);
+    print("|HLS DEBUG_LOG| stream2memWithAvoid | pkts_per_beats: %d \n", pkts_per_beats);
+	print("|HLS DEBUG_LOG| stream2memWithAvoid | adjusted_ii: %d \n", ii_adj);
     print("====================================================================================\n");
 #endif
 
@@ -1271,7 +1271,7 @@ void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
 
 #ifdef DEBUG_LOG_PRINT
         print("====================================================================================\n");
-        print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | discarding index: %d, val=(\n", index);
+        print("|HLS DEBUG_LOG| stream2memWithAvoid | discarding index: %d, val=(\n", index);
         for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
         {
             DataConv conv;
@@ -1304,7 +1304,7 @@ void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
 
 #ifdef DEBUG_LOG_PRINT
             print("====================================================================================\n");
-            print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | writing burst index: %d, val=(\n", index);
+            print("|HLS DEBUG_LOG| stream2memWithAvoid | writing burst index: %d, val=(\n", index);
             for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
             {
                 DataConv conv;
@@ -1336,7 +1336,7 @@ void stream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out,
         
 #ifdef DEBUG_LOG_PRINT
         print("====================================================================================\n");
-        print("|HLS DEBUG_LOG| stream2memWithAvoid_v2 | writing non-burst index: %d, val=(\n", index);
+        print("|HLS DEBUG_LOG| stream2memWithAvoid | writing non-burst index: %d, val=(\n", index);
 
         for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++)
         {
@@ -1429,7 +1429,7 @@ void stream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out,
  */
 
 template <unsigned short MEM_DATA_WIDTH, unsigned short DATA_WIDTH, unsigned short NUM_STREAMS, unsigned short OVERLAP_SIZE = 1>
-void stream2interleave(::hls::stream<ap_uint<MEM_DATA_WIDTH>> in_stream[NUM_STREAMS], ::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_SIZE>> out_stream[NUM_STREAMS], const unsigned int num_pkts) 
+DEPRECATED void stream2interleave(::hls::stream<ap_uint<MEM_DATA_WIDTH>> in_stream[NUM_STREAMS], ::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_SIZE>> out_stream[NUM_STREAMS], const unsigned int num_pkts) 
 {
 #ifndef __SYNTHESIS__
 	static_assert(MEM_DATA_WIDTH >= min_mem_data_width && MEM_DATA_WIDTH <= max_mem_data_width,
@@ -1570,7 +1570,7 @@ void stream2interleave(::hls::stream<ap_uint<MEM_DATA_WIDTH>> in_stream[NUM_STRE
  * @param[in] num_pkts - Number of stream packets
  */
 template <unsigned short MEM_DATA_WIDTH, unsigned short DATA_WIDTH, unsigned short NUM_STREAMS, unsigned short OVERLAP_SIZE = 1>
-void interleave2stream(::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_SIZE>> in_stream[NUM_STREAMS], ::hls::stream<ap_uint<MEM_DATA_WIDTH>> out_stream[NUM_STREAMS], const unsigned int num_pkts) 
+DEPRECATED void interleave2stream(::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_SIZE>> in_stream[NUM_STREAMS], ::hls::stream<ap_uint<MEM_DATA_WIDTH>> out_stream[NUM_STREAMS], const unsigned int num_pkts) 
 {
 	constexpr unsigned short REALISED_OVERLAP_SIZE = DATA_WIDTH * OVERLAP_SIZE;
 	constexpr unsigned short MEM_DATA_WIDTH_IN = MEM_DATA_WIDTH + REALISED_OVERLAP_SIZE;
@@ -1667,7 +1667,7 @@ void interleave2stream(::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_S
  * @param[in] num_pkts - Number of stream packets
  */
 template <unsigned short MEM_DATA_WIDTH, unsigned short DATA_WIDTH, unsigned short NUM_STREAMS, unsigned short OVERLAP_SIZE = 1>
-void updateInterleaveBoundaries(::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_SIZE>> in_stream[NUM_STREAMS], ::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_SIZE>> out_stream[NUM_STREAMS], const unsigned int num_pkts) 
+DEPRECATED void updateInterleaveBoundaries(::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_SIZE>> in_stream[NUM_STREAMS], ::hls::stream<ap_uint<MEM_DATA_WIDTH+DATA_WIDTH*OVERLAP_SIZE>> out_stream[NUM_STREAMS], const unsigned int num_pkts) 
 {
 #ifndef __SYNTHESIS__
 	static_assert(NUM_STREAMS % 2 == 0,
@@ -1842,7 +1842,7 @@ static ap_uint<192> commandGen3D(const ap_uint<64>& offset, const ap_uint<16>& s
 }
 
 template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-static void tileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, ap_uint<160> command)
+DEPRECATED static void tileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, ap_uint<160> command)
 {
     ap_uint<64> offset = command.range(63,0);
     ap_uint<16> size_x = command.range(95,80);
@@ -1871,7 +1871,7 @@ static void tileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uin
 }
 
 template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-static void tileStream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out, ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, ap_uint<160> command)
+DEPRECATED static void tileStream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out, ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, ap_uint<160> command)
 {
     ap_uint<64> offset = command.range(63,0);
     ap_uint<16> size_x = command.range(95,80);
@@ -1899,7 +1899,7 @@ static void tileStream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out, ::hls::stream<ap_ui
 }
 
 template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-static void tileStream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out, ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, ap_uint<192> command)
+DEPRECATED static void tileStream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out, ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, ap_uint<192> command)
 {
     ap_uint<64> offset = command.range(63,0);
     ap_uint<16> size_x = command.range(95,80);
@@ -1956,7 +1956,7 @@ static void tileStream2memWithAvoid(ap_uint<MEM_DATA_WIDTH>* mem_out, ::hls::str
  * @see ops::hls::MemConfigTile
  */
 template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-static void tileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, const ops::hls::MemConfigTile& config)
+DEPRECATED static void tileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, const ops::hls::MemConfigTile& config)
 {
     // #pragma HLS INLINE off
     #ifdef DEBUG_LOG_PRINT
@@ -2042,7 +2042,7 @@ static void tileMem2stream(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uin
  * @see ops::hls::MemConfigTile
  */
 template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-static void tileStream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out, ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, const ops::hls::MemConfigTile& config)
+DEPRECATED static void tileStream2mem(ap_uint<MEM_DATA_WIDTH>* mem_out, ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, const ops::hls::MemConfigTile& config)
 {
     // #pragma HLS INLINE off
     #ifdef DEBUG_LOG_PRINT
@@ -2288,7 +2288,7 @@ static void stridedTileMem2stream3D(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stre
  * replacing expensive hardware modulo operations with bitwise AND masking.
  */
 template <unsigned short NUM_BANKS, unsigned short IN_ITR=2>
-static void readConfigStreamGenerator(const size_t offset_x, const unsigned short size_x, const unsigned short stride_y, const unsigned short size_y, const unsigned short stride_z, const unsigned short size_z, ::hls::stream<ap_uint<48>> strms[NUM_BANKS])
+DEPRECATED static void readConfigStreamGenerator(const size_t offset_x, const unsigned short size_x, const unsigned short stride_y, const unsigned short size_y, const unsigned short stride_z, const unsigned short size_z, ::hls::stream<ap_uint<48>> strms[NUM_BANKS])
 {
 #ifndef __SYNTHESIS__
 	static_assert((NUM_BANKS != 0) && ((NUM_BANKS & (NUM_BANKS - 1)) == 0), "NUM_BANKS must be a power of two");
@@ -2550,7 +2550,7 @@ static void readConfigStreamGenerator(const size_t offset_x, const unsigned shor
  * replacing expensive hardware modulo operations with bitwise AND masking.
  */
 template <unsigned short NUM_BANKS, unsigned short IN_ITR=2>
-static void offsetGenerator(const unsigned short tile_size_y, const unsigned short tile_size_z, 
+DEPRECATED static void offsetGenerator(const unsigned short tile_size_y, const unsigned short tile_size_z, 
 		const unsigned short bank_grid_size_x_floor, const ap_uint<LOG2(NUM_BANKS)> big_grid_size_x_banks_upper, const unsigned short grid_size_y, 
 		const unsigned short tile_offset_x_floor, const ap_uint<LOG2(NUM_BANKS)> big_offset_x_banks_upper,  const unsigned short tile_offset_y, const unsigned short bank_tile_size_x_floor, const ap_uint<NUM_BANKS> big_bank_tile_size_x_mask,
 		::hls::stream<ap_uint<32>> offset_strm[NUM_BANKS])
@@ -2658,7 +2658,7 @@ static void offsetGenerator(const unsigned short tile_size_y, const unsigned sho
  * replacing expensive hardware modulo operations with bitwise AND masking.
  */
 template <unsigned short NUM_BANKS, unsigned short IN_ITR=2>
-static void offsetGenerator(const unsigned short tile_size_y, 
+DEPRECATED static void offsetGenerator(const unsigned short tile_size_y, 
         const unsigned short bank_grid_size_x_floor, const ap_uint<LOG2(NUM_BANKS)> big_grid_size_x_banks_upper, 
         const unsigned short tile_offset_x_floor, const ap_uint<LOG2(NUM_BANKS)> big_offset_x_banks_upper,  
         const unsigned short bank_tile_size_x_floor, 
@@ -2760,7 +2760,7 @@ static void offsetGenerator(const unsigned short tile_size_y,
  * replacing expensive hardware modulo operations with bitwise AND masking.
  */
 template <unsigned short NUM_BANKS, unsigned short IN_ITR=2>
-static void writeConfigStreamGenerator(const size_t offset_x, const unsigned short size_x, const unsigned short stride_y, const unsigned short size_y, const unsigned short stride_z, const unsigned short size_z, const unsigned short avoid_x, const unsigned short avoid_y, ::hls::stream<ap_uint<64>> strms[NUM_BANKS])
+DEPRECATED static void writeConfigStreamGenerator(const size_t offset_x, const unsigned short size_x, const unsigned short stride_y, const unsigned short size_y, const unsigned short stride_z, const unsigned short size_z, const unsigned short avoid_x, const unsigned short avoid_y, ::hls::stream<ap_uint<64>> strms[NUM_BANKS])
 {
 #ifndef __SYNTHESIS__
     static_assert((NUM_BANKS != 0) && ((NUM_BANKS & (NUM_BANKS - 1)) == 0), "NUM_BANKS must be a power of two");
@@ -2885,7 +2885,7 @@ static void writeConfigStreamGenerator(const size_t offset_x, const unsigned sho
  * @see ops::hls::stream2mem
  */
 template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-static void stridedTileMem2streamV2(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uint<48>>& strm_command,
+DEPRECATED static void stridedTileMem2streamV2(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stream<ap_uint<48>>& strm_command,
 		::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, unsigned short size_y, unsigned short size_z=1
 #ifdef DEBUG_LOG_PRINT
 		, const char* print_prompt = ""
@@ -2942,7 +2942,7 @@ static void stridedTileMem2streamV2(ap_uint<MEM_DATA_WIDTH>* mem_in, ::hls::stre
  * @param[in] size_z Depth (default: 1)
  */
 template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-static void stridedTileMem2streamV3(ap_uint<MEM_DATA_WIDTH>* mem_in, 
+DEPRECATED static void stridedTileMem2streamV3(ap_uint<MEM_DATA_WIDTH>* mem_in, 
                                     ::hls::stream<ap_uint<48>>& strm_command,
                                     ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, 
                                     unsigned short size_y, 
@@ -3006,7 +3006,7 @@ static void stridedTileMem2streamV3(ap_uint<MEM_DATA_WIDTH>* mem_in,
  * @param[in] size_z Depth (default: 1)
  */
 template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short BANK_ID, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-static void stridedTileMem2streamV4(ap_uint<MEM_DATA_WIDTH>* mem_in, 
+DEPRECATED static void stridedTileMem2streamV4(ap_uint<MEM_DATA_WIDTH>* mem_in, 
                                     ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, 
 									::hls::stream<ap_uint<32>>& offset_command,
                                     const unsigned short bank_tile_size_x_floor,
@@ -3087,7 +3087,7 @@ static void stridedTileMem2streamV4(ap_uint<MEM_DATA_WIDTH>* mem_in,
  * @param[in] size_z Depth (default: 1)
  */
 template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short BANK_ID, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-static void stridedTileMem2streamV5(ap_uint<MEM_DATA_WIDTH>* mem_in, 
+DEPRECATED static void stridedTileMem2streamV5(ap_uint<MEM_DATA_WIDTH>* mem_in, 
 		::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out, 
 		const unsigned short bank_size_x_floor,
 		const ap_uint<1> is_big_size_x,
@@ -3182,7 +3182,7 @@ static void stridedTileMem2streamV5(ap_uint<MEM_DATA_WIDTH>* mem_in,
  * @see generated by the `writeConfigStreamGenerator` utility.
  */
 template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-static void stridedTileStream2memWithAvoidV2(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, ap_uint<MEM_DATA_WIDTH>* out, ::hls::stream<ap_uint<64>>& strm_command, unsigned short size_y, unsigned short size_z=1
+DEPRECATED static void stridedTileStream2memWithAvoidV2(::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, ap_uint<MEM_DATA_WIDTH>* out, ::hls::stream<ap_uint<64>>& strm_command, unsigned short size_y, unsigned short size_z=1
 #ifdef DEBUG_LOG_PRINT
 		, const char* print_prompt = ""
 #endif	
@@ -3226,7 +3226,7 @@ static void stridedTileStream2memWithAvoidV2(::hls::stream<ap_uint<MEM_DATA_WIDT
  * @param[in] size_z The total number of iterations in the Z dimension.
  */
 template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-static void stridedTileStream2memWithAvoidV3(
+DEPRECATED static void stridedTileStream2memWithAvoidV3(
     ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, 
     ap_uint<MEM_DATA_WIDTH>* out, 
     ::hls::stream<ap_uint<64>>& strm_command, 
@@ -3316,7 +3316,7 @@ static void stridedTileStream2memWithAvoidV3(
  */
 
 template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short BANK_ID, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-static void stridedTileStream2memWithAvoidV4(
+DEPRECATED static void stridedTileStream2memWithAvoidV4(
     	::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, 
 		ap_uint<MEM_DATA_WIDTH>* out, 
 		::hls::stream<ap_uint<32>>& offset_command, 
@@ -3416,7 +3416,7 @@ static void stridedTileStream2memWithAvoidV4(
  * @param[in] size_y The total number of iterations in the Y dimension.
  */
 template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short BANK_ID, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-static void stridedTileStream2memWithAvoidV4(
+DEPRECATED static void stridedTileStream2memWithAvoidV4(
         ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, 
         ap_uint<MEM_DATA_WIDTH>* out, 
         ::hls::stream<ap_uint<32>>& offset_command, 
@@ -3504,7 +3504,7 @@ static void stridedTileStream2memWithAvoidV4(
  * @param[in] size_z The total number of iterations in the Z dimension.
  */
 template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short BANK_ID, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-static void stridedTileStream2memWithAvoidV5(
+DEPRECATED static void stridedTileStream2memWithAvoidV5(
     	::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in, 
 		ap_uint<MEM_DATA_WIDTH>* out,
 		const unsigned short bank_size_x_floor,
@@ -3617,7 +3617,7 @@ static void stridedTileStream2memWithAvoidV5(
  */
 
 template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short IN_ITR=2>
-static void redirect(
+DEPRECATED static void redirect(
         ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in[NUM_BANKS],
         ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out[NUM_BANKS],
         const size_t offset_x, const unsigned short size_x, const unsigned short stride_y, const unsigned short size_y, const unsigned short stride_z, const unsigned short size_z)
@@ -3790,7 +3790,7 @@ static void redirect(
  */
 
 template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short IN_ITR=2>
-static void redirectV2(
+DEPRECATED static void redirectV2(
         ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in[NUM_BANKS],
         ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out[NUM_BANKS],
 		const unsigned short bank_tile_size_x_floor, const unsigned short bank_tile_size_x_ceil, const ap_uint<NUM_BANKS> big_bank_tile_size_x_mask, const ap_uint<LOG2(NUM_BANKS)> big_offset_x_banks_upper, 
@@ -3946,7 +3946,7 @@ static void redirectV2(
  *
  */
 template <unsigned short STREAM1_DATA_WIDTH, unsigned short STREAM2_DATA_WIDTH, unsigned short NUM_STRMS, unsigned short IN_ITR=2>
-static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>> strm_in[NUM_STRMS],
+DEPRECATED static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>> strm_in[NUM_STRMS],
 				::hls::stream<ap_uint<STREAM2_DATA_WIDTH>> strm_out[NUM_STRMS],
 				const unsigned int num_big_pkts)
 {
@@ -4061,7 +4061,7 @@ static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_W
  *
  */
 template <unsigned short STREAM1_DATA_WIDTH, unsigned short STREAM2_DATA_WIDTH, unsigned short NUM_STRMS, unsigned short IN_ITR=2>
-static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>> strm_in[NUM_STRMS],
+DEPRECATED static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>> strm_in[NUM_STRMS],
 				::hls::stream<ap_uint<STREAM2_DATA_WIDTH>> strm_out[NUM_STRMS],
 				const unsigned int num_big_pkts,
 				const bool is_small_tile)
@@ -4210,7 +4210,7 @@ static void aggregatedStream2streamStepdown(::hls::stream<ap_uint<STREAM1_DATA_W
  *
  */
 template <unsigned short STREAM1_DATA_WIDTH, unsigned short STREAM2_DATA_WIDTH, unsigned short NUM_STRMS, unsigned short IN_ITR=2>
-static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>> strm_in[NUM_STRMS],
+DEPRECATED static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>> strm_in[NUM_STRMS],
 			::hls::stream<ap_uint<STREAM2_DATA_WIDTH>> strm_out[NUM_STRMS],
 			const unsigned int num_big_pkts)
 {
@@ -4329,7 +4329,7 @@ static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WID
  *
  */
 template <unsigned short STREAM1_DATA_WIDTH, unsigned short STREAM2_DATA_WIDTH, unsigned short NUM_STRMS, unsigned short IN_ITR=2>
-static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>> strm_in[NUM_STRMS],
+DEPRECATED static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WIDTH>> strm_in[NUM_STRMS],
 			::hls::stream<ap_uint<STREAM2_DATA_WIDTH>> strm_out[NUM_STRMS],
 			const unsigned int num_big_pkts,
 			const bool is_small_tile)
@@ -4487,7 +4487,7 @@ static void aggregatedStream2streamStepup(::hls::stream<ap_uint<STREAM1_DATA_WID
  */
 
 template <unsigned short MEM_DATA_WIDTH, unsigned short STREAM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short IN_ITR=2>
-static void redirect(
+DEPRECATED static void redirect(
         ::hls::stream<ap_uint<STREAM_DATA_WIDTH>> strm_in[NUM_BANKS],
         ::hls::stream<ap_uint<STREAM_DATA_WIDTH>> strm_out[NUM_BANKS],
         const ap_uint<160>& command)
@@ -4670,7 +4670,7 @@ static void redirect(
  * @see ops::hls::redirect
  */
 template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short IN_ITR=2>
-static void reverseRedirect(
+DEPRECATED static void reverseRedirect(
         ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in[NUM_BANKS],
         ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out[NUM_BANKS],
         const size_t offset_x, const unsigned short size_x, const unsigned short stride_y, const unsigned short size_y, const unsigned short stride_z, const unsigned short size_z)
@@ -4830,7 +4830,7 @@ static void reverseRedirect(
  * @see ops::hls::redirect
  */
 template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short IN_ITR=2>
-static void reverseRedirectV2(
+DEPRECATED static void reverseRedirectV2(
         ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in[NUM_BANKS],
         ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out[NUM_BANKS],
         const unsigned short bank_tile_size_x_floor, const unsigned short bank_tile_size_x_ceil,  const ap_uint<NUM_BANKS> big_bank_tile_size_x_mask, const ap_uint<LOG2(NUM_BANKS)> big_offset_x_banks_upper, 
@@ -4992,7 +4992,7 @@ static void reverseRedirectV2(
  * @see ops::hls::redirect
  */
 template <unsigned short MEM_DATA_WIDTH, unsigned short STREAM_DATA_WIDTH, unsigned short NUM_BANKS, unsigned short IN_ITR=2>
-static void reverseRedirect(
+DEPRECATED static void reverseRedirect(
         ::hls::stream<ap_uint<STREAM_DATA_WIDTH>> strm_in[NUM_BANKS],
         ::hls::stream<ap_uint<STREAM_DATA_WIDTH>> strm_out[NUM_BANKS],
         const ap_uint<160>& command)
