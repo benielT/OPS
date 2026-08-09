@@ -132,11 +132,11 @@ def getAdjustedPlaneBufferSize(x_size: int, y_size: int, half_span: int, vec_fac
     adj_y_size = y_size + 2*half_span
     return (adj_x_size * adj_y_size)
 
-def getOverlapTileSize(n_slr: int, p_slr: int, half_span: int, mem_vec_fac: int) -> int:
-    # print(f"n_slr: {n_slr}, p_slr: {p_slr}, half_span: {half_span}, mem_vec_fac: {mem_vec_fac}")
-    if isinstance(p_slr, list):
-        return (floor(((sum(p_slr)) * half_span + mem_vec_fac - 1) / mem_vec_fac) * mem_vec_fac * 2)
-    return (floor(((n_slr * p_slr) * half_span + mem_vec_fac - 1) / mem_vec_fac) * mem_vec_fac * 2)
+# def getOverlapTileSize(n_slr: int, p_slr: int, half_span: int, mem_vec_fac: int) -> int:
+#     # print(f"n_slr: {n_slr}, p_slr: {p_slr}, half_span: {half_span}, mem_vec_fac: {mem_vec_fac}")
+#     if isinstance(p_slr, list):
+#         return (floor(((sum(p_slr)) * half_span + mem_vec_fac - 1) / mem_vec_fac) * mem_vec_fac * 2)
+#     return (floor(((n_slr * p_slr) * half_span + mem_vec_fac - 1) / mem_vec_fac) * mem_vec_fac * 2)
 
 
 def getTotalPEs(n_slr: int, p_slr: Union[int, List]) -> int:
@@ -150,7 +150,7 @@ env.globals.update(get_arg_gbl_name = lambda gbl: getArgGblName(gbl))
 env.globals.update(get_read_args_from_stencil = lambda stencil_ptr, loop: getReadArgsFromStencil(stencil_ptr, loop))
 env.globals.update(get_line_buff_size = lambda x_size, half_span, vec_fac, div = 1: getAdjustedLineBufferSize(x_size, half_span, vec_fac, div))
 env.globals.update(get_plane_buff_size = lambda x_size, y_size, half_span, vec_fac, div = 1: getAdjustedPlaneBufferSize(x_size, y_size, half_span, vec_fac, div))
-env.globals.update(get_overlap_tile_size = lambda n_slr, p_slr, half_span, mem_vec_fac: getOverlapTileSize(n_slr, p_slr, half_span, mem_vec_fac))
+# env.globals.update(get_overlap_tile_size = lambda n_slr, p_slr, half_span, mem_vec_fac: getOverlapTileSize(n_slr, p_slr, half_span, mem_vec_fac))
 env.globals.update(get_total_PEs = lambda n_slr, p_slr: getTotalPEs(n_slr, p_slr))
 env.globals.update(log2 = lambda arg: log2(arg))
 env.globals.update(max = lambda arg1, arg2: max(arg1,arg2))

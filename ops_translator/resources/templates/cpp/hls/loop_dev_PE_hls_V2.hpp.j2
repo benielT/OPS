@@ -339,8 +339,8 @@ public:
         //---------------------------------------------------------------
             {% endif %}
         const unsigned short true_tile_size_x = m_stencilConfig.tile_size[0] << {{"adj_" if prog.is_interleave()}}shift_bits;
-        // overlap_size = {{get_overlap_tile_size(config["SLR_count"], config["iter_par_factor"], half_span_x, config["mem_vector_factor"])|int}}, total_PEs = {{get_total_PEs(config["SLR_count"], config["iter_par_factor"])}} 
-        // const unsigned short overlap_offset_x = {{(get_overlap_tile_size(config["SLR_count"], config["iter_par_factor"], half_span_x, config["mem_vector_factor"]) - (half_span_x * get_total_PEs(config["SLR_count"], config["iter_par_factor"])) - 1)|int}};
+        {#// overlap_size = {{get_overlap_tile_size(config["SLR_count"], config["iter_par_factor"], half_span_x, config["mem_vector_factor"])|int}}, total_PEs = {{get_total_PEs(config["SLR_count"], config["iter_par_factor"])}} 
+        // const unsigned short overlap_offset_x = {{(get_overlap_tile_size(config["SLR_count"], config["iter_par_factor"], half_span_x, config["mem_vector_factor"]) - (half_span_x * get_total_PEs(config["SLR_count"], config["iter_par_factor"])) - 1)|int}};#}
         const bool is_first_x = m_stencilConfig.is_first[0] {% if prog.is_interleave()-%} && is_first_sub_tile {%-endif-%};
         const bool is_last_x = m_stencilConfig.is_last[0] {% if prog.is_interleave()-%} && is_last_sub_tile {%-endif-%};
 
