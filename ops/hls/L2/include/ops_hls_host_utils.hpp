@@ -114,15 +114,81 @@ void printAccessRange(ops::hls::AccessRange& range, std::string prompt = "")
 }
 
 template<unsigned short N_SLR, unsigned short P_SLR, unsigned short HALF_SPAN, unsigned short MEM_VECTOR_SIZE>
-const unsigned short get_overlap_size() {
-    auto val =  (((N_SLR * P_SLR) * HALF_SPAN  + MEM_VECTOR_SIZE - 1) / MEM_VECTOR_SIZE) * MEM_VECTOR_SIZE * 2;
+const unsigned short get_overlap_size_x() {
+#ifdef OPS_HLS_TILE_INTERLEAVE
+	unsigned short divisor = MEM_VECTOR_SIZE * OPS_HLS_TILE_BANKS;
+#else
+	unsigned short divisor = MEM_VECTOR_SIZE;
+#endif
+	auto val =  (((N_SLR * P_SLR) * HALF_SPAN*2  + divisor - 1) / divisor) * divisor;
+#ifdef DEBUG_LOG
+    printf("[FIX2][OVL] half_span_x=%u align=%u -> overlap=%u elems (%u beats)\n",
+           (unsigned)HALF_SPAN, (unsigned)divisor, (unsigned)val,
+           (unsigned)(val / MEM_VECTOR_SIZE));
+#endif
 	return val;
 }
 
 template<unsigned short TOTAL_SLR, unsigned short HALF_SPAN, unsigned short MEM_VECTOR_SIZE>
-const unsigned short get_overlap_size() {
-    auto val =  (((TOTAL_SLR) * HALF_SPAN  + MEM_VECTOR_SIZE - 1) / MEM_VECTOR_SIZE) * MEM_VECTOR_SIZE * 2;
+const unsigned short get_overlap_size_x() {
+#ifdef OPS_HLS_TILE_INTERLEAVE
+	unsigned short divisor = MEM_VECTOR_SIZE * OPS_HLS_TILE_BANKS;
+#else
+	unsigned short divisor = MEM_VECTOR_SIZE;
+#endif
+	auto val =  (((TOTAL_SLR) * HALF_SPAN*2  + divisor - 1) / divisor) * divisor;
+#ifdef DEBUG_LOG
+    printf("[FIX2][OVL] half_span_x=%u align=%u -> overlap=%u elems (%u beats)\n",
+           (unsigned)HALF_SPAN, (unsigned)divisor, (unsigned)val,
+           (unsigned)(val / MEM_VECTOR_SIZE));
+#endif
 	return val;
+}
+
+const unsigned short get_overlap_size_x(unsigned short mem_vector_factor, unsigned short half_span, unsigned short total_PEs) {
+#ifdef OPS_HLS_TILE_INTERLEAVE
+	unsigned short divisor = mem_vector_factor * OPS_HLS_TILE_BANKS;
+#else
+	unsigned short divisor = mem_vector_factor;
+#endif
+    auto val =  ((total_PEs * half_span*2  + divisor - 1) / divisor) * divisor;
+#ifdef DEBUG_LOG
+    printf("[FIX2][OVL] half_span_x=%u align=%u -> overlap=%u elems (%u beats)\n",
+           (unsigned)half_span, (unsigned)divisor, (unsigned)val,
+           (unsigned)(val / mem_vector_factor));
+#endif
+    return val;
+}
+
+template<unsigned short N_SLR, unsigned short P_SLR, unsigned short HALF_SPAN>
+const unsigned short get_overlap_size_y() {
+	auto val =  N_SLR * P_SLR * HALF_SPAN * 2;
+	return val;
+}
+
+template<unsigned short TOTAL_SLR, unsigned short HALF_SPAN>
+const unsigned short get_overlap_size_y() {
+	auto val =  TOTAL_SLR * HALF_SPAN * 2;
+	return val;
+}
+
+const unsigned short get_overlap_size_y(unsigned short half_span, unsigned short total_PEs) {
+    auto val =  total_PEs * half_span * 2;
+    return val;
+}
+
+const unsigned short get_tile_size_x() {
+	unsigned short tile_size_x = ops::hls::FPGA::getInstance()->getOPSTileSizeX();
+#ifdef OPS_HLS_TILE_INTERLEAVE
+	unsigned short p = mem_vector_factor * OPS_HLS_TILE_BANKS;   // 64: min, and a power of two
+	while (p < tile_size_x) p <<= 1;
+	tile_size_x = p;
+#endif
+	return tile_size_x;
+}
+
+const unsigned short get_tile_size_y() {
+	return ops::hls::FPGA::getInstance()->getOPSTileSizeY();
 }
 
 #if defined(OPS_HLS_TILE_INTERLEAVE)
@@ -145,7 +211,11 @@ void genTileMetadataCPU(
         const unsigned short start_x = range.start[0] >> ShiftBits;
         const unsigned short end_x = (range.end[0] + data_vector_factor - 1) >> ShiftBits;
         const unsigned short grid_xblocks = grid_size[0] >> ShiftBits;
-        const unsigned short num_xblocks = end_x - start_x;
+
+        // Tile over the padded grid: padding is allocated, and the kernel clips
+        // at last_tile_upper_limit_x. Keeps num_xblocks == grid_xblocks so the
+        // grid-sizing model in getInterleaveGridSizeX matches runtime.
+        const unsigned short num_xblocks = grid_xblocks;
 
         const unsigned short tile_size_x_beats = tile_size[0] >> ShiftBits;
         const unsigned short overlap_size_x_beats = overlap_size[0] >> ShiftBits;
@@ -164,64 +234,6 @@ void genTileMetadataCPU(
         const unsigned short last_tile_size_y = tile_count_y > 1 ? diff_y - (tile_count_y - 1) * effective_tile_size_y : realized_tile_size_y;
         // const unsigned short last_tile_upper_limit_y = TILE_DIM == 2 ? range.end[1] - (tile_count_y - 1) * effective_tile_size_y : range.end[1];
 
-// #ifndef __SYNTHESIS__
-//     #if defined(OPS_FPGA) && defined(OPS_TILING)
-//         if (tile_size[0] != POW2(LOG2_NON_CONSTEXPR(tile_size[0]))) {
-//             OPSException ex(OPS_RUNTIME_ERROR);
-//             ex << "ERROR: x tile_size (" << tile_size[0] << ") has to be power of 2" 
-//                     << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set";
-//             throw ex;
-//         }
-
-//         if (tile_size[0] <= overlap_size[0]) {
-//             OPSException ex(OPS_RUNTIME_ERROR);
-//             ex << "ERROR: x tile_size (" << tile_size[0] << ") is less than the minimum required overlap size (" << overlap_size[0] << ") in x direction. " 
-//                     << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set";
-//             throw ex;
-//         }
-
-//         if (tile_size[0] > OPS_MAXTILESIZE_X) {
-//             OPSException ex(OPS_RUNTIME_ERROR);
-//             ex << "ERROR: x tile_size (" << tile_size[0] << ") is greater than the minimum tile supported by the generated hardware (" << OPS_MAXTILESIZE_X << ") in x direction. " 
-//                     << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set. If bigger tile size need, rebuild with bigger OPS_MAXTILESIZE_X";
-//             throw ex;
-//         }
-
-//         if (tile_size_x_beats > realized_tile_size_x_beats) {
-//             std::cout << "[OPS_WARNING]: Grid is smaller than tile_size in x direction. Running without tiling in x direction" << std::endl;
-//         }
-//         if (float(effective_tile_size_x_beats) / float(tile_size_x_beats) < 0.75) {
-//             std::cout << "[OPS_WARNING]: Effective tile size is: " << float(effective_tile_size_x_beats) / float(tile_size_x_beats) << ", which is less than 75%. " 
-//                     << " Please increase the tile size ( max: " << OPS_MAXTILESIZE_X << ") to utilize more performance"<< std::endl;
-//         }
-
-//         if (tile_dim == 2) {
-//             if (tile_size[1] <= overlap_size[1]) {
-//                 OPSException ex(OPS_RUNTIME_ERROR);
-//                 ex << "ERROR: y tile_size (" << tile_size[1] << ") is less than the minimum required overlap size (" << overlap_size[1] << ") in y direction. " 
-//                         << "Please make sure appropriate OPS_TILESIZE_Y runtime flag is properly set";
-//                 throw ex;
-//             }
-//         #ifdef OPS_MAXTILESIZE_Y
-//             if (tile_size[1] > OPS_MAXTILESIZE_Y) {
-//                 OPSException ex(OPS_RUNTIME_ERROR);
-//                 ex << "ERROR: y tile_size (" << tile_size[1] << ") is greater than the minimum tile supported by the generated hardware (" << OPS_MAXTILESIZE_Y << ") in y direction. " 
-//                         << "Please make sure appropriate OPS_TILESIZE_Y runtime flag is properly set. If bigger tile size need, rebuild with bigger OPS_MAXTILESIZE_Y";
-//                 throw ex;
-//             }
-//         #endif
-//             if (tile_size[1] > realized_tile_size_y) {
-//                 std::cout << "[OPS_WARNING]: Grid is smaller than tile_size in y direction. Running without tiling in y direction" << std::endl;
-//             }
-//         #ifdef OPS_MAXTILESIZE_Y
-//             if (float(effective_tile_size_y) / float(tile_size[1] ) < 0.75) {
-//                 std::cout << "[OPS_WARNING]: Effective tile size is: " << float(effective_tile_size_y) / float(tile_size[1] ) << ", which is less than 75%" 
-//                         << " Please increase the tile size ( max: " << OPS_MAXTILESIZE_Y << ") to utilize more performance"<< std::endl;
-//             }
-//         #endif
-//         }
-//     #endif
-// #endif
         // Total xblocks calculations
         const unsigned short diff_z = range.end[2] - range.start[2];
         const unsigned short tile_count_min_1_x = tile_count_x - 1;
@@ -257,22 +269,12 @@ void genTileMetadataCPU(
 
 #include <cstdio> // Ensure printf is available if not already included
 
-const unsigned short get_overlap_size(unsigned short mem_vector_factor, unsigned short half_span, unsigned short total_PEs) {
-    auto val =  ((total_PEs * half_span  + mem_vector_factor - 1) / mem_vector_factor) * mem_vector_factor * 2;
 
-// #ifdef DEBUG_LOG_PRINT
-//     printf("|DEBUG_LOG|%s| inputs: mem_vector_factor=%u, half_span=%u, total_PEs=%u | return val=%u\n",
-//             __func__, mem_vector_factor, half_span, total_PEs, (unsigned int)val);
-// #endif
-
-    return val;
-}
-
-unsigned short getMinTileSize(unsigned short vector_factor, unsigned short mem_vector_factor) 
+const unsigned short getMinTileSize(unsigned short vector_factor, unsigned short mem_vector_factor) 
 {
     unsigned short val = (vector_factor * OPS_HLS_TILE_BANKS / mem_vector_factor) << 1;
 
-// #ifdef DEBUG_LOG_PRINT
+// #ifdef DEBUG_LOG
 //     printf("|DEBUG_LOG|%s| inputs: vector_factor=%u, mem_vector_factor=%u | return val=%u\n",
 //             __func__, vector_factor, mem_vector_factor, val);
 // #endif
@@ -280,13 +282,15 @@ unsigned short getMinTileSize(unsigned short vector_factor, unsigned short mem_v
     return val;
 }
 
-unsigned short getInterleaveGridSizeX(unsigned short actual_grid_size_x, unsigned short half_span, unsigned short vector_factor, unsigned short mem_vector_factor, unsigned short total_PEs) 
+unsigned short getInterleaveGridSizeX(unsigned short actual_size_x, unsigned short half_span, unsigned short vector_factor, unsigned short mem_vector_factor, unsigned short total_PEs, unsigned short dim) 
 {
-    unsigned short init_grid_size_x = ((actual_grid_size_x + mem_vector_factor - 1) / mem_vector_factor) * mem_vector_factor;
+    // unsigned short init_grid_size_x = ((actual_size_x + mem_vector_factor - 1) / mem_vector_factor) * mem_vector_factor;
+	const unsigned short align = mem_vector_factor * OPS_HLS_TILE_BANKS;
+    unsigned short init_grid_size_x = ((actual_size_x + align - 1) / align) * align;
 
-#ifdef DEBUG_LOG_PRINT
-    printf("|DEBUG_LOG|%s| inputs: actual_grid_size_x=%u, half_span=%u, vector_factor=%u, mem_vector_factor=%u, total_PEs=%u\n",
-            __func__, actual_grid_size_x, half_span, vector_factor, mem_vector_factor, total_PEs);
+#ifdef DEBUG_LOG
+    printf("|DEBUG_LOG|%s| inputs: actual_size_x=%u, half_span=%u, vector_factor=%u, mem_vector_factor=%u, total_PEs=%u\n",
+            __func__, actual_size_x, half_span, vector_factor, mem_vector_factor, total_PEs);
     printf("|DEBUG_LOG|%s| init_grid_size_x: %u\n", __func__, init_grid_size_x);
 #endif
 
@@ -299,23 +303,44 @@ unsigned short getInterleaveGridSizeX(unsigned short actual_grid_size_x, unsigne
     mock_read_range.end[1] = 1;
     mock_read_range.end[2] = 1;
     mock_read_range.dim = 3;
-    ops::hls::SizeType2d tile_size = {ops::hls::FPGA::getInstance()->getOPSTileSizeX(),  ops::hls::FPGA::getInstance()->getOPSTileSizeY()};
-    ops::hls::SizeType2d overlap_size = {get_overlap_size(mem_vector_factor, half_span, total_PEs), get_overlap_size(1,half_span, total_PEs)};
+
+    ops::hls::SizeType2d tile_size = {get_tile_size_x(), get_tile_size_y()};
+    ops::hls::SizeType2d overlap_size = {get_overlap_size_x(mem_vector_factor, half_span, total_PEs), get_overlap_size_y(half_span, total_PEs)};
     ops::hls::SizeType2d tile_count;
     ops::hls::SizeType2d effective_tile_size;
     ops::hls::SizeType2d last_tile_size;
     unsigned int total_xblocks_widen;
     unsigned short last_tile_upper_limit_x;
 
-    genTileMetadataCPU(mem_vector_factor, 2, mock_grid_size, mock_read_range, tile_size, overlap_size,
-            effective_tile_size, last_tile_size, tile_count, last_tile_upper_limit_x, total_xblocks_widen);
-    
+#ifdef DEBUG_LOG
+    printf("|DEBUG_LOG|%s| tile_size={%u, %u} | overlap_size={%u, %u}\n",
+            __func__, (unsigned int)tile_size[0], (unsigned int)tile_size[1],
+            (unsigned int)overlap_size[0], (unsigned int)overlap_size[1]);
+#endif
+
+		unsigned short tiling_dim = 1;
+		if (dim == 3)
+			tiling_dim = 2;
+
+	    genTileMetadataCPU(mem_vector_factor, tiling_dim, mock_grid_size, mock_read_range, tile_size, overlap_size, effective_tile_size, last_tile_size, tile_count, last_tile_upper_limit_x, total_xblocks_widen);
+
+	#ifdef DEBUG_LOG
+	    printf("|DEBUG_LOG|%s| After genTileMetadataCPU: effective_tile_size={%u, %u}, last_tile_size={%u, %u}, tile_count={%u, %u}\n",
+		    __func__, (unsigned int)effective_tile_size[0], (unsigned int)effective_tile_size[1], (unsigned int)last_tile_size[0], (unsigned int)last_tile_size[1], (unsigned int)tile_count[0], (unsigned int)tile_count[1]);
+	    printf("|DEBUG_LOG|%s| After genTileMetadataCPU: total_xblocks_widen=%u, last_tile_upper_limit_x=%u\n",
+		    __func__, (unsigned int)total_xblocks_widen, (unsigned int)last_tile_upper_limit_x);
+	#endif
+   
+
     unsigned short min_tile_size_val = getMinTileSize(vector_factor, mem_vector_factor);
     unsigned short adjusted_last_tile_x = last_tile_size[0] < min_tile_size_val ? min_tile_size_val : last_tile_size[0];
 
-    unsigned short final_grid_size_x = (init_grid_size_x + (adjusted_last_tile_x - last_tile_size[0]) * mem_vector_factor);
+	const unsigned int delta_elems   = (unsigned int)(adjusted_last_tile_x - last_tile_size[0])
+                                     * mem_vector_factor;
+    const unsigned int delta_aligned = ((delta_elems + align - 1) / align) * align;
+    unsigned short final_grid_size_x = init_grid_size_x + delta_aligned;
 
-#ifdef DEBUG_LOG_PRINT
+#ifdef DEBUG_LOG
     printf("|DEBUG_LOG|%s| genTileMetadataCPU results: effective_tile_size={%u, %u}, last_tile_size={%u, %u}, tile_count={%u, %u}\n",
             __func__, effective_tile_size[0], effective_tile_size[1], last_tile_size[0], last_tile_size[1], tile_count[0], tile_count[1]);
     printf("|DEBUG_LOG|%s| genTileMetadataCPU results: last_tile_upper_limit_x=%u, total_xblocks_widen=%u\n",
@@ -323,6 +348,9 @@ unsigned short getInterleaveGridSizeX(unsigned short actual_grid_size_x, unsigne
     printf("|DEBUG_LOG|%s| adjusted_last_tile_x=%u | return final_grid_size_x=%u\n",
             __func__, adjusted_last_tile_x, final_grid_size_x);
 #endif
+
+	assert(final_grid_size_x % align == 0);
+    assert(final_grid_size_x >= actual_size_x); 
 
     return final_grid_size_x;
 }
@@ -357,8 +385,9 @@ ops::hls::GridPropertyCore createGridPropery(const unsigned short dim,
 	// unsigned short adj_mem_vector_factor = mem_vector_factor * OPS_HLS_TILE_BANKS;
 	// gridProp.xblocks = (gridProp.actual_size[0] + adj_mem_vector_factor - 1) / adj_mem_vector_factor;
 	// gridProp.grid_size[0] = gridProp.xblocks * adj_mem_vector_factor;
-	gridProp.grid_size[0] = getInterleaveGridSizeX(gridProp.actual_size[0], gridProp.d_p[0], vector_factor, mem_vector_factor, total_PEs);
+	gridProp.grid_size[0] = getInterleaveGridSizeX(gridProp.actual_size[0], gridProp.d_p[0], vector_factor, mem_vector_factor, total_PEs, dim);
 	printf("[WARNING]  OPS_HLS_TILE_INTERLEAVE based grid_size_x adjustment. Original size_x: %d, actual size_x: %d, mem_vector_factor: %d, bank_size: %d, adjusted grid size_x:%d, total_PEs: %d\n", gridProp.size[0], gridProp.actual_size[0], mem_vector_factor, OPS_HLS_TILE_BANKS, gridProp.grid_size[0], total_PEs);
+	gridProp.xblocks = gridProp.grid_size[0] / mem_vector_factor;
 #else
 	gridProp.xblocks = (gridProp.actual_size[0] + mem_vector_factor - 1) / mem_vector_factor;
 	gridProp.grid_size[0] = gridProp.xblocks * mem_vector_factor;
@@ -405,7 +434,7 @@ ops::hls::GridPropertyCoreV2 createGridPropery(const unsigned short dim,
 	// unsigned short adj_mem_vector_factor = mem_vector_factor * OPS_HLS_TILE_BANKS;
 	// unsigned short xblocks = (gridProp.actual_size[0] + adj_mem_vector_factor - 1) / adj_mem_vector_factor;
 	// gridProp.grid_size[0] = xblocks * adj_mem_vector_factor;
-	gridProp.grid_size[0] = getInterleaveGridSizeX(gridProp.actual_size[0], gridProp.d_p[0], vector_factor, mem_vector_factor, total_PEs);
+	gridProp.grid_size[0] = getInterleaveGridSizeX(gridProp.actual_size[0], gridProp.d_p[0], vector_factor, mem_vector_factor, total_PEs, dim);
 	printf("[WARNING]  OPS_HLS_TILE_INTERLEAVE based grid_size_x adjustment. Original size_x: %d, actual size_x: %d, mem_vector_factor: %d, bank_size: %d, adjusted grid size_x:%d, total_PEs: %d\n", gridProp.size[0], gridProp.actual_size[0], mem_vector_factor, OPS_HLS_TILE_BANKS, gridProp.grid_size[0], total_PEs);
 #else
 	unsigned short xblocks = (gridProp.actual_size[0] + mem_vector_factor - 1) / mem_vector_factor;
@@ -494,9 +523,9 @@ ops::hls::Grid<T> ops_hls_decl_dat(ops::hls::Block& block, int elem_size, int* s
     // If tiling is enabled, we may need to allocate extra buffer space for row tiles
     if (grid.alt_banks > 1)
     {
-        auto alt_buffer_sizes = grid.getAltBufferSizes();
+        auto alt_buffer_size = grid.getAltBufferSize();
         for (int bank = 0; bank < grid.alt_banks; bank++) {
-            grid.altHostBuffers[bank].resize(alt_buffer_sizes[bank]);
+            grid.altHostBuffers[bank].resize(alt_buffer_size);
         }
     }
 #endif
