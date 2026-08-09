@@ -108,13 +108,13 @@ public:
         read_range_copy.end[1] = read_range.end[1];
         read_range_copy.end[2] = read_range.end[2];
         read_range_copy.dim = read_range.dim;
-        ops::hls::SizeType2d tile_size = {m_fpga->getOPSTileSizeX(), {% if ndim == 3 %} m_fpga->getOPSTileSizeY(){% else %}1{% endif %}};
+        ops::hls::SizeType2d tile_size = {get_tile_size_x(), {% if ndim == 3 %} get_tile_size_y(){% else %}1{% endif %}};
         {% if is_slr_iter_par %}
-        ops::hls::SizeType2d overlap_size = {get_overlap_size<{{get_total_PEs(config["SLR_count"],config["iter_par_factor"])}}, {{half_span_x}}, mem_vector_factor>(), 
-                {% if ndim == 3 %}get_overlap_size<{{get_total_PEs(config["SLR_count"],config["iter_par_factor"])}}, {{half_span_x}}, 1>(){%else %}0{% endif %}};
+        ops::hls::SizeType2d overlap_size = {get_overlap_size_x<{{get_total_PEs(config["SLR_count"],config["iter_par_factor"])}}, {{half_span_x}}, mem_vector_factor>(), 
+                {% if ndim == 3 %}get_overlap_size_y<{{get_total_PEs(config["SLR_count"],config["iter_par_factor"])}}, {{half_span_x}}>(){%else %}0{% endif %}};
         {% else %}
-        ops::hls::SizeType2d overlap_size = {get_overlap_size<{{config["SLR_count"]}}, {{config["iter_par_factor"]}}, {{half_span_x}}, mem_vector_factor>(), 
-                {% if ndim == 3 %}get_overlap_size<{{config["SLR_count"]}}, {{config["iter_par_factor"]}}, {{half_span_x}}, 1>(){%else %}0{% endif %}};
+        ops::hls::SizeType2d overlap_size = {get_overlap_size_x<{{config["SLR_count"]}}, {{config["iter_par_factor"]}}, {{half_span_x}}, mem_vector_factor>(), 
+                {% if ndim == 3 %}get_overlap_size_y<{{config["SLR_count"]}}, {{config["iter_par_factor"]}}, {{half_span_x}}>(){%else %}0{% endif %}};
         {% endif %}
         ops::hls::SizeType2d tile_count;
         ops::hls::SizeType2d effective_tile_size;
@@ -152,6 +152,35 @@ public:
                   << kernel_tile_size[0] << ", " << kernel_tile_size[1] << ")\n";
         std::cout << "[DEBUG][KERNEL_WRAPPER]|" << __func__ << "| kernel_last_tile_size: (" 
                   << kernel_last_tile_size[0] << ", " << kernel_last_tile_size[1] << ")\n";
+
+        {
+            const unsigned short banks = OPS_HLS_TILE_BANKS;
+            printf("[FIX2][WRAP] tile=%u eff=%u ovl=%u last=%u count=%u | eff%%banks=%u %s\n",
+                   (unsigned)tile_size[0], (unsigned)effective_tile_size[0],
+                   (unsigned)overlap_size[0], (unsigned)last_tile_size[0],
+                   (unsigned)tile_count[0],
+                   (unsigned)(effective_tile_size[0] % banks),
+                   (effective_tile_size[0] % banks) ? "*** MISALIGNED ***" : "aligned");
+
+            for (unsigned short t = 0; t < tile_count[0]; t++) {
+                const unsigned short off = t * effective_tile_size[0];
+                const unsigned short sz  = (t == tile_count[0] - 1)
+                                         ? last_tile_size[0] : tile_size[0];
+                printf("[FIX2][WRAP]  tile %2u: offset=%5u start_bank=%u size=%u rem=%u end=%u\n",
+                       t, (unsigned)off, (unsigned)(off % banks), (unsigned)sz,
+                       (unsigned)(sz % banks), (unsigned)(off + sz));
+            }
+            const unsigned int end   = (tile_count[0] - 1) * effective_tile_size[0]
+                                     + last_tile_size[0];
+            const unsigned int tiled = (unsigned int)(original_gridSize_copy[0]
+                                                    - read_range_copy.start[0]);
+            const unsigned int data  = (unsigned int)(read_range_copy.end[0]
+                                                    - read_range_copy.start[0]);
+            printf("[FIX2][WRAP] last tile ends at %u, tiled_xblocks=%u %s"
+                   " | data_xblocks=%u grid_pad=%u | last_tile_upper_limit_x=%u\n",
+                   end, tiled, (end == tiled) ? "" : "*** MISMATCH ***",
+                   data, tiled - data, (unsigned)last_tile_upper_limit_x);
+        }
     #endif
 #endif
 #ifdef DEBUG_LOG
