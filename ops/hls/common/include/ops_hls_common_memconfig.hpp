@@ -8,6 +8,13 @@
   * @details To contain common memory configuration definitions used in Vitis HLS components and Host code.
   */
 
+
+// Minimum X blocks each bank must receive in the last tile.
+// Equals getMinTileSize()'s threshold when vector_factor == mem_vector_factor;
+// otherwise set to (2 * vector_factor / mem_vector_factor), floor, min 1.
+#ifndef OPS_HLS_MIN_X_BLOCKS_PER_BANK
+    #define OPS_HLS_MIN_X_BLOCKS_PER_BANK 2
+#endif
 namespace ops {
 namespace hls {
 
@@ -84,7 +91,7 @@ struct genTileMetadataExecHelper
         const unsigned short start_x = range.start[0] >> ShiftBits;
         const unsigned short end_x = (range.end[0] + data_vector_factor - 1) >> ShiftBits;
         const unsigned short grid_xblocks = grid_size[0] >> ShiftBits;
-        const unsigned short num_xblocks = end_x - start_x;
+        const unsigned short num_xblocks = grid_xblocks;
 
         const unsigned short tile_size_x_beats = tile_size[0] >> ShiftBits;
         const unsigned short overlap_size_x_beats = overlap_size[0] >> ShiftBits;
@@ -220,18 +227,50 @@ struct genTileMetadataExecHelper<MEM_DATA_WIDTH, DATA_WIDTH, 1>
         const unsigned short start_x = range.start[0] >> ShiftBits;
         const unsigned short end_x = (range.end[0] + data_vector_factor - 1) >> ShiftBits;
         const unsigned short grid_xblocks = grid_size[0] >> ShiftBits;
-        const unsigned short num_xblocks = end_x - start_x;
+
+        // Tile over the padded grid: padding is allocated, and the kernel clips
+        // at last_tile_upper_limit_x. Keeps num_xblocks == grid_xblocks so the
+        // grid-sizing model in getInterleaveGridSizeX matches runtime.
+        const unsigned short num_xblocks = grid_xblocks;
+
 
         const unsigned short tile_size_x_beats = tile_size[0] >> ShiftBits;
         const unsigned short overlap_size_x_beats = overlap_size[0] >> ShiftBits;
 
         const unsigned short effective_tile_size_x_beats = tile_size_x_beats - overlap_size_x_beats;
 
+#if defined(OPS_HLS_TILE_INTERLEAVE) && defined(DEBUG_LOG)
+        printf("[FIX2][RT] banks=%u vector_factor=%u | tile=%u ovl=%u eff=%u beats | eff%%banks=%u %s\n",
+               (unsigned)OPS_HLS_TILE_BANKS, (unsigned)data_vector_factor,
+               (unsigned)tile_size_x_beats, (unsigned)overlap_size_x_beats,
+               (unsigned)effective_tile_size_x_beats,
+               (unsigned)(effective_tile_size_x_beats % OPS_HLS_TILE_BANKS),
+               (effective_tile_size_x_beats % OPS_HLS_TILE_BANKS) ? "*** MISALIGNED ***" : "ok");
+#endif
+
         const unsigned short effective_tile_size_y = grid_size[1];
         const unsigned short diff_y = range.end[1] - range.start[1];
         const unsigned short realized_tile_size_x_beats = tile_size_x_beats > num_xblocks ? num_xblocks : tile_size_x_beats;
         const unsigned short tile_count_x = ((num_xblocks - realized_tile_size_x_beats) + effective_tile_size_x_beats - 1) / effective_tile_size_x_beats + 1;
         const unsigned short last_tile_size_x_beats = tile_count_x > 1 ? num_xblocks - (tile_count_x - 1) * effective_tile_size_x_beats : realized_tile_size_x_beats;
+
+#ifndef __SYNTHESIS__
+#if defined(OPS_HLS_TILE_INTERLEAVE)
+        const unsigned short min_last = OPS_HLS_MIN_X_BLOCKS_PER_BANK * OPS_HLS_TILE_BANKS;
+        if (last_tile_size_x_beats < min_last) {
+            const unsigned short rem   = last_tile_size_x_beats % OPS_HLS_TILE_BANKS;
+            const unsigned short floor = last_tile_size_x_beats / OPS_HLS_TILE_BANKS;
+            printf("[OPS_WARNING][INTERLEAVE] last_tile_size_x = %u beats < min %u "
+                    "(%u banks x %u blocks). Banks %u..%u get only %u block(s). "
+                    "| num_xblocks=%u tile=%u eff=%u count=%u\n",
+                    (unsigned)last_tile_size_x_beats, (unsigned)min_last,
+                    (unsigned)OPS_HLS_TILE_BANKS, (unsigned)OPS_HLS_MIN_X_BLOCKS_PER_BANK,
+                    (unsigned)rem, (unsigned)(OPS_HLS_TILE_BANKS - 1), (unsigned)floor,
+                    (unsigned)num_xblocks, (unsigned)tile_size_x_beats,
+                    (unsigned)effective_tile_size_x_beats, (unsigned)tile_count_x);
+        }
+#endif
+#endif
         last_tile_upper_limit_x = range.end[0] - (((tile_count_x - 1) * effective_tile_size_x_beats) << ShiftBits);
 
         const unsigned short realized_tile_size_y = grid_size[1];
@@ -260,6 +299,24 @@ struct genTileMetadataExecHelper<MEM_DATA_WIDTH, DATA_WIDTH, 1>
                     << "Please make sure appropriate OPS_TILESIZE_X runtime flag is properly set. If bigger tile size need, rebuild with bigger OPS_MAXTILESIZE_X";
             throw ex;
         }
+
+    #if defined(OPS_HLS_TILE_INTERLEAVE)
+        if (tile_size[0] < data_vector_factor * OPS_HLS_TILE_BANKS) {
+            OPSException ex(OPS_RUNTIME_ERROR);
+            ex << "ERROR: x tile_size (" << tile_size[0] << ") must be at least "
+               << data_vector_factor * OPS_HLS_TILE_BANKS
+               << " elements so every bank receives at least one block";
+            throw ex;
+        }
+        if (effective_tile_size_x_beats % OPS_HLS_TILE_BANKS != 0) {
+            OPSException ex(OPS_RUNTIME_ERROR);
+            ex << "ERROR: effective_tile_size_x (" << effective_tile_size_x_beats
+               << " beats) is not a multiple of OPS_HLS_TILE_BANKS ("
+               << OPS_HLS_TILE_BANKS << "). tile_beats=" << tile_size_x_beats
+               << " overlap_beats=" << overlap_size_x_beats;
+            throw ex;
+        }
+#endif
 
         if (tile_size_x_beats > realized_tile_size_x_beats) {
             std::cout << "[OPS_WARNING]: Grid is smaller than tile_size in x direction. Running without tiling in x direction" << std::endl;
@@ -448,6 +505,15 @@ void genTileMetadata(
         config.total_xblocks = total_xblocks;
         config.total_size_bytes = config.total_xblocks <<   ShiftBits << DataShiftBits;
 
+    #ifndef __SYNTHESIS__
+        #if defined(OPS_HLS_TILE_BANKS)
+        constexpr unsigned short BANK_MASK = OPS_HLS_TILE_BANKS - 1;
+        assert((config.grid_xblocks           & BANK_MASK) == 0);
+        assert((config.tile_size_x            & BANK_MASK) == 0);
+        assert((config.last_tile_size_x       & BANK_MASK) == 0);
+        assert((config.effective_tile_size_x  & BANK_MASK) == 0);
+        #endif 
+    #endif
 
     #ifndef __SYNTHESIS__
     #ifdef DEBUG_LOG
