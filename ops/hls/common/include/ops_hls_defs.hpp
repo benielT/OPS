@@ -17,6 +17,16 @@
     #pragma message("WARNING: DEPRECATED for this compiler is not implemented")
     #define DEPRECATED
 #endif
+
+#ifndef OPS_HLS_TILE_BANKS
+    #define OPS_HLS_TILE_BANKS 1
+#endif
+
+#if defined(OPS_HLS_TILE_INTERLEAVE) && defined(OPS_HLS_NB_ALIGN)
+    #define OPS_HLS_TILE_ALIGN(mem_vf)  ((unsigned short)((mem_vf) * OPS_HLS_TILE_BANKS))
+#else
+    #define OPS_HLS_TILE_ALIGN(mem_vf)  ((unsigned short)(mem_vf))
+#endif
 /***** OPS limits *****/
 constexpr unsigned int ops_max_dim = 3;
 

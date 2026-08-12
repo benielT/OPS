@@ -240,12 +240,19 @@ struct genTileMetadataExecHelper<MEM_DATA_WIDTH, DATA_WIDTH, 1>
         const unsigned short effective_tile_size_x_beats = tile_size_x_beats - overlap_size_x_beats;
 
 #if defined(OPS_HLS_TILE_INTERLEAVE) && defined(DEBUG_LOG)
-        printf("[FIX2][RT] banks=%u vector_factor=%u | tile=%u ovl=%u eff=%u beats | eff%%banks=%u %s\n",
-               (unsigned)OPS_HLS_TILE_BANKS, (unsigned)data_vector_factor,
-               (unsigned)tile_size_x_beats, (unsigned)overlap_size_x_beats,
-               (unsigned)effective_tile_size_x_beats,
-               (unsigned)(effective_tile_size_x_beats % OPS_HLS_TILE_BANKS),
-               (effective_tile_size_x_beats % OPS_HLS_TILE_BANKS) ? "*** MISALIGNED ***" : "ok");
+    #if defined(OPS_HLS_NB_ALIGN)
+        printf("[NB][RT][aligned] banks=%u | tile=%u ovl=%u eff=%u beats | eff%%banks=%u %s\n",
+                (unsigned)OPS_HLS_TILE_BANKS, (unsigned)tile_size_x_beats,
+                (unsigned)overlap_size_x_beats, (unsigned)effective_tile_size_x_beats,
+                (unsigned)(effective_tile_size_x_beats % OPS_HLS_TILE_BANKS),
+                (effective_tile_size_x_beats % OPS_HLS_TILE_BANKS) ? "*** MISALIGNED ***" : "ok");
+    #else
+        printf("[NB][RT][rotating] banks=%u | tile=%u ovl=%u eff=%u beats | "
+               "start_bank advances by %u per tile\n",
+                (unsigned)OPS_HLS_TILE_BANKS, (unsigned)tile_size_x_beats,
+                (unsigned)overlap_size_x_beats, (unsigned)effective_tile_size_x_beats,
+                (unsigned)(effective_tile_size_x_beats % OPS_HLS_TILE_BANKS));
+    #endif
 #endif
 
         const unsigned short effective_tile_size_y = grid_size[1];
@@ -308,6 +315,7 @@ struct genTileMetadataExecHelper<MEM_DATA_WIDTH, DATA_WIDTH, 1>
                << " elements so every bank receives at least one block";
             throw ex;
         }
+        #if defined(OPS_HLS_NB_ALIGN)
         if (effective_tile_size_x_beats % OPS_HLS_TILE_BANKS != 0) {
             OPSException ex(OPS_RUNTIME_ERROR);
             ex << "ERROR: effective_tile_size_x (" << effective_tile_size_x_beats
@@ -316,6 +324,7 @@ struct genTileMetadataExecHelper<MEM_DATA_WIDTH, DATA_WIDTH, 1>
                << " overlap_beats=" << overlap_size_x_beats;
             throw ex;
         }
+        #endif
 #endif
 
         if (tile_size_x_beats > realized_tile_size_x_beats) {
@@ -506,13 +515,16 @@ void genTileMetadata(
         config.total_size_bytes = config.total_xblocks <<   ShiftBits << DataShiftBits;
 
     #ifndef __SYNTHESIS__
-        #if defined(OPS_HLS_TILE_BANKS)
+        #if defined(OPS_HLS_TILE_INTERLEAVE)
         constexpr unsigned short BANK_MASK = OPS_HLS_TILE_BANKS - 1;
-        assert((config.grid_xblocks           & BANK_MASK) == 0);
-        assert((config.tile_size_x            & BANK_MASK) == 0);
-        assert((config.last_tile_size_x       & BANK_MASK) == 0);
-        assert((config.effective_tile_size_x  & BANK_MASK) == 0);
-        #endif 
+        // holds in both modes: get_tile_size_x rounds to a power of two >= mem_vf*NUM_BANKS
+        assert((config.tile_size_x & BANK_MASK) == 0);
+            #if defined(OPS_HLS_NB_ALIGN)
+        assert((config.grid_xblocks          & BANK_MASK) == 0);
+        assert((config.last_tile_size_x      & BANK_MASK) == 0);
+        assert((config.effective_tile_size_x & BANK_MASK) == 0);
+            #endif
+        #endif
     #endif
 
     #ifndef __SYNTHESIS__
