@@ -40,9 +40,6 @@
 // This file is required for OpenCL C++ wrapper APIs
 #include "../../ext/xcl2/xcl2.hpp"
 
-#ifndef OPS_HLS_TILE_BANKS
-    #define OPS_HLS_TILE_BANKS 1
-#endif
 namespace ops
 {
 namespace hls
@@ -222,8 +219,10 @@ public:
                ((total_vect_element_x + alt_banks - 1) / alt_banks) * alt_banks - total_vect_element_x);
 
     #endif
+    #if defined(OPS_HLS_TILE_INTERLEAVE) && defined(OPS_HLS_NB_ALIGN)
         assert(total_vect_element_x % alt_banks == 0
-           && "grid_xblocks must be a multiple of OPS_HLS_TILE_BANKS");
+               && "OPS_HLS_NB_ALIGN: grid_xblocks must be a multiple of OPS_HLS_TILE_BANKS");
+    #endif
         return alt_buff_size;
     }
 
@@ -255,9 +254,10 @@ public:
         if (alt_banks > 1 && originalProperty.dim >=2) {
         #if defined(OPS_HLS_TILE_INTERLEAVE)
             size_t total_vect_element_x = (originalProperty.grid_size[0] + mem_vector_factor - 1) / mem_vector_factor;
-            auto size_y_mult_size_z = originalProperty.grid_size[1] * originalProperty.grid_size[2];
+            #if defined(OPS_HLS_NB_ALIGN)
             assert(total_vect_element_x % alt_banks == 0
-           && "grid_xblocks must be a multiple of OPS_HLS_TILE_BANKS");
+           && "OPS_HLS_NB_ALIGN: grid_xblocks must be a multiple of OPS_HLS_TILE_BANKS");
+            #endif
         #endif
             for (unsigned int b = 0; b < originalProperty.batch_size; b++) {
                 for (unsigned int k = 0; k < originalProperty.grid_size[2]; k++) {

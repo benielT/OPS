@@ -115,11 +115,7 @@ void printAccessRange(ops::hls::AccessRange& range, std::string prompt = "")
 
 template<unsigned short N_SLR, unsigned short P_SLR, unsigned short HALF_SPAN, unsigned short MEM_VECTOR_SIZE>
 const unsigned short get_overlap_size_x() {
-#ifdef OPS_HLS_TILE_INTERLEAVE
-	unsigned short divisor = MEM_VECTOR_SIZE * OPS_HLS_TILE_BANKS;
-#else
-	unsigned short divisor = MEM_VECTOR_SIZE;
-#endif
+	unsigned short divisor = OPS_HLS_TILE_ALIGN(MEM_VECTOR_SIZE);
 	auto val =  (((N_SLR * P_SLR) * HALF_SPAN*2  + divisor - 1) / divisor) * divisor;
 #ifdef DEBUG_LOG
     printf("[FIX2][OVL] half_span_x=%u align=%u -> overlap=%u elems (%u beats)\n",
@@ -131,11 +127,7 @@ const unsigned short get_overlap_size_x() {
 
 template<unsigned short TOTAL_SLR, unsigned short HALF_SPAN, unsigned short MEM_VECTOR_SIZE>
 const unsigned short get_overlap_size_x() {
-#ifdef OPS_HLS_TILE_INTERLEAVE
-	unsigned short divisor = MEM_VECTOR_SIZE * OPS_HLS_TILE_BANKS;
-#else
-	unsigned short divisor = MEM_VECTOR_SIZE;
-#endif
+	unsigned short divisor = OPS_HLS_TILE_ALIGN(MEM_VECTOR_SIZE);
 	auto val =  (((TOTAL_SLR) * HALF_SPAN*2  + divisor - 1) / divisor) * divisor;
 #ifdef DEBUG_LOG
     printf("[FIX2][OVL] half_span_x=%u align=%u -> overlap=%u elems (%u beats)\n",
@@ -146,11 +138,7 @@ const unsigned short get_overlap_size_x() {
 }
 
 const unsigned short get_overlap_size_x(unsigned short mem_vector_factor, unsigned short half_span, unsigned short total_PEs) {
-#ifdef OPS_HLS_TILE_INTERLEAVE
-	unsigned short divisor = mem_vector_factor * OPS_HLS_TILE_BANKS;
-#else
-	unsigned short divisor = mem_vector_factor;
-#endif
+	unsigned short divisor = OPS_HLS_TILE_ALIGN(mem_vector_factor);
     auto val =  ((total_PEs * half_span*2  + divisor - 1) / divisor) * divisor;
 #ifdef DEBUG_LOG
     printf("[FIX2][OVL] half_span_x=%u align=%u -> overlap=%u elems (%u beats)\n",
@@ -285,7 +273,7 @@ const unsigned short getMinTileSize(unsigned short vector_factor, unsigned short
 unsigned short getInterleaveGridSizeX(unsigned short actual_size_x, unsigned short half_span, unsigned short vector_factor, unsigned short mem_vector_factor, unsigned short total_PEs, unsigned short dim) 
 {
     // unsigned short init_grid_size_x = ((actual_size_x + mem_vector_factor - 1) / mem_vector_factor) * mem_vector_factor;
-	const unsigned short align = mem_vector_factor * OPS_HLS_TILE_BANKS;
+	const unsigned short align = OPS_HLS_TILE_ALIGN(mem_vector_factor);
     unsigned short init_grid_size_x = ((actual_size_x + align - 1) / align) * align;
 
 #ifdef DEBUG_LOG
