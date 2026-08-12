@@ -148,9 +148,13 @@ class Program:
     tile_sizes: List[int] = field(default_factory=lambda: [-1, -1, -1])  # x,y,z
     tiling_type: Optional[TilingType] = TilingType.TILE_TYPE_ROW
     interleave_bank_group: Optional[int] = 2
+    interleave_np_align: Optional[bool] = False
 
     def get_ops_interleave_bank_group(self) ->int:
         return self.interleave_bank_group
+    
+    def is_ops_interleave_nb_align(self) -> bool:
+        return self.interleave_np_align
     
     def isTiling(self) -> bool:
         return self.tiling

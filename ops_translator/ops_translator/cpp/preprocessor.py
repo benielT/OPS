@@ -33,6 +33,7 @@ class Preprocessor(pcpp.Preprocessor):
         self.__ops_tile_sizes = [-1,-1,-1]  # x,y,z
         self.__is_ops_tiled_interleave = False
         self.__ops_hls_bank_group = 2
+        self.__ops_hls_nb_align = False
 
     # preprocessor hook
     def on_comment(self, tok: str) -> bool:
@@ -99,8 +100,14 @@ class Preprocessor(pcpp.Preprocessor):
         if (self.is_ops_tiling_interleaved()):
             return self.__ops_hls_bank_group
         else:
-            return 1
+            return 2
     
+    def is_ops_interleave_nb_align(self)-> bool:
+        if (self.is_ops_tiling_interleaved()):
+            return self.__ops_hls_nb_align
+        else:
+            return False
+        
     def extract_macro_value(self, name: str, macro: Any) -> Any:
         if isinstance(macro.value, list) and len(macro.value) > 0:
             token = macro.value[0]
@@ -138,7 +145,10 @@ class Preprocessor(pcpp.Preprocessor):
             elif name == "OPS_HLS_INTERLEAVE_BANK_GROUP":
                 self.__ops_hls_bank_group = self.extract_macro_value(name, macro)
                 print(f"[PREPROC] OPS TILING OPS_HLS_INTERLEAVE_BANK_GROUP: {self.__ops_hls_bank_group}")
-                
+            
+            elif name == "OPS_HLS_NB_ALIGN":
+                self.__ops_hls_nb_align = True
+                print(f"[PREPROC] OPS TILING OPS_HLS_NB_ALIGN: {self.__ops_hls_nb_align}")
 
     def parse(self, input, source) -> None:
         super().parse(input, source)
