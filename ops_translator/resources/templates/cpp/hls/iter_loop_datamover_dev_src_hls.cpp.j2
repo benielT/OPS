@@ -415,11 +415,20 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
     ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_redirect_strm[{{config["tile_banks"]}}];
     #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_redirect_strm 
     {#depth = {{(config["maxi_read_burst_length"]  * config["num_read_outstanding"])|int + 6}}#}  
-            {% set num_groups = (config["tile_banks"]/prog.get_ops_interleave_bank_group())|int %}
-                {% for group in range(num_groups) %}
+                {% if not prog.is_ops_interleave_nb_align() %}
+    ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_strm{%if isTiling %}[{{config["tile_banks"]}}]{%endif%};
+    #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm depth={{config["maxi_read_burst_length"]}}
+
+    ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_redirect_strm[{{config["tile_banks"]}}];
+    #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_redirect_strm 
+    {#depth = {{(config["maxi_read_burst_length"]  * config["num_read_outstanding"])|int + 6}}#}  
+                {% else %}
+                {% set num_groups = (config["tile_banks"]/prog.get_ops_interleave_bank_group())|int %}
+                    {% for group in range(num_groups) %}
     ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_strm_g{{group}}{%if isTiling %}[{{prog.get_ops_interleave_bank_group()}}]{%endif%};
     #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm_g{{group}} depth={{config["maxi_read_burst_length"]}}
-                {% endfor %}
+                    {% endfor %}
+                {% endif %}
             {% else %}
     ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_read_mem_strm{%if isTiling %}[{{config["tile_banks"]}}]{%endif%};
     #pragma HLS STREAM variable = arg{{arg.id}}_read_mem_strm depth={{config["maxi_read_burst_length"]}}
@@ -454,11 +463,20 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
     depth = {{(config["maxi_write_burst_length"] * config["num_write_outstanding"])|int + 6}}
     ::hls::stream<ap_uint<32>> arg{{arg.id}}_write_offset_strm[{{config["tile_banks"]}}];
     #pragma HLS STREAM variable = arg{{arg.id}}_write_offset_strm depth = 32   #}
-            {% set num_groups = (config["tile_banks"]/prog.get_ops_interleave_bank_group())|int %}
-                {% for group in range(num_groups) %}
+                {% if not prog.is_ops_interleave_nb_align() %}
+    ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_strm{%if isTiling %}[{{config["tile_banks"]}}]{%endif%};
+    #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm depth={{config["maxi_write_burst_length"]}}
+
+    ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_redirect_strm[{{config["tile_banks"]}}];
+    #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_redirect_strm 
+    {#depth = {{(config["maxi_write_burst_length"] * config["num_write_outstanding"])|int + 6}}#}          
+                {% else %}
+                {% set num_groups = (config["tile_banks"]/prog.get_ops_interleave_bank_group())|int %}
+                    {% for group in range(num_groups) %}
     ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_strm_g{{group}}{%if isTiling %}[{{prog.get_ops_interleave_bank_group()}}]{%endif%};
     #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm_g{{group}} depth={{config["maxi_write_burst_length"]}}
-                {% endfor %}
+                    {% endfor %}
+                {% endif %}
             {% else %}
     ::hls::stream<ap_uint<mem_data_width>> arg{{arg.id}}_write_mem_strm{%if isTiling %}[{{config["tile_banks"]}}]{%endif%};
     #pragma HLS STREAM variable = arg{{arg.id}}_write_mem_strm depth={{config["maxi_write_burst_length"]}}
@@ -475,12 +493,14 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         //ops::hls::combineSteams<mem_data_width, {{II(arg)}}>(arg{{arg.id}}_read_mem_strm_b1, arg{{arg.id}}_read_mem_strm_b2, arg{{arg.id}}_read_mem_strm, memconfig);
             {% if config["datamover_lib"] == 1 %}
                 {% if prog.is_interleave() %}
-                    {% set num_groups = (config["tile_banks"]/prog.get_ops_interleave_bank_group())|int %}
+                    {% set nb_align = prog.is_ops_interleave_nb_align() %}
+                    {% set bg_size = prog.get_ops_interleave_bank_group() %}
+                    {% set num_groups = (config["tile_banks"]/bg_size)|int %}
                     {% if ndim == 3 %}
         // Not yet implemented
                     {% else %}
                         {% for group in range(num_groups) %}
-        ops::hls::interleaveTileMem2stream2D<mem_data_width, {{config["tile_banks"]}}, {{group * prog.get_ops_interleave_bank_group()}}, {{prog.get_ops_interleave_bank_group()}}, {{II(arg)}}>(arg{{arg.id}}_read_mem_strm_g{{group}}, memconfig, 
+        ops::hls::interleaveTileMem2stream2D<mem_data_width, {{config["tile_banks"]}}, {{group * prog.get_ops_interleave_bank_group()}}, {{prog.get_ops_interleave_bank_group()}}, {{II(arg)}}>({%if not nb_align %}&arg{{arg.id}}_read_mem_strm[{{group*bg_size}}]{%else%}arg{{arg.id}}_read_mem_strm_g{{group}}{% endif %}, memconfig, 
                             {% for l_bank_idx in range(prog.get_ops_interleave_bank_group()) %}
                             {% set i = group * prog.get_ops_interleave_bank_group() + l_bank_idx %}
                             arg{{arg.id}}_b{{i}}{{"," if not loop.last}}
@@ -519,14 +539,18 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
             {% if ndim == 3 %}
         // Not yet implemented
             {% else %}
-                {% for group in range(num_groups) %}
+                {% if not prog.is_ops_interleave_nb_align() %}
+        ops::hls::redirectTile2D<mem_data_width, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_read_mem_strm, arg{{arg.id}}_read_mem_redirect_strm, memconfig);
+                {% else %}
+                    {% for group in range(num_groups) %}
         ops::hls::stream2axisTileStepdown2D<mem_data_width, {{axis_data_width(arg)-}}, {{config["tile_banks"]}}, {{group * prog.get_ops_interleave_bank_group()}}, {{prog.get_ops_interleave_bank_group()}}, {{II(arg)}}>(arg{{arg.id}}_read_mem_strm_g{{group}}, memconfig,
-                    {% for l_bank_idx in range(prog.get_ops_interleave_bank_group()) %}
-                    {% set i = group * prog.get_ops_interleave_bank_group() + l_bank_idx %}
+                        {% for l_bank_idx in range(prog.get_ops_interleave_bank_group()) %}
+                        {% set i = group * prog.get_ops_interleave_bank_group() + l_bank_idx %}
                 {% if arg is ops_read %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "out")}}{% endif %}{{"," if not loop.last}}
-                    {% endfor %}
+                        {% endfor %}
         );
-                {% endfor %}
+                    {% endfor %}
+                {% endif %}
             {% endif %}
         {#ops::hls::aggregatedStream2streamStepdown<mem_data_width, {{axis_data_width(arg)-}}, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_read_mem_redirect_strm, arg{{arg.id}}_read_reduced_mem_strm, num_big_trans);#}  
         {% else %}
@@ -537,20 +561,30 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
     {% endfor %}
     {% for arg in ilh.joint_args|ops_dat|ops_read_or_rw %}
         {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
-            {% if prog.is_interleave() %}
+            {% if prog.is_interleave() and not prog.is_ops_interleave_nb_align() %}
                 {#% for i in range(config["tile_banks"]) %}
         ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm[{{i}}], {% if arg is ops_read %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "out")}}{% endif %}, num_small_trans);
                 {% endfor %#}
+        ops::hls::stream2axisTileStepdown2D<mem_data_width, {{axis_data_width(arg)-}}, {{config["tile_banks"]}}, 0, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_read_mem_redirect_strm, memconfig,
+                {% for i in range(config["tile_banks"]) %}
+                {% if arg is ops_read %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "out")}}{% endif %}{{"," if not loop.last}}
+                {% endfor %}
+        );
             {% else %}
         {#TODO: small tile case - need to be fixed
         ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm, {% if arg is ops_read %}{{lmac.axis_name(arg)}}{% else %}{{lmac.axis_name_t2(arg, "out")}}{% endif %}, {%if isTiling %}{% if prog.is_interleave() %}is_small_tile ? num_pkts >> 1 : num_pkts{%else%}num_pkts{%endif%}{% else %}{{num_pkts(arg)}}{% endif %});#}
         ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm, {% if arg is ops_read %}{{lmac.axis_name(arg)}}{% else %}{{lmac.axis_name_t2(arg, "out")}}{% endif %}, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
             {% endif %}
         {% else %}
-            {% if prog.is_interleave() %}
+             {% if prog.is_interleave() and not prog.is_ops_interleave_nb_align() %}
                 {#% for i in range(config["tile_banks"]) %}
         ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_redirect_strm[{{i}}], {% if arg is ops_read %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "out")}}{% endif %}, num_small_trans);
                 {% endfor %#}
+        ops::hls::stream2axisTileStepdown2D<mem_data_width, {{axis_data_width(arg)-}}, {{config["tile_banks"]}}, 0, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_read_mem_redirect_strm, memconfig,
+                {% for i in range(config["tile_banks"]) %}
+                {% if arg is ops_read %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "out")}}{% endif %}{{"," if not loop.last}}
+                {% endfor %}
+        );
             {% elif isTiling %}
         ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_combined_read_mem_strm, {% if arg is ops_read %}{{lmac.axis_name(arg)}}{% else %}{{lmac.axis_name_t2(arg, "out")}}{% endif %}, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
             {% else %}
@@ -567,18 +601,28 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         ops::hls::axisTerminate<{{axis_data_width(arg)-}}>({{lmac.axis_name_t2(arg, "in")}}, {%if isTiling %}{%if prog.is_interleave() %}num_small_trans{%else%}num_pkts{%endif%}{% else %}{{num_pkts(arg)}}{% endif %});
             {% else %}
                 {% if config["vector_factor"] * ilh.dats[arg.dat_id][0].dim < config["mem_vector_factor"] %}
-                    {% if prog.is_interleave() %}
+                    {% if prog.is_interleave() and not prog.is_ops_interleave_nb_align() %}
                         {#% for i in range(config["tile_banks"]) %}
         ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "in")}}{% endif %}, arg{{arg.id}}_write_reduced_mem_strm[{{i}}], num_small_trans);
                         {% endfor %#}
+        ops::hls::axis2streamTileStepup2D<mem_data_width, {{axis_data_width(arg)-}}, {{config["tile_banks"]}}, 0, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_redirect_strm, memconfig,
+                {% for i in range(config["tile_banks"]) %}
+                {% if arg is ops_write %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "in")}}{% endif %}{{"," if not loop.last}}
+                {% endfor %}
+        );
                     {% else %}
         ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{lmac.axis_name(arg)}}{% else %}{{lmac.axis_name_t2(arg, "in")}}{% endif %}, arg{{arg.id}}_write_reduced_mem_strm, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
                     {% endif %}
                 {% else %}
-                    {% if prog.is_interleave() %}
+                     {% if prog.is_interleave() and not prog.is_ops_interleave_nb_align() %}
                         {#% for i in range(config["tile_banks"]) %}
         ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "in")}}{% endif %}, arg{{arg.id}}_write_mem_redirect_strm[{{i}}], num_small_trans);
                         {% endfor %#}
+        ops::hls::axis2streamTileStepup2D<mem_data_width, {{axis_data_width(arg)-}}, {{config["tile_banks"]}}, 0, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_redirect_strm, memconfig,
+                {% for i in range(config["tile_banks"]) %}
+                {% if arg is ops_write %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "in")}}{% endif %}{{"," if not loop.last}}
+                {% endfor %}
+        );
                     {% elif isTiling %}
         ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{lmac.axis_name(arg)}}{% else %}{{lmac.axis_name_t2(arg, "in")}}{% endif %}, arg{{arg.id}}_combined_write_mem_strm, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
                     {% else %}
@@ -594,14 +638,18 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
             {% if ndim == 3 %}
         // Not yet implemented
             {% else %}
-                {% for group in range(num_groups) %}
+                {% if not prog.is_ops_interleave_nb_align() %}
+        ops::hls::reverseRedirectTile2D<mem_data_width, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_redirect_strm, arg{{arg.id}}_write_mem_strm, memconfig);
+                {% else %}
+                    {% for group in range(num_groups) %}
         ops::hls::axis2streamTileStepup2D<mem_data_width, {{axis_data_width(arg)-}}, {{config["tile_banks"]}}, {{group * prog.get_ops_interleave_bank_group()}}, {{prog.get_ops_interleave_bank_group()}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm_g{{group}}, memconfig,
-                    {% for l_bank_idx in range(prog.get_ops_interleave_bank_group()) %}
-                    {% set i = group * prog.get_ops_interleave_bank_group() + l_bank_idx %}
-                {% if arg is ops_write %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "in")}}{% endif %}{{"," if not loop.last}}
-                    {% endfor %}
+                        {% for l_bank_idx in range(prog.get_ops_interleave_bank_group()) %}
+                        {% set i = group * prog.get_ops_interleave_bank_group() + l_bank_idx %}
+        {% if arg is ops_write %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "in")}}{% endif %}{{"," if not loop.last}}
+                        {% endfor %}
         );
-                {% endfor %}
+                    {% endfor %}
+                {% endif %}
             {% endif %}
         {#ops::hls::aggregatedStream2streamStepup<{{axis_data_width(arg)-}}, mem_data_width, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_write_reduced_mem_strm, arg{{arg.id}}_write_mem_redirect_strm, num_big_trans);#}
         {% else %}
@@ -615,12 +663,14 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
             {% if isTiling %}
                 {% if config["datamover_lib"] == 1 %}
                     {% if prog.is_interleave() %}
-                        {% set num_groups = (config["tile_banks"]/prog.get_ops_interleave_bank_group())|int %}
+                        {% set nb_align = prog.is_ops_interleave_nb_align() %}
+                        {% set bg_size = prog.get_ops_interleave_bank_group() %}
+                        {% set num_groups = (config["tile_banks"]/bg_size)|int %}
                         {% if ndim == 3 %}
             // Not yet implemented
                         {% else %}
                             {% for group in range(num_groups) %}
-        ops::hls::interleaveTileStream2mem2D<mem_data_width, {{config["tile_banks"]}}, {{group * prog.get_ops_interleave_bank_group()}}, {{prog.get_ops_interleave_bank_group()}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_strm_g{{group}}, memconfig, 
+        ops::hls::interleaveTileStream2mem2D<mem_data_width, {{config["tile_banks"]}}, {{group * prog.get_ops_interleave_bank_group()}}, {{prog.get_ops_interleave_bank_group()}}, {{II(arg)}}>({% if not nb_align %}&arg{{arg.id}}_write_mem_strm[{{group * bg_size}}]{% else %}arg{{arg.id}}_write_mem_strm_g{{group}}{% endif %}, memconfig, 
                                 {% for l_bank_idx in range(prog.get_ops_interleave_bank_group()) %}
                                 {% set i = group * prog.get_ops_interleave_bank_group() + l_bank_idx %}
                 arg{{arg.id}}_b{{i}}{{"," if not loop.last}}
