@@ -5780,107 +5780,805 @@ static void splitStream3D(
 #endif 
 }
 
-// /**
-//  * @brief 	mem2streamTiled reads from a memory location in tiled manner to an hls stream.
-//  *  		This is optimized to read from AXI4 with burst and to utilize width maximum througput
-//  *          by utilizing two banks to read from.
-//  *
-//  * @tparam MEM_DATA_WIDTH : Data width of the AXI4 port and the hls stream port
-//  * @tparam IN_ITR: II of the mem read
-//  * @tparam BURST_SIZE : Burst length of the AXI4 (max beats < 256)
-//  * 
-//  *
-//  * @param mem_in : input memory port
-//  * @param stream_out : output hls-stream
-//  * @param config : MemconfigTile to guide reading
-//  */
-// template <unsigned short MEM_DATA_WIDTH,  unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-// void mem2streamTiled(ap_uint<MEM_DATA_WIDTH>* mem_in_b1,
-//                 ap_uint<MEM_DATA_WIDTH>* mem_in_b2,
-// 				::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_out,
-// 				const ops::hls::MemConfigTile& config)
-// {
-// #ifdef DEBUG_LOG_PRINT
-// 	printf("|HLS DEBUG_LOG|%s| starting\n", __func__);
-// #endif
-// 	if (config.isContinous)
-// 	{
-// #ifdef DEBUG_LOG_PRINT
-// 	printf("|HLS DEBUG_LOG|%s| continuous read\n", __func__);
-// #endif
 
-// #ifdef DEBUG_LOG_PRINT
-// 	printf("|HLS DEBUG_LOG|%s| init offset:%d, size_bytes:%d\n", __func__, config.start_offset, config.total_size_bytes);
-// #endif
-// 	ops::hls::mem2stream<MEM_DATA_WIDTH>((ap_uint<MEM_DATA_WIDTH>* )(mem_in_b1 + config.start_offset), strm_out, config.total_xblocks);
-// 	}
-// 	else
-// 	{
-//         static ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in_b1;
-//         #pragma HLS STREAM variable = strm_in_b1
-//         static ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in_b2;
-//         #pragma HLS STREAM variable = strm_in_b2
-//         #pragma HLS DATAFLOW
-//         stridedTileMem2stream<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(mem_in_b1, strm_in_b1, config, 0);
-//         stridedTileMem2stream<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(mem_in_b2, strm_in_b2, config, 1);
-//         combineSteams<MEM_DATA_WIDTH, IN_ITR>(strm_in_b1, strm_in_b2, strm_out, config);
-// 	}
-// #ifdef DEBUG_LOG_PRINT
-// 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
-// 			, __func__);
-// #endif
-// }
+/** @brief Per-bank block counts for one INTERLEAVE_BANK_GROUP. Passed by value so HLS
+ *         scalarises it across the INLINE-off boundary rather than inferring a RAM port. */
+template <unsigned short BANK_GROUP>
+struct BankTileSizes {
+    unsigned short v[BANK_GROUP];
+};
 
-// /**
-//  * @brief 	stream2memTiled writes from a stream to memory in tiled manner.
-//  *  		This is optimized to write to AXI4 with burst and to utilize maximum throughput
-//  *          by utilizing two banks to write to.
-//  *
-//  * @tparam MEM_DATA_WIDTH : Data width of the AXI4 port and the hls stream port
-//  * @tparam IN_ITR: II of the mem write
-//  * @tparam BURST_SIZE : Burst length of the AXI4 (max beats < 256)
-//  *
-//  * @param mem_out_b1 : output memory port for bank 1
-//  * @param mem_out_b2 : output memory port for bank 2
-//  * @param stream_in : input hls-stream
-//  * @param config : MemConfigTile to guide writing
-//  */
-// template <unsigned short MEM_DATA_WIDTH, unsigned short BURST_SIZE=32, unsigned short IN_ITR=2>
-// void stream2memTiled(ap_uint<MEM_DATA_WIDTH>* mem_out_b1,
-//                 ap_uint<MEM_DATA_WIDTH>* mem_out_b2,
-//                 ::hls::stream<ap_uint<MEM_DATA_WIDTH>>& strm_in,
-// 				const ops::hls::MemConfigTile& config)
-// {
-// #ifdef DEBUG_LOG_PRINT
-// 	printf("|HLS DEBUG_LOG|%s| starting\n", __func__);
-// #endif
-// 	if (config.isContinous)
-// 	{
-// #ifdef DEBUG_LOG_PRINT
-// 		printf("|HLS DEBUG_LOG|%s| continuous write\n", __func__);
-// #endif
+// ---- terminator: declared first so the recursive call below resolves ----
+template <unsigned short MEM_DATA_WIDTH, unsigned short BANK_GROUP,
+          unsigned short START_BANK_ID, unsigned short IN_ITR>
+static void mem2streamGroupExpand(::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out[BANK_GROUP],
+                                  BankTileSizes<BANK_GROUP> sizes)
+{
+#pragma HLS INLINE
+    (void)strm_out; (void)sizes;
+}
 
-// #ifdef DEBUG_LOG_PRINT
-// 		printf("|HLS DEBUG_LOG|%s| init offset:%d, size_bytes:%d\n", __func__, config.start_offset, config.total_size_bytes);
-// #endif
-// 		ops::hls::stream2mem<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>((ap_uint<MEM_DATA_WIDTH>* )(mem_out_b1 + config.start_offset), strm_in, config.total_xblocks);
-// 	}
-// 	else
-// 	{
-//         static ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out_b1;
-//         #pragma HLS STREAM variable = strm_out_b1
-//         static ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out_b2;
-//         #pragma HLS STREAM variable = strm_out_b2
-//         #pragma HLS DATAFLOW
-//         splitStream<MEM_DATA_WIDTH, IN_ITR>(strm_in, strm_out_b1, strm_out_b2, config);
-//         stridedTileStream2mem<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(strm_out_b1, mem_out_b1,  config, 0);
-//         stridedTileStream2mem<MEM_DATA_WIDTH, BURST_SIZE, IN_ITR>(strm_out_b2, mem_out_b2,  config, 1);
-// 	}
-// #ifdef DEBUG_LOG_PRINT
-// 	printf("|HLS DEBUG_LOG|%s| exiting.\n"
-// 			, __func__);
-// #endif
-// }
+// ---- recursive expander: emits one mem2streamV2 call per pointer ----
+template <unsigned short MEM_DATA_WIDTH, unsigned short BANK_GROUP,
+          unsigned short START_BANK_ID, unsigned short IN_ITR, typename... Rest>
+static void mem2streamGroupExpand(::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out[BANK_GROUP],
+                                  BankTileSizes<BANK_GROUP> sizes,
+                                  ap_uint<MEM_DATA_WIDTH>* head, Rest*... rest)
+{
+#pragma HLS INLINE
+    constexpr unsigned short IDX =
+            (unsigned short)(BANK_GROUP - 1 - (unsigned short)sizeof...(Rest));
+    static_assert(IDX < BANK_GROUP, "pointer count must equal BANK_GROUP");
+
+    ops::hls::mem2streamV2<MEM_DATA_WIDTH, IN_ITR>(head, strm_out[IDX], sizes.v[IDX]
+#ifdef DEBUG_LOG
+            , START_BANK_ID + IDX
+#endif
+    );
+
+    mem2streamGroupExpand<MEM_DATA_WIDTH, BANK_GROUP, START_BANK_ID, IN_ITR>(
+            strm_out, sizes, rest...);
+}
+
+template <unsigned short MEM_DATA_WIDTH, unsigned short BANK_GROUP,
+          unsigned short START_BANK_ID, unsigned short IN_ITR, typename... Ptrs>
+static void interleaveTileMem2Stream2D_inner(
+        ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out[BANK_GROUP],
+        BankTileSizes<BANK_GROUP> sizes,
+        Ptrs*... mem_in)
+{
+#pragma HLS INLINE off
+#pragma HLS DATAFLOW
+    mem2streamGroupExpand<MEM_DATA_WIDTH, BANK_GROUP, START_BANK_ID, IN_ITR>(
+            strm_out, sizes, mem_in...);
+}
+
+/**
+ * @brief interleaveTileMem2stream2D: Reads one INTERLEAVE_BANK_GROUP of banks from HBM into
+ *      per-bank streams, tile by tile, for a cyclic-x interleaved 2D grid.
+ *
+ * @details Entry stage of the datamover read path. The grid is decomposed cyclically over the
+ *      widened memory block index, so block i of a row lives in bank (i mod NUM_BANKS). This
+ *      function walks the x-tiles and, for each tile, issues one burst per bank per row, emitting
+ *      each bank's blocks in ascending x order on its own stream. BANK_GROUP banks are driven
+ *      concurrently: the per-row calls sit in a nested DATAFLOW region so the group's AXI masters
+ *      are active simultaneously rather than serialised.
+ *
+ *      Addressing is bank-independent by construction, which is what keeps this cheap:
+ *        - The host pads every bank's row to ceil(grid_xblocks / NUM_BANKS) blocks, so one row
+ *          stride serves all banks and a single accumulator serves the whole group.
+ *        - effective_tile_size_x is a multiple of NUM_BANKS, so every tile starts at bank 0
+ *          (start_bank == 0). No rotation, no barrel shifting, and the tile base offset is the
+ *          same for every bank in the group.
+ *
+ *      The per-bank (b < rem_x) term is retained for generality. Under the aligned configuration
+ *      tile_size_x and last_tile_size_x are also multiples of NUM_BANKS, so rem_x is always zero
+ *      and every bank in the group receives an identical block count; the term costs one
+ *      comparator per bank and is the safety net if the host-side alignment ever regresses.
+ *
+ *      Row padding is allocated but never read: per-bank block counts are derived from
+ *      tile_size_x, and the tiling covers exactly grid_xblocks.
+ *
+ *      Pointer parameters are a variadic pack rather than an array so that each one remains a
+ *      distinct named entity and resolves to its own m_axi adapter. A pack must be last, so the
+ *      pointers follow @p config in the parameter list. The pack is expanded into BANK_GROUP
+ *      sequential mem2streamV2 calls inside the nested DATAFLOW region; after inlining, the
+ *      synthesis report should list BANK_GROUP processes for that region.
+ *
+ * @note At BANK_GROUP == 1 the nested DATAFLOW region wraps a single process, which serves no
+ *      purpose and imposes a region boundary per row that prevents the row loop from pipelining.
+ *      Use the interleaveTileMem2stream2DV2_G1 specialisation instead, which calls mem2streamV2
+ *      directly from the row loop.
+ *
+ * @pre config.effective_tile_size_x % NUM_BANKS == 0 (host-side tile alignment).
+ * @pre Each bank's rows are allocated at the padded stride ceil(grid_xblocks / NUM_BANKS);
+ *      see getAltBufferSize / splitGrid.
+ * @pre config.start_offset == 0. The field is computed in full-grid element coordinates and is
+ *      meaningless in bank coordinates, so it is deliberately not applied here.
+ * @pre config.tile_count_y == 1. Only x-tiling is implemented; each x-tile reads a full column
+ *      of grid_size_y rows.
+ *
+ * @tparam MEM_DATA_WIDTH Bit-width of the AXI4 ports and the output streams.
+ * @tparam NUM_BANKS      Total number of banks in the interleaved decomposition across the whole
+ *                        grid. Must be a power of two and >= 2.
+ * @tparam START_BANK_ID  Global id of the first bank in this group. Must be a multiple of
+ *                        BANK_GROUP and satisfy START_BANK_ID + BANK_GROUP <= NUM_BANKS.
+ * @tparam BANK_GROUP     Number of banks read concurrently by this instance. Must divide
+ *                        NUM_BANKS and satisfy 2 <= BANK_GROUP <= NUM_BANKS. Defaults to 2.
+ * @tparam IN_ITR         Initiation interval passed through to mem2streamV2.
+ * @tparam Ptrs           Deduced pointer pack; sizeof...(Ptrs) must equal BANK_GROUP.
+ *
+ * @param[out] strm_out Group-local array of BANK_GROUP output streams. Index i carries the blocks
+ *                      of global bank START_BANK_ID + i, in ascending x order, rows concatenated.
+ *                      Callers holding one array for all NUM_BANKS should pass
+ *                      &all_streams[START_BANK_ID].
+ * @param[in]  config   Tile and grid geometry. Reads grid_xblocks, grid_size_y, tile_count_x,
+ *                      tile_size_x, last_tile_size_x and effective_tile_size_x.
+ * @param[in]  mem_in   BANK_GROUP device pointers, one per bank, in ascending bank order starting
+ *                      at START_BANK_ID. Each addresses that bank's buffer base.
+ *
+ * @see interleaveTileStream2mem2D   Write-path counterpart (adds per-bank halo avoid).
+ * @see interleaveTileMem2Stream2D_inner Dataflow region of the inner mem2stream module
+ * @see stream2axisTileStepdown2D      Downstream AXIS adapter for the same bank group.
+ * 
+ */
+template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS,
+          unsigned short START_BANK_ID, unsigned short BANK_GROUP = 2,
+          unsigned short IN_ITR = 2, typename... Ptrs>
+static void interleaveTileMem2stream2D(
+        ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out[BANK_GROUP],
+        const ops::hls::MemConfigTile config,
+        Ptrs*... mem_in)
+{
+    static_assert(sizeof...(Ptrs) == BANK_GROUP, "pointer count must equal BANK_GROUP");
+    static_assert(NUM_BANKS >= 2 && (NUM_BANKS & (NUM_BANKS - 1)) == 0, "Power of two, >= 2");
+    static_assert(BANK_GROUP >= 1 && BANK_GROUP <= NUM_BANKS, "1 <= BANK_GROUP <= NUM_BANKS");
+    static_assert(NUM_BANKS % BANK_GROUP == 0, "BANK_GROUP must divide NUM_BANKS");
+    static_assert(START_BANK_ID % BANK_GROUP == 0, "group base must be group-aligned");
+    static_assert(START_BANK_ID + BANK_GROUP <= NUM_BANKS, "group must not wrap past NUM_BANKS-1");
+
+    constexpr unsigned short BANK_SHIFT = LOG2(NUM_BANKS);
+    constexpr unsigned short BANK_MASK  = NUM_BANKS - 1;
+
+    // Padded: identical row length in every bank, so stride is bank-independent.
+    const unsigned short bank_row_stride = (config.grid_xblocks + BANK_MASK) >> BANK_SHIFT;
+
+#ifndef __SYNTHESIS__
+    assert(config.effective_tile_size_x % NUM_BANKS == 0
+           && "host must align effective_tile_size_x to NUM_BANKS");
+    assert(config.start_offset == 0);
+    assert(config.tile_count_y == 1);
+#endif
+
+tile_x_loop:
+    for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++) {
+
+        const unsigned short tile_offset_x = tile_x * config.effective_tile_size_x;
+        const unsigned short tile_size_x   = (tile_x == config.tile_count_x - 1)
+                                           ? config.last_tile_size_x : config.tile_size_x;
+
+        // start_bank == 0 by construction -> no rotation, offset is bank-independent
+        const unsigned int   tile_base = tile_offset_x >> BANK_SHIFT;
+        const unsigned short floor_x   = tile_size_x   >> BANK_SHIFT;
+        const unsigned short rem_x     = tile_size_x   &  BANK_MASK;
+
+        BankTileSizes<BANK_GROUP> sizes;
+#pragma HLS ARRAY_PARTITION variable=sizes.v complete dim=1
+
+    bank_size_calc:
+        for (unsigned short i = 0; i < BANK_GROUP; i++) {
+#pragma HLS UNROLL
+            const unsigned short b = START_BANK_ID + i;   // compile-time constant
+            sizes.v[i] = floor_x + ((b < rem_x) ? 1 : 0);
+        }
+
+        unsigned int row_base = tile_base;
+
+    row_loop:
+        for (unsigned short j = 0; j < config.grid_size_y; j++) {
+            interleaveTileMem2Stream2D_inner<MEM_DATA_WIDTH, BANK_GROUP, START_BANK_ID, IN_ITR>(
+                    strm_out, sizes, (mem_in + row_base)...);
+            row_base += bank_row_stride;
+        }
+    }
+}
+
+
+// ---- terminator ----
+template <unsigned short MEM_DATA_WIDTH, unsigned short BANK_GROUP,
+          unsigned short START_BANK_ID, unsigned short IN_ITR>
+static void stream2memGroupExpand(::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in[BANK_GROUP],
+                                  BankTileSizes<BANK_GROUP> sizes,
+                                  BankTileSizes<BANK_GROUP> avoids)
+{
+#pragma HLS INLINE
+    (void)strm_in; (void)sizes; (void)avoids;
+}
+
+// ---- recursive expander: emits one stream2memWithAvoidV3 call per pointer ----
+template <unsigned short MEM_DATA_WIDTH, unsigned short BANK_GROUP,
+          unsigned short START_BANK_ID, unsigned short IN_ITR, typename... Rest>
+static void stream2memGroupExpand(::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in[BANK_GROUP],
+                                  BankTileSizes<BANK_GROUP> sizes,
+                                  BankTileSizes<BANK_GROUP> avoids,
+                                  ap_uint<MEM_DATA_WIDTH>* head, Rest*... rest)
+{
+#pragma HLS INLINE
+    constexpr unsigned short IDX =
+            (unsigned short)(BANK_GROUP - 1 - (unsigned short)sizeof...(Rest));
+    static_assert(IDX < BANK_GROUP, "pointer count must equal BANK_GROUP");
+
+    ops::hls::stream2memWithAvoidV3<MEM_DATA_WIDTH, IN_ITR>(
+            head, strm_in[IDX], sizes.v[IDX], avoids.v[IDX]
+#ifdef DEBUG_LOG
+            , START_BANK_ID + IDX
+#endif
+    );
+
+    stream2memGroupExpand<MEM_DATA_WIDTH, BANK_GROUP, START_BANK_ID, IN_ITR>(
+            strm_in, sizes, avoids, rest...);
+}
+
+template <unsigned short MEM_DATA_WIDTH, unsigned short BANK_GROUP,
+          unsigned short START_BANK_ID, unsigned short IN_ITR, typename... Ptrs>
+static void interleaveTileStream2mem2D_inner(
+        ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in[BANK_GROUP],
+        BankTileSizes<BANK_GROUP> sizes,
+        BankTileSizes<BANK_GROUP> avoids,
+        Ptrs*... mem_out)
+{
+#pragma HLS INLINE off
+#pragma HLS DATAFLOW
+    stream2memGroupExpand<MEM_DATA_WIDTH, BANK_GROUP, START_BANK_ID, IN_ITR>(
+            strm_in, sizes, avoids, mem_out...);
+}
+
+/**
+ * @brief interleaveTileStream2mem2D: Writes one INTERLEAVE_BANK_GROUP of banks from per-bank
+ *      streams back to HBM, tile by tile, for a cyclic-x interleaved 2D grid.
+ *
+ * @details Terminal stage of the datamover write path and the exact counterpart of
+ *      interleaveTileMem2stream2DV2. For each x-tile it issues one burst per bank per row,
+ *      consuming each bank's blocks in ascending x order from its own stream. BANK_GROUP banks are
+ *      driven concurrently: the per-row calls sit in a nested DATAFLOW region so the group's AXI
+ *      masters are active simultaneously rather than serialised.
+ *
+ *      Addressing is bank-independent by construction — the host pads every bank's row to
+ *      ceil(grid_xblocks / NUM_BANKS) blocks, and effective_tile_size_x is a multiple of NUM_BANKS
+ *      so every tile starts at bank 0. One row-stride accumulator serves the whole group; no
+ *      rotation, no barrel shifting.
+ *
+ *      HALO SUPPRESSION. Interior tiles carry a stale left halo: the first
+ *      (tile_overlap_size_x >> 1) blocks were computed without their full left-hand neighbourhood
+ *      and were already written correctly by the preceding tile. Those blocks are dropped by
+ *      passing a per-bank avoid count to stream2memWithAvoidV3, which drains them from the stream
+ *      and starts writing at mem_out[avoid]. Tile 0 has no predecessor and avoids nothing.
+ *
+ *      Coverage is contiguous and each block is written exactly once by its owning tile: tile t
+ *      writes [t*eff + a, t*eff + tile_size) and tile t+1 begins at t*eff + tile_size - a, so
+ *      tile t's stale right halo is overwritten by tile t+1's valid data. THIS DEPENDS ON TILES
+ *      BEING WRITTEN IN INCREASING tile_x ORDER on the same AXI master — do not parallelise
+ *      tile_x_loop or split a bank group across kernels.
+ *
+ *      Unlike the tile geometry, the avoid geometry is NOT bank-uniform: avoid_x is
+ *      overlap >> 1, which is a multiple of NUM_BANKS/2 but not of NUM_BANKS, so the low
+ *      (avoid_x mod NUM_BANKS) banks skip one extra block. The (b < rem_avoid_x) term is
+ *      load-bearing and must not be simplified away, unlike the (b < rem_x) term beside it.
+ *
+ *      Pointer parameters are a variadic pack rather than an array so that each remains a distinct
+ *      named entity resolving to its own m_axi adapter. A pack must be last, so the pointers follow
+ *      @p config. After inlining, the synthesis report should list BANK_GROUP processes for the
+ *      nested region.
+ *
+ * @note At BANK_GROUP == 1 the nested DATAFLOW region wraps a single process and imposes a region
+ *      boundary per row that prevents the row loop from pipelining. Use the
+ *      interleaveTileStream2mem2DV2_G1 specialisation, which calls stream2memWithAvoidV3 directly
+ *      from the row loop.
+ *
+ * @pre config.effective_tile_size_x % NUM_BANKS == 0 (host-side tile alignment).
+ * @pre config.tile_overlap_size_x is even, so the halo splits symmetrically. Guaranteed while
+ *      overlap_beats is a multiple of NUM_BANKS >= 2.
+ * @pre Each bank's rows are allocated at the padded stride ceil(grid_xblocks / NUM_BANKS).
+ * @pre config.start_offset == 0. The field is computed in full-grid element coordinates and is
+ *      meaningless in bank coordinates, so it is deliberately not applied here.
+ * @pre config.tile_count_y == 1. Only x-tiling is implemented.
+ * @pre bank_avoid_x[i] < bank_tile_size_x[i] for every bank, i.e. the last tile is wide enough to
+ *      survive its avoid.
+ *
+ * @tparam MEM_DATA_WIDTH Bit-width of the AXI4 ports and the input streams.
+ * @tparam NUM_BANKS      Total banks in the interleaved decomposition. Power of two, >= 2.
+ * @tparam START_BANK_ID  Global id of the first bank in this group. Multiple of BANK_GROUP, with
+ *                        START_BANK_ID + BANK_GROUP <= NUM_BANKS.
+ * @tparam BANK_GROUP     Banks written concurrently by this instance. Divides NUM_BANKS,
+ *                        1 <= BANK_GROUP <= NUM_BANKS. Defaults to 2.
+ * @tparam IN_ITR         Initiation interval passed through to stream2memWithAvoidV3.
+ * @tparam Ptrs           Deduced pointer pack; sizeof...(Ptrs) must equal BANK_GROUP.
+ *
+ * @param[in]  strm_in Group-local array of BANK_GROUP input streams. Index i carries the FULL
+ *                     per-bank tile width for global bank START_BANK_ID + i, halo included; the
+ *                     avoid is applied here, not upstream. Callers holding one array for all
+ *                     NUM_BANKS should pass &all_streams[START_BANK_ID].
+ * @param[in]  config  Tile and grid geometry. Reads grid_xblocks, grid_size_y, tile_count_x,
+ *                     tile_size_x, last_tile_size_x, effective_tile_size_x, tile_overlap_size_x.
+ * @param[out] mem_out BANK_GROUP device pointers, one per bank, in ascending bank order starting at
+ *                     START_BANK_ID. Each addresses that bank's buffer base.
+ *
+ * @see interleaveTileMem2stream2D  Read-path counterpart.
+ * @see axis2streamTileStepup2D       Upstream AXIS adapter for the same bank group.
+ * @see stream2memWithAvoidV3         Split-loop variant that preserves burst inference.
+ */
+template <unsigned short MEM_DATA_WIDTH, unsigned short NUM_BANKS,
+          unsigned short START_BANK_ID, unsigned short BANK_GROUP = 2,
+          unsigned short IN_ITR = 2, typename... Ptrs>
+static void interleaveTileStream2mem2D(
+        ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in[BANK_GROUP],
+        const ops::hls::MemConfigTile& config,
+        Ptrs*... mem_out)
+{
+    static_assert(sizeof...(Ptrs) == BANK_GROUP, "pointer count must equal BANK_GROUP");
+    static_assert(NUM_BANKS >= 2 && (NUM_BANKS & (NUM_BANKS - 1)) == 0, "Power of two, >= 2");
+    static_assert(BANK_GROUP >= 1 && BANK_GROUP <= NUM_BANKS, "1 <= BANK_GROUP <= NUM_BANKS");
+    static_assert(NUM_BANKS % BANK_GROUP == 0, "BANK_GROUP must divide NUM_BANKS");
+    static_assert(START_BANK_ID % BANK_GROUP == 0, "group base must be group-aligned");
+    static_assert(START_BANK_ID + BANK_GROUP <= NUM_BANKS, "group must not wrap past NUM_BANKS-1");
+
+    constexpr unsigned short BANK_SHIFT = LOG2(NUM_BANKS);
+    constexpr unsigned short BANK_MASK  = NUM_BANKS - 1;
+
+    // Padded: identical row length in every bank, so stride is bank-independent.
+    const unsigned short bank_row_stride = (config.grid_xblocks + BANK_MASK) >> BANK_SHIFT;
+
+#ifndef __SYNTHESIS__
+    assert(config.effective_tile_size_x % NUM_BANKS == 0
+           && "host must align effective_tile_size_x to NUM_BANKS");
+    assert((config.tile_overlap_size_x & 1) == 0
+           && "overlap must be even for a symmetric halo split");
+    assert(config.tile_overlap_size_x < config.tile_size_x);
+    assert(config.start_offset == 0);
+    assert(config.tile_count_y == 1);
+#endif
+
+tile_x_loop:
+    for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++) {
+
+        const unsigned short tile_offset_x = tile_x * config.effective_tile_size_x;
+        const unsigned short tile_size_x   = (tile_x == config.tile_count_x - 1)
+                                           ? config.last_tile_size_x : config.tile_size_x;
+        const unsigned short avoid_x       = (tile_x == 0) ? 0 : (config.tile_overlap_size_x >> 1);
+
+        // start_bank == 0 by construction -> no rotation, offset is bank-independent
+        const unsigned int   tile_base    = tile_offset_x >> BANK_SHIFT;
+        const unsigned short floor_x      = tile_size_x   >> BANK_SHIFT;
+        const unsigned short rem_x        = tile_size_x   &  BANK_MASK;
+        const unsigned short avoid_floor  = avoid_x       >> BANK_SHIFT;
+        const unsigned short rem_avoid_x  = avoid_x       &  BANK_MASK;
+
+        BankTileSizes<BANK_GROUP> sizes;
+        BankTileSizes<BANK_GROUP> avoids;
+#pragma HLS ARRAY_PARTITION variable=sizes.v  complete dim=1
+#pragma HLS ARRAY_PARTITION variable=avoids.v complete dim=1
+
+    bank_size_calc:
+        for (unsigned short i = 0; i < BANK_GROUP; i++) {
+#pragma HLS UNROLL
+            const unsigned short b = START_BANK_ID + i;      // compile-time constant
+            sizes.v[i]  = floor_x     + ((b < rem_x)       ? 1 : 0);
+            avoids.v[i] = avoid_floor + ((b < rem_avoid_x) ? 1 : 0);
+#ifndef __SYNTHESIS__
+            assert(avoids.v[i] < sizes.v[i] && "avoid must be strictly less than the bank tile width");
+#endif
+        }
+
+        unsigned int row_base = tile_base;
+
+    row_loop:
+        for (unsigned short j = 0; j < config.grid_size_y; j++) {
+            interleaveTileStream2mem2D_inner<MEM_DATA_WIDTH, BANK_GROUP, START_BANK_ID, IN_ITR>(
+                    strm_in, sizes, avoids, (mem_out + row_base)...);
+            row_base += bank_row_stride;
+        }
+    }
+}
+
+// ---- terminator ----
+template <unsigned short MEM_DATA_WIDTH, unsigned short AXIS_DATA_WIDTH,
+          unsigned short BANK_GROUP, unsigned short START_BANK_ID>
+static void stepdownLaneExpand(const ap_uint<MEM_DATA_WIDTH> (&wide)[BANK_GROUP],
+                               unsigned short tile_x, unsigned short row, unsigned short x)
+{
+#pragma HLS INLINE
+    (void)wide; (void)tile_x; (void)row; (void)x;
+}
+
+// ---- recursive expander: one lane's FACTOR chunk writes per level ----
+template <unsigned short MEM_DATA_WIDTH, unsigned short AXIS_DATA_WIDTH,
+          unsigned short BANK_GROUP, unsigned short START_BANK_ID, typename... Rest>
+static void stepdownLaneExpand(const ap_uint<MEM_DATA_WIDTH> (&wide)[BANK_GROUP],
+                               unsigned short tile_x, unsigned short row, unsigned short x,
+                               ::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& head,
+                               Rest&... rest)
+{
+#pragma HLS INLINE
+    typedef ap_axiu<AXIS_DATA_WIDTH,0,0,0> axis_pkt_t;
+    constexpr unsigned short FACTOR = MEM_DATA_WIDTH / AXIS_DATA_WIDTH;
+    constexpr unsigned short IDX =
+            (unsigned short)(BANK_GROUP - 1 - (unsigned short)sizeof...(Rest));
+    static_assert(IDX < BANK_GROUP, "AXIS stream count must equal BANK_GROUP");
+
+write_chunks:
+    for (unsigned short k = 0; k < FACTOR; k++)
+    {
+#pragma HLS UNROLL
+        axis_pkt_t pkt;
+        pkt.data = wide[IDX].range((k+1) * AXIS_DATA_WIDTH - 1, k * AXIS_DATA_WIDTH);
+        // pkt.keep = -1;      // all bytes valid
+        // pkt.strb = -1;
+        // pkt.last = 0;       // framing unused across all components
+
+        head.write(pkt);
+
+#ifdef DEBUG_LOG_PRINT
+        printf("==== STEPDOWN AXIS WRITE ==== tile[%u] row[%u] x[%u] bank[%u] chunk[%u] = (",
+                (unsigned)tile_x, (unsigned)row, (unsigned)x,
+                (unsigned)(START_BANK_ID + IDX), (unsigned)k);
+        for (unsigned j = 0; j < AXIS_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); j++) {
+            ops::hls::DataConv conv;
+            conv.i = pkt.data.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+            printf("%f%s ", conv.f, (j + 1 != AXIS_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8)) ? "," : "");
+        }
+        printf(")\n");
+#endif
+    }
+
+    stepdownLaneExpand<MEM_DATA_WIDTH, AXIS_DATA_WIDTH, BANK_GROUP, START_BANK_ID>(
+            wide, tile_x, row, x, rest...);
+}
+
+/**
+ * @brief stream2axisTileStepdown2D: Converts wide internal memory-width beats into AXI4-Stream
+ *      packets of AXIS_DATA_WIDTH, per bank, for one INTERLEAVE_BANK_GROUP.
+ *
+ * @details Terminal stage of the datamover read path, driving the compute kernel's AXIS ports
+ *      directly with no intermediate conversion. Because every tile begins at bank 0 and every tile
+ *      width is a multiple of NUM_BANKS, each bank's stream carries only that bank's blocks in
+ *      ascending x order, so the step-down is a pure within-lane split: each MEM_DATA_WIDTH beat
+ *      becomes FACTOR consecutive AXIS packets, LSB chunk first. No barrel shifting, no cross-lane
+ *      redistribution — which is why redirect()/reverseRedirect() are not needed on this path.
+ *
+ *      UNIFORM BANK WIDTHS. The host aligns tile_size_x and last_tile_size_x to
+ *      mem_vector_factor * NUM_BANKS, so tile_size_x >> BANK_SHIFT is exact and every lane in the
+ *      group carries the identical block count bank_x. There is therefore no per-bank remainder
+ *      term, no per-lane beat count and no liveness predicate: all BANK_GROUP lanes read
+ *      unconditionally and advance lock-step in one pipelined loop. The asserts below pin that
+ *      invariant; if the host-side alignment ever regresses, this component reads the wrong number
+ *      of beats rather than adapting.
+ *
+ *      The row structure is an explicit loop nest rather than a flattened beat count. Computing
+ *      bank_x * grid_size_y placed an add and a multiply in the same DSP48 (pre-adder into
+ *      multiplier), a 3.34 ns combinational path that does not close at 300 MHz. Nesting removes
+ *      the multiply entirely.
+ *
+ *      TKEEP and TSTRB are driven all-ones on every packet. TLAST is tied low: no component in this
+ *      design performs AXIS framing, and block counts come from the config on both sides, so packet
+ *      boundaries carry no information. Leaving any ap_axiu field unassigned would drive X in RTL
+ *      even where nothing reads it.
+ *
+ *      At FACTOR == 1 (mem_data_width == axis_data_width) this degenerates to the AXIS adapter
+ *      alone, which is still required at the kernel boundary.
+ *
+ *      AXIS streams are a variadic pack rather than an array so that each remains a distinct named
+ *      entity resolving to its own top-level AXIS port. A pack must be last, so they follow
+ *      @p config.
+ *
+ * @pre config.tile_size_x, last_tile_size_x and effective_tile_size_x are all multiples of
+ *      NUM_BANKS. REQUIRED, not merely expected — the uniform-width assumption is structural here.
+ * @pre config.tile_count_y == 1.
+ *
+ * @tparam MEM_DATA_WIDTH  Bit-width of the internal input streams (memory side).
+ * @tparam AXIS_DATA_WIDTH Bit-width of the AXIS output. Must divide MEM_DATA_WIDTH.
+ * @tparam NUM_BANKS       Total banks in the interleaved decomposition. Power of two.
+ * @tparam START_BANK_ID   Global id of the first bank in this group. Multiple of BANK_GROUP.
+ * @tparam BANK_GROUP      Banks handled by this instance. Divides NUM_BANKS. Defaults to 2.
+ * @tparam IN_ITR          Requested initiation interval; raised to FACTOR when FACTOR is larger.
+ * @tparam AxisStrms       Deduced AXIS stream pack; sizeof...(AxisStrms) must equal BANK_GROUP.
+ *
+ * @param[in]  strm_in  Group-local array of BANK_GROUP internal streams, index i for global bank
+ *                      START_BANK_ID + i. Callers holding one array for all NUM_BANKS should pass
+ *                      &all_streams[START_BANK_ID].
+ * @param[in]  config   Tile geometry: tile_count_x, tile_size_x, last_tile_size_x, grid_size_y.
+ * @param[out] strm_out BANK_GROUP AXIS outputs in ascending bank order from START_BANK_ID.
+ *
+ * @see axis2streamTileStepup2D      Write-path counterpart.
+ * @see interleaveTileMem2stream2D   Upstream HBM reader for the same bank group.
+ */
+template <unsigned short MEM_DATA_WIDTH, unsigned short AXIS_DATA_WIDTH,
+          unsigned short NUM_BANKS, unsigned short START_BANK_ID,
+          unsigned short BANK_GROUP = 2, unsigned short IN_ITR = 2,
+          typename... AxisStrms>
+static void stream2axisTileStepdown2D(
+        ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_in[BANK_GROUP],
+        const ops::hls::MemConfigTile& config,
+        AxisStrms&... strm_out)
+{
+    constexpr unsigned short FACTOR     = MEM_DATA_WIDTH / AXIS_DATA_WIDTH;
+    constexpr unsigned int   ii_adj     = (IN_ITR >= FACTOR) ? IN_ITR : FACTOR;
+    constexpr unsigned short BANK_SHIFT = LOG2(NUM_BANKS);
+    constexpr unsigned short BANK_MASK  = NUM_BANKS - 1;
+
+    static_assert(sizeof...(AxisStrms) == BANK_GROUP, "AXIS stream count must equal BANK_GROUP");
+    static_assert((NUM_BANKS != 0) && ((NUM_BANKS & (NUM_BANKS - 1)) == 0), "NUM_BANKS must be a power of two");
+    static_assert(BANK_GROUP >= 1 && BANK_GROUP <= NUM_BANKS, "1 <= BANK_GROUP <= NUM_BANKS");
+    static_assert(NUM_BANKS % BANK_GROUP == 0, "BANK_GROUP must divide NUM_BANKS");
+    static_assert(START_BANK_ID % BANK_GROUP == 0, "group base must be group-aligned");
+    static_assert(START_BANK_ID + BANK_GROUP <= NUM_BANKS, "group must not wrap past NUM_BANKS-1");
+    static_assert(MEM_DATA_WIDTH >= AXIS_DATA_WIDTH, "MEM_DATA_WIDTH must be >= AXIS_DATA_WIDTH");
+    static_assert(MEM_DATA_WIDTH % AXIS_DATA_WIDTH == 0, "AXIS_DATA_WIDTH must divide MEM_DATA_WIDTH");
+    static_assert(AXIS_DATA_WIDTH % 8 == 0, "AXIS_DATA_WIDTH must be a whole number of bytes");
+
+#ifndef __SYNTHESIS__
+    assert((config.tile_size_x           & BANK_MASK) == 0
+           && "tile_size_x must be a multiple of NUM_BANKS: uniform bank widths assumed");
+    assert((config.last_tile_size_x      & BANK_MASK) == 0
+           && "last_tile_size_x must be a multiple of NUM_BANKS: uniform bank widths assumed");
+    assert((config.effective_tile_size_x & BANK_MASK) == 0);
+    assert(config.tile_count_y == 1);
+#endif
+
+#ifdef DEBUG_LOG_PRINT
+    printf("====================================================================================\n");
+    printf("|HLS DEBUG_LOG| %s | banks: %u, group base: %u, group: %u, FACTOR: %u, ii_adj: %u\n",
+            __func__, (unsigned)NUM_BANKS, (unsigned)START_BANK_ID, (unsigned)BANK_GROUP,
+            (unsigned)FACTOR, (unsigned)ii_adj);
+    printf("|HLS DEBUG_LOG| %s | tile_count_x: %u, tile_size_x: %u, last_tile_size_x: %u, grid_size_y: %u\n",
+            __func__, (unsigned)config.tile_count_x, (unsigned)config.tile_size_x,
+            (unsigned)config.last_tile_size_x, (unsigned)config.grid_size_y);
+    printf("====================================================================================\n");
+#endif
+
+tile_x_loop:
+    for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++)
+    {
+#pragma HLS LOOP_TRIPCOUNT min=1 max=64
+
+        const unsigned short tile_size_x = (tile_x == config.tile_count_x - 1)
+                                         ? config.last_tile_size_x : config.tile_size_x;
+
+        // Exact: tile widths are multiples of NUM_BANKS, so every bank gets bank_x blocks.
+        const unsigned short bank_x = tile_size_x >> BANK_SHIFT;
+
+#ifdef DEBUG_LOG_PRINT
+        printf("|HLS DEBUG_LOG| %s | tile %u: tile_size_x=%u, bank_x=%u, rows=%u\n",
+                __func__, (unsigned)tile_x, (unsigned)tile_size_x,
+                (unsigned)bank_x, (unsigned)config.grid_size_y);
+#endif
+
+    row_loop:
+        for (unsigned short row = 0; row < config.grid_size_y; row++)
+        {
+#pragma HLS LOOP_TRIPCOUNT min=1 max=4096
+#pragma HLS LOOP_FLATTEN off
+
+        beat_loop:
+            for (unsigned short x = 0; x < bank_x; x++)
+            {
+#pragma HLS PIPELINE II=ii_adj
+#pragma HLS LOOP_TRIPCOUNT min=1 max=1024
+
+                ap_uint<MEM_DATA_WIDTH> wide[BANK_GROUP];
+#pragma HLS ARRAY_PARTITION variable=wide complete dim=1
+
+            lane_read:
+                for (unsigned short i = 0; i < BANK_GROUP; i++)
+                {
+#pragma HLS UNROLL
+                    wide[i] = strm_in[i].read();
+
+#ifdef DEBUG_LOG_PRINT
+                    printf("==== STEPDOWN READ ==== tile[%u] row[%u] x[%u] bank[%u] = (",
+                            (unsigned)tile_x, (unsigned)row, (unsigned)x,
+                            (unsigned)(START_BANK_ID + i));
+                    for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++) {
+                        ops::hls::DataConv conv;
+                        conv.i = wide[i].range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+                        printf("%f%s ", conv.f, (k + 1 != MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8)) ? "," : "");
+                    }
+                    printf(")\n");
+#endif
+                }
+
+                stepdownLaneExpand<MEM_DATA_WIDTH, AXIS_DATA_WIDTH, BANK_GROUP, START_BANK_ID>(
+                        wide, tile_x, row, x, strm_out...);
+            }
+        }
+    }
+}
+
+// ---- terminator ----
+template <unsigned short MEM_DATA_WIDTH, unsigned short AXIS_DATA_WIDTH,
+          unsigned short BANK_GROUP, unsigned short START_BANK_ID>
+static void stepupLaneExpand(ap_uint<MEM_DATA_WIDTH> (&wide)[BANK_GROUP],
+                             unsigned short tile_x, unsigned short row, unsigned short x)
+{
+#pragma HLS INLINE
+    (void)wide; (void)tile_x; (void)row; (void)x;
+}
+
+// ---- recursive expander: one lane's FACTOR chunk reads per level ----
+template <unsigned short MEM_DATA_WIDTH, unsigned short AXIS_DATA_WIDTH,
+          unsigned short BANK_GROUP, unsigned short START_BANK_ID, typename... Rest>
+static void stepupLaneExpand(ap_uint<MEM_DATA_WIDTH> (&wide)[BANK_GROUP],
+                             unsigned short tile_x, unsigned short row, unsigned short x,
+                             ::hls::stream<ap_axiu<AXIS_DATA_WIDTH,0,0,0>>& head,
+                             Rest&... rest)
+{
+#pragma HLS INLINE
+    typedef ap_axiu<AXIS_DATA_WIDTH,0,0,0> axis_pkt_t;
+    constexpr unsigned short FACTOR = MEM_DATA_WIDTH / AXIS_DATA_WIDTH;
+    constexpr unsigned short IDX =
+            (unsigned short)(BANK_GROUP - 1 - (unsigned short)sizeof...(Rest));
+    static_assert(IDX < BANK_GROUP, "AXIS stream count must equal BANK_GROUP");
+
+read_chunks:
+    for (unsigned short k = 0; k < FACTOR; k++)
+    {
+#pragma HLS UNROLL
+        const axis_pkt_t pkt = head.read();
+        wide[IDX].range((k+1) * AXIS_DATA_WIDTH - 1, k * AXIS_DATA_WIDTH) = pkt.data;
+
+#ifdef DEBUG_LOG_PRINT
+        printf("==== STEPUP AXIS READ ==== tile[%u] row[%u] x[%u] bank[%u] chunk[%u] = (",
+                (unsigned)tile_x, (unsigned)row, (unsigned)x,
+                (unsigned)(START_BANK_ID + IDX), (unsigned)k);
+        for (unsigned j = 0; j < AXIS_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); j++) {
+            ops::hls::DataConv conv;
+            conv.i = pkt.data.range((j+1) * DEBUG_LOG_SIZE_OF * 8 - 1, j * DEBUG_LOG_SIZE_OF * 8);
+            printf("%f%s ", conv.f, (j + 1 != AXIS_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8)) ? "," : "");
+        }
+        printf(")\n");
+#endif
+    }
+
+    stepupLaneExpand<MEM_DATA_WIDTH, AXIS_DATA_WIDTH, BANK_GROUP, START_BANK_ID>(
+            wide, tile_x, row, x, rest...);
+}
+
+/**
+ * @brief axis2streamTileStepup2D: Reassembles AXI4-Stream packets of AXIS_DATA_WIDTH into wide
+ *      internal memory-width beats, per bank, for one INTERLEAVE_BANK_GROUP.
+ *
+ * @details Exact inverse of stream2axisTileStepdown2D and the entry stage of the datamover write
+ *      path. FACTOR consecutive AXIS packets on a lane are packed LSB-chunk-first into one
+ *      MEM_DATA_WIDTH beat on the same lane. No cross-lane movement, because every tile begins at
+ *      bank 0 and each lane owns its own blocks.
+ *
+ *      UNIFORM BANK WIDTHS. The host aligns tile_size_x and last_tile_size_x to
+ *      mem_vector_factor * NUM_BANKS, so tile_size_x >> BANK_SHIFT is exact and every lane carries
+ *      the identical block count bank_x. No per-bank remainder, no per-lane beat count, no liveness
+ *      predicate: all lanes read unconditionally and advance lock-step in one pipelined loop.
+ *
+ *      The row structure is an explicit loop nest rather than a flattened beat count, because
+ *      bank_x * grid_size_y placed an add and a multiply in the same DSP48 and would not close
+ *      timing at 300 MHz.
+ *
+ *      TKEEP/TSTRB/TLAST are ignored on input: the producer is the compute kernel, which emits
+ *      whole beats, and block counts come from the MemConfigTile rather than from packet framing.
+ *
+ *      This component emits the FULL per-bank tile width, halo included. Halo suppression is the
+ *      responsibility of interleaveTileStream2mem2D downstream, which drops the leading
+ *      (tile_overlap_size_x >> 1) blocks of each interior tile via stream2memWithAvoidV3. No avoid
+ *      logic belongs here — applying it twice would silently truncate every interior tile. Note
+ *      that the avoid geometry is NOT bank-uniform even though the tile geometry is, which is why
+ *      it lives downstream and not here.
+ *
+ *      AXIS streams are a variadic pack rather than an array so that each remains a distinct named
+ *      entity resolving to its own top-level AXIS port. A pack must be last, so they follow
+ *      @p config.
+ *
+ * @pre config.tile_size_x, last_tile_size_x and effective_tile_size_x are all multiples of
+ *      NUM_BANKS. REQUIRED, not merely expected — the uniform-width assumption is structural here.
+ * @pre config.tile_count_y == 1.
+ * @pre The paired step-down used the same MemConfigTile; block counts are recomputed here rather
+ *      than communicated, so a mismatch stalls the dataflow region rather than erroring.
+ *
+ * @tparam MEM_DATA_WIDTH  Bit-width of the internal output streams (memory side).
+ * @tparam AXIS_DATA_WIDTH Bit-width of the AXIS input. Must divide MEM_DATA_WIDTH.
+ * @tparam NUM_BANKS       Total banks in the interleaved decomposition. Power of two.
+ * @tparam START_BANK_ID   Global id of the first bank in this group. Multiple of BANK_GROUP.
+ * @tparam BANK_GROUP      Banks handled by this instance. Divides NUM_BANKS. Defaults to 2.
+ * @tparam IN_ITR          Requested initiation interval; raised to FACTOR when FACTOR is larger.
+ * @tparam AxisStrms       Deduced AXIS stream pack; sizeof...(AxisStrms) must equal BANK_GROUP.
+ *
+ * @param[out] strm_out Group-local array of BANK_GROUP internal streams, index i for global bank
+ *                      START_BANK_ID + i. Callers holding one array for all NUM_BANKS should pass
+ *                      &all_streams[START_BANK_ID].
+ * @param[in]  config   Tile geometry: tile_count_x, tile_size_x, last_tile_size_x, grid_size_y.
+ * @param[in]  strm_in  BANK_GROUP AXIS inputs in ascending bank order from START_BANK_ID.
+ *
+ * @see stream2axisTileStepdown2D    Read-path counterpart.
+ * @see interleaveTileStream2mem2D   Downstream HBM writer, which applies the halo avoid.
+ */
+template <unsigned short MEM_DATA_WIDTH, unsigned short AXIS_DATA_WIDTH,
+          unsigned short NUM_BANKS, unsigned short START_BANK_ID,
+          unsigned short BANK_GROUP = 2, unsigned short IN_ITR = 2,
+          typename... AxisStrms>
+static void axis2streamTileStepup2D(
+        ::hls::stream<ap_uint<MEM_DATA_WIDTH>> strm_out[BANK_GROUP],
+        const ops::hls::MemConfigTile& config,
+        AxisStrms&... strm_in)
+{
+    constexpr unsigned short FACTOR     = MEM_DATA_WIDTH / AXIS_DATA_WIDTH;
+    constexpr unsigned int   ii_adj     = (IN_ITR >= FACTOR) ? IN_ITR : FACTOR;
+    constexpr unsigned short BANK_SHIFT = LOG2(NUM_BANKS);
+    constexpr unsigned short BANK_MASK  = NUM_BANKS - 1;
+
+    static_assert(sizeof...(AxisStrms) == BANK_GROUP, "AXIS stream count must equal BANK_GROUP");
+    static_assert((NUM_BANKS != 0) && ((NUM_BANKS & (NUM_BANKS - 1)) == 0), "NUM_BANKS must be a power of two");
+    static_assert(BANK_GROUP >= 1 && BANK_GROUP <= NUM_BANKS, "1 <= BANK_GROUP <= NUM_BANKS");
+    static_assert(NUM_BANKS % BANK_GROUP == 0, "BANK_GROUP must divide NUM_BANKS");
+    static_assert(START_BANK_ID % BANK_GROUP == 0, "group base must be group-aligned");
+    static_assert(START_BANK_ID + BANK_GROUP <= NUM_BANKS, "group must not wrap past NUM_BANKS-1");
+    static_assert(MEM_DATA_WIDTH >= AXIS_DATA_WIDTH, "MEM_DATA_WIDTH must be >= AXIS_DATA_WIDTH");
+    static_assert(MEM_DATA_WIDTH % AXIS_DATA_WIDTH == 0, "AXIS_DATA_WIDTH must divide MEM_DATA_WIDTH");
+    static_assert(AXIS_DATA_WIDTH % 8 == 0, "AXIS_DATA_WIDTH must be a whole number of bytes");
+
+#ifndef __SYNTHESIS__
+    assert((config.tile_size_x           & BANK_MASK) == 0
+           && "tile_size_x must be a multiple of NUM_BANKS: uniform bank widths assumed");
+    assert((config.last_tile_size_x      & BANK_MASK) == 0
+           && "last_tile_size_x must be a multiple of NUM_BANKS: uniform bank widths assumed");
+    assert((config.effective_tile_size_x & BANK_MASK) == 0);
+    assert(config.tile_count_y == 1);
+#endif
+
+#ifdef DEBUG_LOG_PRINT
+    printf("====================================================================================\n");
+    printf("|HLS DEBUG_LOG| %s | banks: %u, group base: %u, group: %u, FACTOR: %u, ii_adj: %u\n",
+            __func__, (unsigned)NUM_BANKS, (unsigned)START_BANK_ID, (unsigned)BANK_GROUP,
+            (unsigned)FACTOR, (unsigned)ii_adj);
+    printf("|HLS DEBUG_LOG| %s | tile_count_x: %u, tile_size_x: %u, last_tile_size_x: %u, grid_size_y: %u\n",
+            __func__, (unsigned)config.tile_count_x, (unsigned)config.tile_size_x,
+            (unsigned)config.last_tile_size_x, (unsigned)config.grid_size_y);
+    printf("====================================================================================\n");
+#endif
+
+tile_x_loop:
+    for (unsigned short tile_x = 0; tile_x < config.tile_count_x; tile_x++)
+    {
+#pragma HLS LOOP_TRIPCOUNT min=1 max=64
+
+        const unsigned short tile_size_x = (tile_x == config.tile_count_x - 1)
+                                         ? config.last_tile_size_x : config.tile_size_x;
+
+        // Exact: tile widths are multiples of NUM_BANKS, so every bank gets bank_x blocks.
+        const unsigned short bank_x = tile_size_x >> BANK_SHIFT;
+
+#ifdef DEBUG_LOG_PRINT
+        printf("|HLS DEBUG_LOG| %s | tile %u: tile_size_x=%u, bank_x=%u, rows=%u\n",
+                __func__, (unsigned)tile_x, (unsigned)tile_size_x,
+                (unsigned)bank_x, (unsigned)config.grid_size_y);
+#endif
+
+    row_loop:
+        for (unsigned short row = 0; row < config.grid_size_y; row++)
+        {
+#pragma HLS LOOP_TRIPCOUNT min=1 max=4096
+#pragma HLS LOOP_FLATTEN off
+
+        beat_loop:
+            for (unsigned short x = 0; x < bank_x; x++)
+            {
+#pragma HLS PIPELINE II=ii_adj
+#pragma HLS LOOP_TRIPCOUNT min=1 max=1024
+
+                ap_uint<MEM_DATA_WIDTH> wide[BANK_GROUP];
+#pragma HLS ARRAY_PARTITION variable=wide complete dim=1
+
+                stepupLaneExpand<MEM_DATA_WIDTH, AXIS_DATA_WIDTH, BANK_GROUP, START_BANK_ID>(
+                        wide, tile_x, row, x, strm_in...);
+
+            lane_write:
+                for (unsigned short i = 0; i < BANK_GROUP; i++)
+                {
+#pragma HLS UNROLL
+                    strm_out[i].write(wide[i]);
+
+#ifdef DEBUG_LOG_PRINT
+                    printf("==== STEPUP WRITE ==== tile[%u] row[%u] x[%u] bank[%u] = (",
+                            (unsigned)tile_x, (unsigned)row, (unsigned)x,
+                            (unsigned)(START_BANK_ID + i));
+                    for (unsigned k = 0; k < MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8); k++) {
+                        ops::hls::DataConv conv;
+                        conv.i = wide[i].range((k+1) * DEBUG_LOG_SIZE_OF * 8 - 1, k * DEBUG_LOG_SIZE_OF * 8);
+                        printf("%f%s ", conv.f, (k + 1 != MEM_DATA_WIDTH/(DEBUG_LOG_SIZE_OF * 8)) ? "," : "");
+                    }
+                    printf(")\n");
+#endif
+                }
+            }
+        }
+    }
+}
+
 /****************************** END of TILED ops *******************************/
 
 /**
