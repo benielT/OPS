@@ -576,15 +576,17 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_reduced_mem_strm, {% if arg is ops_read %}{{lmac.axis_name(arg)}}{% else %}{{lmac.axis_name_t2(arg, "out")}}{% endif %}, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
             {% endif %}
         {% else %}
-             {% if prog.is_interleave() and not prog.is_ops_interleave_nb_align() %}
+             {% if prog.is_interleave() %}
                 {#% for i in range(config["tile_banks"]) %}
         ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_read_mem_redirect_strm[{{i}}], {% if arg is ops_read %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "out")}}{% endif %}, num_small_trans);
                 {% endfor %#}
+                {% if not prog.is_ops_interleave_nb_align() %}
         ops::hls::stream2axisTileStepdown2D<mem_data_width, {{axis_data_width(arg)-}}, {{config["tile_banks"]}}, 0, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_read_mem_redirect_strm, memconfig,
-                {% for i in range(config["tile_banks"]) %}
+                    {% for i in range(config["tile_banks"]) %}
                 {% if arg is ops_read %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "out")}}{% endif %}{{"," if not loop.last}}
-                {% endfor %}
+                    {% endfor %}
         );
+                {% endif %}
             {% elif isTiling %}
         ops::hls::stream2axis<{{axis_data_width(arg)-}}>(arg{{arg.id}}_combined_read_mem_strm, {% if arg is ops_read %}{{lmac.axis_name(arg)}}{% else %}{{lmac.axis_name_t2(arg, "out")}}{% endif %}, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
             {% else %}
@@ -614,15 +616,17 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{lmac.axis_name(arg)}}{% else %}{{lmac.axis_name_t2(arg, "in")}}{% endif %}, arg{{arg.id}}_write_reduced_mem_strm, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
                     {% endif %}
                 {% else %}
-                     {% if prog.is_interleave() and not prog.is_ops_interleave_nb_align() %}
+                     {% if prog.is_interleave() %}
                         {#% for i in range(config["tile_banks"]) %}
         ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "in")}}{% endif %}, arg{{arg.id}}_write_mem_redirect_strm[{{i}}], num_small_trans);
                         {% endfor %#}
+                        {% if not prog.is_ops_interleave_nb_align() %}
         ops::hls::axis2streamTileStepup2D<mem_data_width, {{axis_data_width(arg)-}}, {{config["tile_banks"]}}, 0, {{config["tile_banks"]}}, {{II(arg)}}>(arg{{arg.id}}_write_mem_redirect_strm, memconfig,
-                {% for i in range(config["tile_banks"]) %}
+                            {% for i in range(config["tile_banks"]) %}
                 {% if arg is ops_write %}{{lmac.axis_name_t3(arg, i)}}{% else %}{{lmac.axis_name_t3(arg, i, "in")}}{% endif %}{{"," if not loop.last}}
-                {% endfor %}
+                            {% endfor %}
         );
+                        {% endif %}
                     {% elif isTiling %}
         ops::hls::axis2stream<{{axis_data_width(arg)-}}>({% if arg is ops_write %}{{lmac.axis_name(arg)}}{% else %}{{lmac.axis_name_t2(arg, "in")}}{% endif %}, arg{{arg.id}}_combined_write_mem_strm, {%if isTiling %}num_pkts{% else %}{{num_pkts(arg)}}{% endif %});
                     {% else %}
@@ -714,13 +718,20 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
     {% for arg in ilh.joint_args|ops_dat %}
         {% if arg is ops_read_or_rw%}
             {% if prog.is_interleave() %}
-            {% set num_groups = (config["tile_banks"]/prog.get_ops_interleave_bank_group())|int %}
-                {% for group in range(num_groups) %}
+                {% if prog.is_ops_interleave_nb_align() %}
+                {% set num_groups = (config["tile_banks"]/prog.get_ops_interleave_bank_group())|int %}
+                    {% for group in range(num_groups) %}
     for (int i = 0; i < {{prog.get_ops_interleave_bank_group()}}; i++) {
         if(!arg{{arg.id}}_read_mem_strm_g{{group}}[i].empty())
             printf("[SIM WARNING] arg{{arg.id}}_read_mem_strm_g{{group}}[%d] has %zu leftover elements!\n", i, arg{{arg.id}}_read_mem_strm_g{{group}}[i].size());
     }           
-                {% endfor %}
+                    {% endfor %}
+                {% else %}
+    for (int i = 0; i < {{config["tile_banks"]}}; i++) {
+        if(!arg{{arg.id}}_read_mem_strm[i].empty())
+            printf("[SIM WARNING] arg{{arg.id}}_read_mem_strm[%d] has %zu leftover elements!\n", i, arg{{arg.id}}_read_mem_strm[i].size());
+    }
+                {% endif %}
             {% elif isTiling%}
         if(!arg{{arg.id}}_combined_read_mem_strm.empty())
             printf("[SIM WARNING] arg{{arg.id}}_combined_read_mem_strm.empty() has %zu leftover elements!\n", arg{{arg.id}}_combined_read_mem_strm.empty());
@@ -763,13 +774,20 @@ static void datamover_outerloop_{{ilh.id}}_dataflow_read_write_dataflow_region(
         printf("[SIM WARNING] arg{{arg.id}}_combined_write_mem_strm has %zu leftover elements!\n", arg{{arg.id}}_combined_write_mem_strm.size());
                 {% endif %}
                 {%if prog.is_interleave() %}
-                {% set num_groups = (config["tile_banks"]/prog.get_ops_interleave_bank_group())|int %}
-                    {% for group in range(num_groups) %}
+                    {% if prog.is_ops_interleave_nb_align() %}
+                    {% set num_groups = (config["tile_banks"]/prog.get_ops_interleave_bank_group())|int %}
+                        {% for group in range(num_groups) %}
     for (int i = 0; i < {{prog.get_ops_interleave_bank_group()}}; i++) {
         if(!arg{{arg.id}}_write_mem_strm_g{{group}}[i].empty())
             printf("[SIM WARNING] arg{{arg.id}}_write_mem_strm_g{{group}}[%d] has %zu leftover elements!\n", i, arg{{arg.id}}_write_mem_strm_g{{group}}[i].size());
     }           
-                    {% endfor %}
+                        {% endfor %}
+                    {% else %}
+    for (int i = 0; i < {{config["tile_banks"]}}; i++) {
+        if(!arg{{arg.id}}_write_mem_strm[i].empty())
+            printf("[SIM WARNING] arg{{arg.id}}_write_mem_strm[%d] has %zu leftover elements!\n", i, arg{{arg.id}}_write_mem_strm[i].size());
+    } 
+                    {% endif %}
                 {% else %}
     for (int i = 0; i < {{config["tile_banks"]}}; i++) {
         if(!arg{{arg.id}}_write_mem_strm[i].empty())
