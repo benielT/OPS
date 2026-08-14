@@ -237,7 +237,7 @@ def ISLCopyDetection_deprecated(original_graph: DataflowGraph_v2, prog: Program,
         node = copy_graph.getNode(src_id)
             
         if node is None: 
-            raise OptError(f"Failed to access node information of node_id: {edge.source_id} from {copy_graph.unique_name}")
+            raise OptError(f"Failed to access node information of node_id: {src_id} from {copy_graph.unique_name}")
         
         kernel_entities = prog.findEntities(node.loop.kernel)
         

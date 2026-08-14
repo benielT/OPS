@@ -518,7 +518,7 @@ class ArgDat(Arg):
 
     def __str__(self) -> str:
         return (
-            f"ArgDat(id={self.id}, loc={self.loc}, access_type={str(self.access_type) + ',':17} opt={self.opt}, dat_id={self.dat_id}, global_dat_id={self.global_dat_id}, stencil_id={self.stencil_ptr})"
+            f"ArgDat(id={self.id}, loc={self.loc}, access_type={str(self.access_type) + ',':17} opt={self.opt}, dat_id={self.dat_id}, global_dat_id={self.global_dat_id}, stencil_id={self.stencil_ptr}, is_read_only?={self.is_read_only})"
             )
 
 @dataclass(frozen=True)
@@ -1137,6 +1137,13 @@ class IterLoop:
         
         #print (f"source dats: {source_dats}, sink_dats: {sink_dats}")
         #print(self.get_active_df_graph().getGlobalDatsSwapMap())
+        read_only_dats = []
+        for (src_id, sink_id, attr) in self.get_active_df_graph().getInEdgesFromNode(self.get_active_df_graph().getEndNodeIdx()):
+            if (attr["isStray"]):
+                if attr["dat_str"] not in read_only_dats:
+                    read_only_dats.append(attr["dat_str"])
+        logging.debug(f"{function_name()}, readonly dats: {read_only_dats}, joint args: {self.joint_args}, source dats: {source_dats}")
+                
         for dat_id in source_dats:
             idx = findIdx(sink_dats, lambda x: x == dat_id)
             node = self.get_active_df_graph().getFirstReadingNode(self.dats[dat_id][0].ptr)
@@ -1149,12 +1156,20 @@ class IterLoop:
             if not arg:
                 raise OpsError(f"Error finding ArgDat from node: {node.node_id} of parloop: {node.loop.kernel}, loc: {node.loop.loc}")
             
+            logging.debug(f"{function_name()}, dat: {self.dats[dat_id][0].ptr}, swap_dat: {self.get_active_df_graph().getGlobalDatsSwapMap()[self.dats[dat_id][0].ptr]}, is_source idx: {idx}")
             if self.get_active_df_graph().getGlobalDatsSwapMap()[self.dats[dat_id][0].ptr] == self.dats[dat_id][0].ptr:
                 if not idx is None:
-                    self.joint_args.append(ArgDat(len(self.joint_args), arg.loc, AccessType.OPS_RW, arg.opt, dat_id, arg.stencil_ptr, arg.dim, arg.restrict, arg.prolong, dat_id))
+                    if self.dats[dat_id][0].ptr in read_only_dats:
+                        logging.debug(f"{function_name()} dat: {self.dats[dat_id][0].ptr} is readonly")
+                        self.joint_args.append(ArgDat(len(self.joint_args), arg.loc, AccessType.OPS_RW, arg.opt, dat_id, arg.stencil_ptr, arg.dim, arg.restrict, arg.prolong, dat_id, is_read_only=True))
+                    else:
+                        logging.debug(f"{function_name()} dat: {self.dats[dat_id][0].ptr} is not readonly")
+                        self.joint_args.append(ArgDat(len(self.joint_args), arg.loc, AccessType.OPS_RW, arg.opt, dat_id, arg.stencil_ptr, arg.dim, arg.restrict, arg.prolong, dat_id))
+                    
                     del sink_dats[idx]
                 else:
-                    self.joint_args.append(ArgDat(len(self.joint_args), arg.loc, AccessType.OPS_RW, arg.opt, dat_id, arg.stencil_ptr, arg.dim, arg.restrict, arg.prolong, dat_id, True))
+                    logging.debug(f"{function_name()} dat: {self.dats[dat_id][0].ptr} is readonly")
+                    self.joint_args.append(ArgDat(len(self.joint_args), arg.loc, AccessType.OPS_RW, arg.opt, dat_id, arg.stencil_ptr, arg.dim, arg.restrict, arg.prolong, dat_id, is_read_only=True))
                      
             else:
                 self.joint_args.append(ArgDat(len(self.joint_args), arg.loc, AccessType.OPS_READ, arg.opt, dat_id, arg.stencil_ptr, arg.dim, arg.restrict, arg.prolong, dat_id))
@@ -1172,7 +1187,8 @@ class IterLoop:
 
             self.joint_args.append(ArgDat(len(self.joint_args), arg.loc, AccessType.OPS_WRITE, arg.opt, dat_id, arg.stencil_ptr, arg.dim, arg.restrict, arg.prolong, dat_id))    
 
-
+        logging.debug(f"{function_name()}, readonly dats: {read_only_dats}, joint args: {self.joint_args}")
+        
     def gen_global_const_args(self) -> None:
             
             global_args_ptrs = []
@@ -1296,7 +1312,7 @@ class IterLoop:
         
         outer_loop_str += f" |\n"
         outer_loop_str += f" ├─ GRAPH INFO: \n |  ------ \n"
-        outer_loop_str += f" |  ├─ Graph selected: " + "Original \n" if not self.is_opt_graph() else "Optimized \n"
+        outer_loop_str += f" |  ├─ Graph selected: " + ("Original \n" if not self.is_opt_graph() else "Optimized \n")
         outer_loop_str += f" |  ├─ SOURCE DATS: " + str(self.get_active_df_graph().getGlobalSourceDatNames()) + "\n"
         outer_loop_str += f" |  └─ SINK DATS: " + str(self.get_active_df_graph().getGlobalSinkDatNames()) + "\n"
         
