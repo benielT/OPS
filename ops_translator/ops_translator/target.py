@@ -165,6 +165,7 @@ class FPGABankPlacementPolicy(Enum):
     DATAMOVER_TILE_HBM_RACK_LB = 2 #RACK BASED LOAD BALLANCING
     DATAMOVER_TILE_HBM_RACK_LB_ARG_BASED = 3 #RACK BASED LOAD BALLANCING WITH MAKING AN ARG RECIDE IN SAME RACK
     DATAMOVER_TILE_NO_HBM = 4
+    DATAMOVER_TILE_HBM_SKEWED_ARG_BASED = 5 #GLOBAL BASED CONSECUTIVE BANKS FOR SUB-DOMAIN AND SKEWED BANKING ACROSS ARGS
     
 class FPGABankPlacer:
     __policy: int
@@ -174,6 +175,7 @@ class FPGABankPlacer:
     __current_rack: int = 0
     __current_bank: int = 0
     __previous_arg_id: int = None
+    __previous_arg_start_bank: int = 0
         
     def __init__(self, policy: int, num_banks: int, num_bank_racks: int):
         if policy in [e.value for e in FPGABankPlacementPolicy]:
@@ -196,6 +198,8 @@ class FPGABankPlacer:
             return self.__getBank_DATAMOVER_TILE_HBM_RACK_LB()
         elif self.__policy == FPGABankPlacementPolicy.DATAMOVER_TILE_HBM_RACK_LB_ARG_BASED.value:
             return self.__getBank_DATAMOVER_TILE_HBM_RACK_LB_ARG_BASED(arg_id)
+        elif self.__policy == FPGABankPlacementPolicy.DATAMOVER_TILE_HBM_SKEWED_ARG_BASED.value:
+            return self.__getBank_DATAMOVER_TILE_HBM_SKEWED_ARG_BASED(arg_id)
             
     def __getBank_DATAMOVER_TILE_HBM_ROUND_ROBIN(self)->int:
         # [{{(arg.id * config["tile_banks"]|int + i) % 32}}]
@@ -224,6 +228,19 @@ class FPGABankPlacer:
         self.__previous_arg_id = arg_id
         return int(current_bank)       
     
+    def __getBank_DATAMOVER_TILE_HBM_SKEWED_ARG_BASED(self, arg_id: int) -> int:
+        if (self.__previous_arg_id is None or self.__previous_arg_id != arg_id):
+            if self.__previous_arg_id is None:
+                self.__current_bank = 0
+            else:
+                self.__current_bank = (self.__previous_arg_start_bank + 1) % self.__num_banks
+            self.__previous_arg_id = arg_id
+            self.__previous_arg_start_bank = self.__current_bank
+        else:
+            self.__current_bank = (self.__current_bank + 1) % self.__num_banks
+            self.__previous_arg_id = arg_id
+        return int(self.__current_bank)       
+        
 class F2CSycl(Target):
     name = "f2c_sycl"
     suffix = "f2c"

@@ -1472,7 +1472,7 @@ static void datamover_outerloop_{{ilh.id}}_loopback(
         {% if isTiling %}
             {% if config["datamover_lib"] == 1 and config["tile_banks"] > 1 %}
                 {% for i in range(config["tile_banks"]) %}
-    #pragma HLS INTERFACE mode=m_axi bundle=gmem{{(arg.id * config["tile_banks"]|int + i) % 32}} depth={{config["maxi_depth"]}} max_read_burst_length={{config["maxi_read_burst_length"]}} max_write_burst_length={{config["maxi_write_burst_length"]}} \
+    #pragma HLS INTERFACE mode=m_axi bundle=gmem{%if FPGABankPlacer == none %}{{(arg.id * config["tile_banks"]|int + i) % 32}}{% else %}{{FPGABankPlacer.getBank(arg.id)}}{%endif%} depth={{config["maxi_depth"]}} max_read_burst_length={{config["maxi_read_burst_length"]}} max_write_burst_length={{config["maxi_write_burst_length"]}} \
             num_read_outstanding={{config["num_read_outstanding"]}} num_write_outstanding={{config["num_write_outstanding"]}} \
             port=arg{{arg.id}}_b{{i}} offset={{config["maxi_offset"]}} latency={{config["maxi_latency"]}}
     #pragma HLS INTERFACE s_axilite port = arg{{arg.id}}_b{{i}} bundle = control

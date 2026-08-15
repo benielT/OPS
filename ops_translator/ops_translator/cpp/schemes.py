@@ -5,7 +5,7 @@ import ops
 from language import Lang
 from scheme import Scheme
 from store import Application, CodegenError, Program
-from target import Target, FPGABankPlacer
+from target import Target, FPGABankPlacer, FPGABankPlacementPolicy
 from jinja2 import Environment
 from typing import List, Tuple, Set, Union, Optional
 from util import KernelProcess, findIdx, function_name
@@ -372,8 +372,14 @@ class CppHLS(Scheme):
                 consts_map[kernel_idx] = kernel_consts
                 consts.extend(x for x in kernel_consts if x not in consts)
         
+        if (config["HBM_tile_racks"] > 0 and config["tile_bank_placement_policy"] == FPGABankPlacementPolicy.DATAMOVER_TILE_HBM_SKEWED_ARG_BASED.value):
+            placer = FPGABankPlacer(config["tile_bank_placement_policy"], 
+                            config["HBM_banks"], config["HBM_tile_racks"])
+        else:
+            placer = None
+            
         output = [(iterloop_datamover_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, isTiling = program.isTiling(), tiles=program.getTileSizes(), prog=program), self.iterloop_datamover_inc_extension),
-                (iterLoop_datamover_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, isTiling = program.isTiling(), tiles=program.getTileSizes(), prog=program), self.iterloop_datamover_src_extension)]
+                (iterLoop_datamover_src_template.render(ilh=iterLoop, ndim=program.ndim, config=config, isTiling = program.isTiling(), tiles=program.getTileSizes(), prog=program, FPGABankPlacer=placer), self.iterloop_datamover_src_extension)]
         
         if not isinstance(config["iter_par_factor"],list):
                 output.extend([(iterLoop_kernel_inc_template.render(ilh=iterLoop, ndim=program.ndim, config=config, consts=consts, isTiling = program.isTiling(), tiles=program.getTileSizes(), prog=program), self.iterloop_device_inc_extension),
