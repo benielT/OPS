@@ -257,7 +257,7 @@ class HLS(Target):
         "num_write_outstanding" : 4,
         "maxi_offset" : "slave",
         "ops_max_dim" : 3,
-        "axis_interconnect_buff_size" : 2048,
+        "axis_interconnect_buff_size" : 16,
         "hls_interconnect_buff_size" : 10,
         "datamover_mode" : FpgaDatamoverMode.DATAMOVER_DATACOPY.value,
         "datamover_lib" : FPGDatamoverLib.DATAMOVER_NATIVE.value,
