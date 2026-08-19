@@ -79,21 +79,41 @@ slr=repeater_outerloop_{{ilh.id}}_1:SLR1
     {% if config["platform_is_sb_selectable"] %}
         {% for ilh, program in app.uniqueOuterLoops() %}
             {% for arg in ilh.joint_args|ops_dat %}
-                {% if program.tiling %}
-                    {% if config["tile_banks"] > 1 %}
-                        {% for i in range(config["tile_banks"]) %}
+                {% if config["tile_bank_placement_policy"] == 6 %} {# DDR bank placement #}
+                    {% if program.tiling %}
+                        {% if config["tile_banks"] > 1 %}
+                            {% for i in range(config["tile_banks"]) %}
+                                {% if not config["tile_bank_placement_policy"] == 4 %}
+sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b{{i}}:DDR[0]
+                                {% endif %}
+                            {% endfor %}
+                        {% else %} 
                             {% if not config["tile_bank_placement_policy"] == 4 %}
-sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b{{i}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:DDR[0]
                             {% endif %}
-                        {% endfor %}
-                    {% else %} 
+                        {% endif %}
+                    {% else %}
                         {% if not config["tile_bank_placement_policy"] == 4 %}
-sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:DDR[0]
                         {% endif %}
                     {% endif %}
                 {% else %}
-                    {% if not config["tile_bank_placement_policy"] == 4 %}
+                    {% if program.tiling %}
+                        {% if config["tile_banks"] > 1 %}
+                            {% for i in range(config["tile_banks"]) %}
+                                {% if not config["tile_bank_placement_policy"] == 4 %}
+sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}_b{{i}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+                                {% endif %}
+                            {% endfor %}
+                        {% else %} 
+                            {% if not config["tile_bank_placement_policy"] == 4 %}
 sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+                            {% endif %}
+                        {% endif %}
+                    {% else %}
+                        {% if not config["tile_bank_placement_policy"] == 4 %}
+sp=datamover_outerloop_{{ilh.id}}_1.arg{{arg.id}}:HBM[{{FPGABankPlacer.getBank(arg.id)}}]
+                        {% endif %}
                     {% endif %}
                 {% endif %}
             {% endfor %}
