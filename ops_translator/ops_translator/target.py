@@ -10,15 +10,15 @@ class Target(Findable):
     name: str
     kernel_translation: bool
     config: Dict[str, Any]
-    # contrains will be key-type-contrains if type is "numeric" contrains will be (lower, upper) tuple
+    # constraints will be key-type-constraints if type is "numeric" constraints will be (lower, upper) tuple
         # if lower or upper is None it means unbounded on that side
-    # if type is "select" contrains will be a set of allowed values
-    # if type is "bool" contrains will be (True, False)
-    # if type is "illegal" contrains will be a set of illegal values
+    # if type is "select" constraints will be a set of allowed values
+    # if type is "bool" constraints will be (True, False)
+    # if type is "illegal" constraints will be a set of illegal values
     
-    __config_contrains__: Dict[str, Tuple[str,Any]] = {} 
-    __non_definables__: List[str] = [] 
-    __config_verified__: bool = False
+    __config_constraints: Dict[str, Tuple[str,Any]] = {} 
+    __non_definables: List[str] = [] 
+    __config_verified: bool = False
 
     def __str__(self) -> str:
         return f"{self.name}: config: {self.config}"
@@ -34,13 +34,13 @@ class Target(Findable):
     
     def verify_non_definables(self, userConfig: Dict[str, Any]) -> bool:
         for key in userConfig.keys():
-            if key in self.__non_definables__:
+            if key in self.__non_definables:
                 raise CodegenError(f"Target {self.name} config error: {key} is not user definable config. Please remove it from the user config file")
 
     def verify_config(self, app: Application) -> None:
-        if self.__config_verified__:
+        if self.__config_verified:
             return
-        for key, (constraint_type, constraint_value) in self.__config_contrains__.items():
+        for key, (constraint_type, constraint_value) in self.__config_constraints.items():
             if key in self.config:
                 value = self.config[key]
                 if constraint_type == "numeric":
@@ -56,7 +56,7 @@ class Target(Findable):
                 elif constraint_type == "illegal":
                     if value in constraint_value:
                         raise CodegenError(f"Target {self.name} config error: {key}={value} is an illegal value")
-        self.__config_verified__ = True
+        self.__config_verified = True
         # Each target can override this method to add more complex verification if needed
 
 class MPIOpenMP(Target):
@@ -161,11 +161,12 @@ class FPGDatamoverLib(Enum):
     DATAMOVER_XF = 2
 
 class FPGABankPlacementPolicy(Enum):
-    DATAMOVER_TILE_HBM_ROUND_ROBIN = 1
-    DATAMOVER_TILE_HBM_RACK_LB = 2 #RACK BASED LOAD BALLANCING
-    DATAMOVER_TILE_HBM_RACK_LB_ARG_BASED = 3 #RACK BASED LOAD BALLANCING WITH MAKING AN ARG RECIDE IN SAME RACK
-    DATAMOVER_TILE_NO_HBM = 4
-    DATAMOVER_TILE_HBM_SKEWED_ARG_BASED = 5 #GLOBAL BASED CONSECUTIVE BANKS FOR SUB-DOMAIN AND SKEWED BANKING ACROSS ARGS
+    DATAMOVER_HBM_ROUND_ROBIN = 1
+    DATAMOVER_HBM_RACK_LB = 2 #RACK BASED LOAD BALLANCING
+    DATAMOVER_HBM_RACK_LB_ARG_BASED = 3 #RACK BASED LOAD BALLANCING WITH MAKING AN ARG RECIDE IN SAME RACK
+    DATAMOVER_NO_MEM_BANK = 4
+    DATAMOVER_HBM_SKEWED_ARG_BASED = 5 #GLOBAL BASED CONSECUTIVE BANKS FOR SUB-DOMAIN AND SKEWED BANKING ACROSS ARGS
+    DATAMOVER_DDR = 6
     
 class FPGABankPlacer:
     __policy: int
@@ -192,29 +193,29 @@ class FPGABankPlacer:
             raise ValueError(f"Invalid policy: {policy}")
     
     def getBank(self, arg_id: int = None)->int:
-        if self.__policy == FPGABankPlacementPolicy.DATAMOVER_TILE_HBM_ROUND_ROBIN.value:
-            return self.__getBank_DATAMOVER_TILE_HBM_ROUND_ROBIN()
-        elif self.__policy == FPGABankPlacementPolicy.DATAMOVER_TILE_HBM_RACK_LB.value:
-            return self.__getBank_DATAMOVER_TILE_HBM_RACK_LB()
-        elif self.__policy == FPGABankPlacementPolicy.DATAMOVER_TILE_HBM_RACK_LB_ARG_BASED.value:
-            return self.__getBank_DATAMOVER_TILE_HBM_RACK_LB_ARG_BASED(arg_id)
-        elif self.__policy == FPGABankPlacementPolicy.DATAMOVER_TILE_HBM_SKEWED_ARG_BASED.value:
-            return self.__getBank_DATAMOVER_TILE_HBM_SKEWED_ARG_BASED(arg_id)
+        if self.__policy == FPGABankPlacementPolicy.DATAMOVER_HBM_ROUND_ROBIN.value:
+            return self.__getBank_DATAMOVER_HBM_ROUND_ROBIN()
+        elif self.__policy == FPGABankPlacementPolicy.DATAMOVER_HBM_RACK_LB.value:
+            return self.__getBank_DATAMOVER_HBM_RACK_LB()
+        elif self.__policy == FPGABankPlacementPolicy.DATAMOVER_HBM_RACK_LB_ARG_BASED.value:
+            return self.__getBank_DATAMOVER_HBM_RACK_LB_ARG_BASED(arg_id)
+        elif self.__policy == FPGABankPlacementPolicy.DATAMOVER_HBM_SKEWED_ARG_BASED.value:
+            return self.__getBank_DATAMOVER_HBM_SKEWED_ARG_BASED(arg_id)
             
-    def __getBank_DATAMOVER_TILE_HBM_ROUND_ROBIN(self)->int:
+    def __getBank_DATAMOVER_HBM_ROUND_ROBIN(self)->int:
         # [{{(arg.id * config["tile_banks"]|int + i) % 32}}]
         current_bank = self.__current_bank
         self.__current_bank = (self.__current_bank + 1) % self.__num_banks
         return current_bank
     
-    def __getBank_DATAMOVER_TILE_HBM_RACK_LB(self)->int:
+    def __getBank_DATAMOVER_HBM_RACK_LB(self)->int:
         banks_per_rack = self.__num_banks / self.__num_bank_racks
         current_bank = self.__rack_current_bank[self.__current_rack] + self.__current_rack * banks_per_rack
         self.__rack_current_bank[self.__current_rack] =  (self.__rack_current_bank[self.__current_rack] + 1) % banks_per_rack
         self.__current_rack = (self.__current_rack + 1) % self.__num_bank_racks
         return int(current_bank)
     
-    def __getBank_DATAMOVER_TILE_HBM_RACK_LB_ARG_BASED(self, arg_id: int) -> int:
+    def __getBank_DATAMOVER_HBM_RACK_LB_ARG_BASED(self, arg_id: int) -> int:
         banks_per_rack = self.__num_banks / self.__num_bank_racks
         
         if (self.__previous_arg_id is None or self.__previous_arg_id == arg_id):
@@ -228,7 +229,7 @@ class FPGABankPlacer:
         self.__previous_arg_id = arg_id
         return int(current_bank)       
     
-    def __getBank_DATAMOVER_TILE_HBM_SKEWED_ARG_BASED(self, arg_id: int) -> int:
+    def __getBank_DATAMOVER_HBM_SKEWED_ARG_BASED(self, arg_id: int) -> int:
         if (self.__previous_arg_id is None or self.__previous_arg_id != arg_id):
             if self.__previous_arg_id is None:
                 self.__current_bank = 0
@@ -287,12 +288,13 @@ class HLS(Target):
         "default_tile_sizes" : [256,256],
         "max_grid_size" : [300,300,300],
         "tile_banks" : 1,
-        "tile_bank_placement_policy" : FPGABankPlacementPolicy.DATAMOVER_TILE_HBM_ROUND_ROBIN.value,
+        "tile_bank_placement_policy" : FPGABankPlacementPolicy.DATAMOVER_HBM_ROUND_ROBIN.value,
         "global_clock" : -1,
         "datamover_clock" : -1,
         "max_global_clock" : 300000000,
         "HBM_tile_racks" : 2,
         "HBM_banks" : 32,
+        "DDR_banks" : 0, 
         "optimize_policy" : []
         }
     platforms = {
@@ -305,7 +307,8 @@ class HLS(Target):
             "supported_internal_storage" : ["URAM",  "BRAM"],
             "max_global_clock" : 300000000,
             "HBM_tile_racks" : 2,
-            "HBM_banks" : 32
+            "HBM_banks" : 32,
+            "DDR_banks" : 2
         },
         "u55c" : {
             "SLR_count" : 3,
@@ -328,7 +331,7 @@ class HLS(Target):
             "HBM_tile_racks" : 0
         }
     }
-    __config_contrains__ = {
+    __config_constraints = {
         "max_SLR_count" : ("numeric", (1, 3)),
         "SLR_count" : ("numeric", (1, config["max_SLR_count"])),
         "vector_factor" : ("numeric", (1, None)),
@@ -350,10 +353,12 @@ class HLS(Target):
         "datamover_clock" : ("numeric", (-1, config["max_global_clock"]))
     }
     
-    __non_definables__ = [
+    __non_definables = [
         "max_global_clock",
         "HBM_tile_racks",
-        "HBM_banks"
+        "HBM_banks",
+        "DDR_banks",
+        "platforms"
     ]
     
     def verify_config(self, app: Application) -> None:
@@ -395,8 +400,7 @@ class HLS(Target):
                 raise CodegenError(f"iter_par_factor is invalid. It should be greater than or equal to 1")
 
         # Check platform specific constraints
-        
-        platform = self.config.get("platform", "")
+        platform = self.config["platform"]
         if platform in self.platforms:
             platform_info = self.platforms[platform]
             # Check SLR_count
@@ -409,7 +413,17 @@ class HLS(Target):
             if internal_storage and internal_storage not in supported_storage:
                 raise CodegenError(f"Target {self.name} config error: internal_storage={internal_storage} not supported on platform {platform}. Supported: {supported_storage}") 
             
-
+        # Check DDR policy selection for non-DDR defice
+        print(f"platform: {platform}")
+        if platform in self.platforms:
+            if(self.config["tile_bank_placement_policy"] == FPGABankPlacementPolicy.DATAMOVER_DDR.value and self.config["DDR_banks"] == 0):
+                raise CodegenError(f"Target {self.name}: Platform {platform} config.error: This platform do not support DDR banks")
+        else:
+            if (self.config["tile_bank_placement_policy"] == FPGABankPlacementPolicy.DATAMOVER_DDR.value):
+                raise CodegenError(f"Target {self.name} config.error: FPGABankPlacementPolicy.DATAMOVER_DDR cannot be used with unknown target. Please select DDR supported target through platform key")
+         
+                
+    
 class TAPA(HLS):
     name = "tapa"
     kernel_translation = True       

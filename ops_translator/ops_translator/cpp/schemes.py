@@ -372,7 +372,7 @@ class CppHLS(Scheme):
                 consts_map[kernel_idx] = kernel_consts
                 consts.extend(x for x in kernel_consts if x not in consts)
         
-        if (config["HBM_tile_racks"] > 0 and config["tile_bank_placement_policy"] == FPGABankPlacementPolicy.DATAMOVER_TILE_HBM_SKEWED_ARG_BASED.value):
+        if (config["HBM_tile_racks"] > 0 and config["tile_bank_placement_policy"] == FPGABankPlacementPolicy.DATAMOVER_HBM_SKEWED_ARG_BASED.value):
             placer = FPGABankPlacer(config["tile_bank_placement_policy"], 
                             config["HBM_banks"], config["HBM_tile_racks"])
         else:
