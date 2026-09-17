@@ -24,6 +24,7 @@
 
 #include <iomanip>
 #include <iostream>
+#include <cassert>
 #include "ops_hls_kernel.hpp"
 
 static ops::hls::SizeType default_d_p({0,0,0});
@@ -210,6 +211,11 @@ void genTileMetadataCPU(
 
         const unsigned short effective_tile_size_x_beats = tile_size_x_beats - overlap_size_x_beats;
 
+		// printf("tile_size_x_beats: %u, overlap_size_x_beats: %u, effective_tile_size_x_beats: %u\n",
+		// 	tile_size_x_beats, overlap_size_x_beats, effective_tile_size_x_beats);
+
+		assert(effective_tile_size_x_beats > 0);
+		
         const unsigned short effective_tile_size_y = tile_dim == 2 ? tile_size[1] - overlap_size[1] : grid_size[1];
         const unsigned short diff_y = range.end[1] - range.start[1];
         const unsigned short realized_tile_size_x_beats = tile_size_x_beats > num_xblocks ? num_xblocks : tile_size_x_beats;
@@ -255,7 +261,85 @@ void genTileMetadataCPU(
         // #endif
 }
 
-#include <cstdio> // Ensure printf is available if not already included
+#if defined(OPS_HLS_TILE_INTERLEAVE)
+/**
+ * @brief Host-side tiling valid-ratio report. Runs the SAME genTileMetadataCPU the datamover
+ *        geometry derives from, on the REAL grid (not the mock 1D grid getInterleaveGridSizeX
+ *        uses), so it reports the true 3D x*y valid ratio at decl time. Pure host arithmetic —
+ *        no HW build dependency. Gated by OPS_HLS_VERBOSE_TILING (host flag), not DEBUG_LOG.
+ *
+ *        x geometry is in BEATS (isWideMem), y in ROWS, z untiled.
+ */
+static inline void reportTilingValidRatio(const char* tag,
+                                          const ops::hls::SizeType& grid_size,
+                                          unsigned short dim,
+                                          unsigned short mem_vector_factor,
+                                          unsigned short half_span,
+                                          unsigned short total_PEs)
+{
+    const unsigned short tiling_dim = (dim == 3) ? 2 : 1;
+
+    ops::hls::AccessRange range;
+    range.dim = 3;
+    range.start[0] = range.start[1] = range.start[2] = 0;
+    range.end[0] = grid_size[0];
+    range.end[1] = grid_size[1];
+    range.end[2] = grid_size[2];
+
+    ops::hls::SizeType real_grid = { grid_size[0], grid_size[1], grid_size[2] };
+
+    ops::hls::SizeType2d tile_size    = { get_tile_size_x(), get_tile_size_y() };
+    ops::hls::SizeType2d overlap_size = { get_overlap_size_x(mem_vector_factor, half_span, total_PEs),
+                                          get_overlap_size_y(half_span, total_PEs) };
+    ops::hls::SizeType2d eff, last, count;
+    unsigned short ltul_x = 0;
+    unsigned int   total_xblocks = 0;
+
+    // Same routine, same inputs, as the real geometry path -> reported numbers are the ones the
+    // datamover acts on. genTileMetadataCPU may throw on the y-validation; that would mean the
+    // real path throws too, so surface it rather than hide it.
+    genTileMetadataCPU(mem_vector_factor, tiling_dim, real_grid, range,
+                       tile_size, overlap_size, eff, last, count, ltul_x, total_xblocks);
+
+    // ---- x in BEATS ----
+    const unsigned int   grid_xblocks = grid_size[0] / mem_vector_factor;
+    const double streamed_x = (double)(count[0] - 1) * tile_size[0] + last[0];   // full tile per pass
+    const double useful_x   = (double)grid_xblocks;
+    const double valid_x    = (streamed_x > 0.0) ? useful_x / streamed_x : 0.0;
+
+    // ---- y in ROWS ----
+    double streamed_y = (double)grid_size[1];
+    double valid_y    = 1.0;
+    if (tiling_dim == 2) {
+        streamed_y = (double)(count[1] - 1) * tile_size[1] + last[1];
+        valid_y    = (streamed_y > 0.0) ? (double)grid_size[1] / streamed_y : 0.0;
+    }
+
+    const double valid = valid_x * valid_y;   // z untiled -> valid_z = 1
+
+    const bool short_x = (streamed_x < useful_x);
+    const bool short_y = (tiling_dim == 2) && (streamed_y < (double)grid_size[1]);
+
+    printf("========================================================================\n");
+    printf("[TILING] %s : grid (%u, %u, %u)  mem_vf=%u  half_span=%u  PEs=%u  tiling_dim=%u\n",
+           tag, grid_size[0], grid_size[1], grid_size[2],
+           mem_vector_factor, half_span, total_PEs, tiling_dim);
+    printf("[TILING]   x (beats): tile=%u eff=%u count=%u last=%u ovl=%u | grid_xblocks=%u\n",
+           (unsigned)tile_size[0], (unsigned)eff[0], (unsigned)count[0],
+           (unsigned)last[0], (unsigned)overlap_size[0], grid_xblocks);
+    printf("[TILING]   y (rows) : tile=%u eff=%u count=%u last=%u ovl=%u | grid_size_y=%u\n",
+           (unsigned)tile_size[1], (unsigned)eff[1], (unsigned)count[1],
+           (unsigned)last[1], (unsigned)overlap_size[1], (unsigned)grid_size[1]);
+    printf("[TILING]   z        : %u planes (untiled)\n", (unsigned)grid_size[2]);
+    printf("[TILING]   streamed x=%.0f beats (useful %.0f), y=%.0f rows (useful %u)\n",
+           streamed_x, useful_x, streamed_y, (unsigned)grid_size[1]);
+    printf("[TILING]   valid_x=%.2f%%  valid_y=%.2f%%  -> OVERALL=%.2f%% (halo %.2f%%)%s%s\n",
+           100.0*valid_x, 100.0*valid_y, 100.0*valid, 100.0*(1.0 - valid),
+           short_x ? "  *** X SHORT OF GRID ***" : "",
+           short_y ? "  *** Y SHORT OF GRID ***" : "");
+    printf("========================================================================\n");
+}
+#endif
 
 
 const unsigned short getMinTileSize(unsigned short vector_factor, unsigned short mem_vector_factor) 
@@ -376,6 +460,10 @@ ops::hls::GridPropertyCore createGridPropery(const unsigned short dim,
 	gridProp.grid_size[0] = getInterleaveGridSizeX(gridProp.actual_size[0], gridProp.d_p[0], vector_factor, mem_vector_factor, total_PEs, dim);
 	printf("[WARNING]  OPS_HLS_TILE_INTERLEAVE based grid_size_x adjustment. Original size_x: %d, actual size_x: %d, mem_vector_factor: %d, bank_size: %d, adjusted grid size_x:%d, total_PEs: %d\n", gridProp.size[0], gridProp.actual_size[0], mem_vector_factor, OPS_HLS_TILE_BANKS, gridProp.grid_size[0], total_PEs);
 	gridProp.xblocks = gridProp.grid_size[0] / mem_vector_factor;
+#ifdef DEBUG_LOG
+	reportTilingValidRatio("decl", gridProp.grid_size, dim,
+	                        mem_vector_factor, gridProp.d_p[0], total_PEs);
+#endif
 #else
 	gridProp.xblocks = (gridProp.actual_size[0] + mem_vector_factor - 1) / mem_vector_factor;
 	gridProp.grid_size[0] = gridProp.xblocks * mem_vector_factor;
@@ -424,6 +512,10 @@ ops::hls::GridPropertyCoreV2 createGridPropery(const unsigned short dim,
 	// gridProp.grid_size[0] = xblocks * adj_mem_vector_factor;
 	gridProp.grid_size[0] = getInterleaveGridSizeX(gridProp.actual_size[0], gridProp.d_p[0], vector_factor, mem_vector_factor, total_PEs, dim);
 	printf("[WARNING]  OPS_HLS_TILE_INTERLEAVE based grid_size_x adjustment. Original size_x: %d, actual size_x: %d, mem_vector_factor: %d, bank_size: %d, adjusted grid size_x:%d, total_PEs: %d\n", gridProp.size[0], gridProp.actual_size[0], mem_vector_factor, OPS_HLS_TILE_BANKS, gridProp.grid_size[0], total_PEs);
+#ifdef DEBUG_LOG
+	reportTilingValidRatio("decl", gridProp.grid_size, dim,
+	                        mem_vector_factor, gridProp.d_p[0], total_PEs);
+#endif
 #else
 	unsigned short xblocks = (gridProp.actual_size[0] + mem_vector_factor - 1) / mem_vector_factor;
 	gridProp.grid_size[0] = xblocks * mem_vector_factor;

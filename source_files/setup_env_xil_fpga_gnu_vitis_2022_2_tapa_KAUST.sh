@@ -29,7 +29,7 @@ export PLATFORM_PATH=/opt/xilinx/platforms/
 
 export OPS_COMPILER=gnu
 
-if [[ -n "$OPS_HLS_ARTIFACT_DIR" ]]; then
+if [[ -n "${OPS_HLS_ARTIFACT_DIR:-}" ]]; then
     export OPS_INSTALL_PATH=$OPS_HLS_ARTIFACT_DIR/ops
 else
     export OPS_INSTALL_PATH=$SCRIPT_DIR/../ops

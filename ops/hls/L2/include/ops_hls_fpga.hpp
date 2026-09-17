@@ -337,7 +337,11 @@ class FPGA {
         auto regexStr = std::regex(".*" + deviceName + ".*");
         for (auto device : devices) {
             std::string cl_device_name;
-            OCL_CHECK(err, err = device.getInfo(CL_DEVICE_NAME, &cl_device_name));
+            err = device.getInfo(CL_DEVICE_NAME, &cl_device_name);
+            if (err != CL_SUCCESS) {
+                // Device is inaccessible (likely locked by cluster admin), skip it
+                continue; 
+            }
             std::cout << "Found device: " << cl_device_name << std::endl;
             if (regex_match(cl_device_name, regexStr)) m_Devices.push_back(device);
         }
