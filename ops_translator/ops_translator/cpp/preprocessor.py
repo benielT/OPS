@@ -32,6 +32,7 @@ class Preprocessor(pcpp.Preprocessor):
         self.__is_ops_tiled_flag = False
         self.__ops_tile_sizes = [-1,-1,-1]  # x,y,z
         self.__is_ops_tiled_interleave = False
+        self.__is_ops_tiled_y_vect = False
         self.__ops_hls_bank_group = 2
         self.__ops_hls_nb_align = False
 
@@ -96,6 +97,11 @@ class Preprocessor(pcpp.Preprocessor):
             return True
         return False
     
+    def is_ops_tiling_y_vectorized(self)-> bool:
+            if (self.is_ops_tiled and self.__is_ops_tiled_y_vect):
+                return True
+            return False
+    
     def get_ops_interleave_bank_group(self) -> int:
         if (self.is_ops_tiling_interleaved()):
             return self.__ops_hls_bank_group
@@ -137,6 +143,10 @@ class Preprocessor(pcpp.Preprocessor):
             elif name == "OPS_MAXTILESIZE_Z":
                 self.__ops_tile_sizes[2] = self.extract_macro_value(name, macro)
                 print(f"[PREPROC] Z tile size: {self.__ops_tile_sizes[2]}")
+                
+            elif name == "OPS_HLS_TILE_Y_VECT":
+                self.__is_ops_tiled_y_vect = True
+                print(f"[PREPROC] OPS TILING Y VECTORIZATION flag set")
                 
             elif name == "OPS_HLS_TILE_INTERLEAVE":
                 self.__is_ops_tiled_interleave = True
