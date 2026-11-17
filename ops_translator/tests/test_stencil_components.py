@@ -10,6 +10,7 @@ from ops import (
     getMinPoint,
     getStencilSize,
     stencilPointsSort,
+    stencilShift,
 )
  
  
@@ -33,3 +34,28 @@ def test_widen_points_x_extent(vector_factor, expected_width):
     assert max(xs) - min(xs) + 1 == expected_width
     assert min(xs) == 0  # translated to origin
     assert set(mapping) == set(pts)  # every original point is mapped
+
+
+@pytest.mark.parametrize(
+    "points, shift_size, shift_dim, expected",
+    [
+        ([Point([1, 2, 3])], 2, 0, [Point([3, 2, 3])]),
+        ([Point([1, 2, 3])], -2, 1, [Point([1, 0, 3])]),
+        ([Point([1, 2, 3]), Point([-1, 0, 1])], 4, 2,
+            [Point([1, 2, 7]), Point([-1, 0, 5])]),
+    ],
+)
+def test_stencil_shift(points, shift_size, shift_dim, expected):
+    result = stencilShift(points, shift_size, shift_dim)
+
+    assert result == expected
+    assert all(
+        result_point is not original_point
+        for result_point, original_point in zip(result, points)
+    )
+
+
+@pytest.mark.parametrize("shift_dim", [-1, 3])
+def test_stencil_shift_rejects_invalid_dimension(shift_dim):
+    with pytest.raises(OpsError, match=r"shift_dim must be in \[0, 2\]"):
+        stencilShift([Point([0, 0, 0])], 1, shift_dim)
