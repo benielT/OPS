@@ -1,0 +1,45 @@
+# Ignore emu directories
+hls/build/sw_emu
+hls/build/hw_emu
+hls/profile_data/sw_emu
+hls/profile_data/hw_emu
+!hls/profile_data/hw/*
+
+# Ignore text and log files globally by default
+*.txt
+*.out
+*.log
+
+# Ignore vitis build, runtime tempraries
+_x
+.Xil
+--temp_dir*
+vitis_analyzer*
+
+# Ignore emporary profile derivative
+perf_profile.csv
+
+# Ignore emulation configuration 
+emconfig.json
+
+# Ignore everything inside temp_dir to filter out heavy artifacts...
+hls/build/hw/temp_dir/**/*
+
+# ...BUT force Git to track the directory structures...
+!hls/build/hw/temp_dir/**/
+
+# ...AND whitelist the specific database, report, and log extensions needed by Vitis Analyzer
+!hls/build/hw/temp_dir/**/*.xml
+!hls/build/hw/temp_dir/**/*.rpt
+!hls/build/hw/temp_dir/**/*.pb
+!hls/build/hw/temp_dir/**/*.pb3
+!hls/build/hw/temp_dir/**/*.xtxt
+!hls/build/hw/temp_dir/**/*.json
+!hls/build/hw/temp_dir/**/*.rtd
+!hls/build/hw/temp_dir/**/*.xutil
+!hls/build/hw/temp_dir/**/*.rpx
+!hls/build/hw/temp_dir/**/*.rpv
+!hls/build/hw/temp_dir/**/*.html
+!hls/build/hw/temp_dir/**/*.info
+!hls/build/hw/temp_dir/**/*.log
+!hls/build/hw/temp_dir/**/*.txt
