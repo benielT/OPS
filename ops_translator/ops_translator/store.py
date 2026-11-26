@@ -14,6 +14,7 @@ from enum import Enum
 class TilingType(Enum):
     TILE_TYPE_ROW = 1
     TILE_TYPE_INTERLEAVE = 2
+    TILE_TYPE_Y_VECT = 3
     
 
 if TYPE_CHECKING:
@@ -195,6 +196,11 @@ class Program:
     
     def is_interleave(self) -> bool:
         if self.tiling and self.tiling_type == TilingType.TILE_TYPE_INTERLEAVE:
+            return True
+        return False
+    
+    def is_yVect(self)-> bool:
+        if self.tiling and self.tiling_type == TilingType.TILE_TYPE_Y_VECT:
             return True
         return False
     

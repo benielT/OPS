@@ -12,7 +12,7 @@ import cpp.translator.program
 import cpp.preprocessor
 import ops
 from language import Lang
-from store import Program, TilingType
+from store import Program, TilingType, ParseError
 
 libclang_path = os.getenv("LIBCLANG_PATH")
 if libclang_path is not None:
@@ -80,13 +80,13 @@ class Cpp(Lang):
             )
 
         if isl_directives is not None:
-            return translation_unit, source, isl_directives, preprocessor.is_ops_tiled(), preprocessor.get_ops_tile_sizes(), preprocessor.is_ops_tiling_interleaved(), preprocessor.get_ops_interleave_bank_group(), preprocessor.is_ops_interleave_nb_align()
+            return translation_unit, source, isl_directives, preprocessor.is_ops_tiled(), preprocessor.get_ops_tile_sizes(), preprocessor.is_ops_tiling_interleaved(), preprocessor.get_ops_interleave_bank_group(), preprocessor.is_ops_interleave_nb_align(), preprocessor.is_ops_tiling_y_vectorized()
         else:
             return translation_unit, source,  
 
     def parseProgram(self, path: Path, include_dirs: Set[Path], defines: List[str]) -> Program:
         ast, source = self.parseFile(path, frozenset(include_dirs), frozenset(defines))
-        ast_pp, source_pp, isl_directives, is_tiled, tile_sizes, is_interleave, interleave_b_group, is_interleave_nb_align =  self.parseFile(path, frozenset(include_dirs), frozenset(defines), preprocess = True)
+        ast_pp, source_pp, isl_directives, is_tiled, tile_sizes, is_interleave, interleave_b_group, is_interleave_nb_align, is_y_vectoriszed =  self.parseFile(path, frozenset(include_dirs), frozenset(defines), preprocess = True)
 
         with open("./source_pp.txt", "w") as f:        
             f.write("=================================================================================")
@@ -97,7 +97,14 @@ class Cpp(Lang):
             f.write("=================================================================================")
                 
         # TODO: Find the global ndim programatically
-        tilingType = TilingType.TILE_TYPE_INTERLEAVE if is_interleave else TilingType.TILE_TYPE_ROW
+        tilingType = TilingType.TILE_TYPE_ROW
+        if is_interleave and is_y_vectoriszed:
+            raise ParseError("Cannot both OPS_HLS_TILE_INTERLEAVE and OPS_HLS_TILE_Y_VECT flags used together")
+        elif is_interleave:
+            tilingType = TilingType.TILE_TYPE_INTERLEAVE
+        elif is_y_vectoriszed:
+            tilingType = TilingType.TILE_TYPE_Y_VECT
+            
         program = Program(path, ast, ast_pp, source_pp, isl_directives, tiling=is_tiled, tile_sizes=tile_sizes, tiling_type = tilingType, interleave_bank_group = interleave_b_group, interleave_np_align=is_interleave_nb_align)
 
         cpp.parser.parseLoops(ast, program)
