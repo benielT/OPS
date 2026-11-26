@@ -10,6 +10,8 @@ from jinja2 import Environment
 from typing import List, Tuple, Set, Union, Optional
 from util import KernelProcess, findIdx, function_name
 import re
+from functools import cmp_to_key
+
 import logging
 from cpp import optimizer
 import os
@@ -291,6 +293,7 @@ class CppHLS(Scheme):
         widen_points, point_to_widen_map = ops.computeWidenPoints(stencil.row_discriptors, vector_factor)
         widen_base_point = point_to_widen_map[stencil.base_point]
         widen_windows_buffers, widen_chains = ops.windowBuffChainingAlgo(widen_points, stencil.dim)
+        logging.debug((f"{function_name()}: widen_windows_buffers: {widen_windows_buffers}, widen_chains: {widen_chains}") )
         widen_stencilSize = ops.getStencilSize(widen_points)
         widen_row_discriptors = ops.genRowDiscriptors(widen_points, widen_base_point)
         widen_d_m = ops.Point([(stencil.d_m[0] - vector_factor + 1)/vector_factor, stencil.d_m[1], stencil.d_m[2]])
@@ -298,7 +301,32 @@ class CppHLS(Scheme):
         widen_stencil = ops.Stencil(stencil.id, stencil.dim, stencil.stencil_ptr + "_widen", len(widen_points), widen_points, widen_base_point, widen_stencilSize, widen_d_m, widen_d_p, widen_row_discriptors)
         logging.debug(f"{function_name()}: widen points: {widen_points}, stencil: {stencil}, widen_stencil: {widen_stencil}")
         return (ops.WindowBufferDiscriptor(widen_stencil, widen_windows_buffers, widen_chains, point_to_widen_map))
-      
+     
+    def generateYVectWidenStencilandBufferDiscriptor(self, stencil: ops.Stencil, vector_factor: int,y_vector_factor: int) -> Tuple[ops.Stencil, ops.YVectWindowBufferDiscriptor]:
+        yVect_stencil = ops.yVectStencilGeneration(stencil, y_vector_factor)
+        logging.debug(f"{function_name()}: stencil: {stencil}, yvect_stencil_points: {ops.StencilVisualizer.to_string(yVect_stencil.points, yVect_stencil.base_point)}") 
+  
+        yVect_row_discriptors = ops.genRowDiscriptors(yVect_stencil.points, yVect_stencil.base_point)
+        widen_points, point_to_widen_map = ops.computeWidenPoints(yVect_row_discriptors, vector_factor)
+        widen_base_point = point_to_widen_map[yVect_stencil.base_point]
+        logging.debug((f"{function_name()}: stencil: {stencil}, widen_points: {ops.StencilVisualizer.to_string(widen_points, widen_base_point)}") )
+        
+        grp_points = ops.yVectGenGroupPoints(widen_points, y_vector_factor)
+        grp_points = sorted(grp_points, key=cmp_to_key(ops.pointCompare))
+        logging.debug((f"{function_name()}: stencil: {stencil}, group_points: {ops.StencilVisualizer.to_string(grp_points, widen_base_point)}") )
+        
+        widen_windows_buffers, widen_chains = ops.yVectWindowBuffChainingAlgo(grp_points, yVect_stencil.dim, y_vector_factor)
+        logging.debug((f"{function_name()}: grp_points: {grp_points}, widen_windows_buffers: {widen_windows_buffers}, widen_chains: {widen_chains}") )
+        
+        widen_stencilSize = ops.getStencilSize(widen_points)
+        widen_row_discriptors = ops.genRowDiscriptors(widen_points, widen_base_point)
+        widen_d_m = ops.Point([(stencil.d_m[0] - vector_factor + 1)/vector_factor, stencil.d_m[1], stencil.d_m[2]])
+        widen_d_p = ops.Point([(stencil.d_p[0] + vector_factor - 1)/vector_factor, stencil.d_p[1], stencil.d_p[2]])
+        widen_stencil = ops.Stencil(stencil.id, stencil.dim, stencil.stencil_ptr + "_widen", len(widen_points), widen_points, widen_base_point, widen_stencilSize, widen_d_m, widen_d_p, widen_row_discriptors)
+        logging.debug(f"{function_name()}: widen points: {widen_points}, stencil: {stencil}, widen_stencil: {widen_stencil}")
+        return (ops.YVectWindowBufferDiscriptor(widen_stencil, widen_windows_buffers, widen_chains, point_to_widen_map, yVect_stencil, grp_points))
+        
+        
     def find_kernel_arg_of_ops_idx(self, kernel_args: List[str], loopArgs: List[ops.Arg])-> Union[str, None]:
         for i, arg in enumerate(loopArgs):
             if isinstance(arg, ops.ArgIdx):
@@ -430,7 +458,7 @@ class CppHLS(Scheme):
         kernel_consts = self.find_const_in_kernel(kernel_body, program.consts)
         kernel_idx_arg_name = self.find_kernel_arg_of_ops_idx(kernel_args, loop.args)
         logging.debug("kernel_idx_arg_name: %s", kernel_idx_arg_name)
-        
+        print(f"if program y_vect: {program.is_yVect()}")        
         widen_stencil_desc_map = {}
         
         for stencil_ptr in loop.stencils:
@@ -439,10 +467,18 @@ class CppHLS(Scheme):
             if not stencil:
                 raise CodegenError("Failed to find stencil of a loop in the program")
             
-            widen_stencil_desc = self.generateWidenStencilandBufferDiscriptor(stencil, config["vector_factor"])
+            if program.is_yVect():
+                
+                widen_stencil_desc = self.generateYVectWidenStencilandBufferDiscriptor(stencil, config["vector_factor"], config["tile_banks"])
+            else:
+                widen_stencil_desc = self.generateWidenStencilandBufferDiscriptor(stencil, config["vector_factor"])
+                
             widen_stencil_desc_map[stencil.stencil_ptr] = widen_stencil_desc
-            
-        widen_read_stencil_desc = self.generateWidenStencilandBufferDiscriptor(loop.get_read_stencil(program), config["vector_factor"])
+          
+        if program.is_yVect():  
+            widen_read_stencil_desc = self.generateYVectWidenStencilandBufferDiscriptor(loop.get_read_stencil(program), config["vector_factor"], config["tile_banks"])
+        else:
+            widen_read_stencil_desc = self.generateWidenStencilandBufferDiscriptor(loop.get_read_stencil(program), config["vector_factor"])
         
         
         if kernel_idx_arg_name:

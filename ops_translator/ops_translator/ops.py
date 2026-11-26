@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from store import Location
 from copy import deepcopy
 
+import matplotlib.pyplot as plt
 class AccessType(Enum):
     OPS_READ = 0
     OPS_WRITE = 1 
@@ -270,7 +271,177 @@ class Point:
     
     def __hash__(self) -> int:
         return hash(str(self.x) + "_" + str(self.y) + "_" + str(self.z))
+    
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, Point): return False
+        return self.x == other.x and self.y == other.y and self.z == other.z
 
+@dataclass(frozen=False)
+class GroupPoint(Point):
+    g: int = 0
+    
+    def __str__(self) -> str:
+        return f"Point: ({self.x},{self.y},{self.z}), Group: {self.g}"
+    
+    def __init__(self, input: List[int], group: int):
+        super().__init__(input)
+        self.g = group
+    
+class StencilVisualizer:
+    @staticmethod
+    def to_string(points: List[Union[Point, GroupPoint]], origin: Point = None) -> str:
+        """
+        Generate a 3D slice of the stencil to string by slicing them to 2D planes
+        and printing them.
+        """
+        out_str = ""
+        out_str = "--- Stencil Points ---" + "\n"
+        for z_slice in sorted({point.z for point in points}):
+            out_str += StencilVisualizer.to_string_2d(points, z_slice, origin)
+            logging.debug(f"StencilVisualizer.{function_name()}, z_slice: {z_slice}, out_str: {out_str}")
+        out_str += "===========" + "\n"
+        return out_str
+        
+    @staticmethod
+    def to_string_2d(points: List[Union[Point, GroupPoint]], z_slice: int = 0, origin: Point = None) -> str: 
+        """
+        Prints a 2D slice of the stencil to string.
+        Points in the stencil are marked with ' *', the origin with 'x' (or 'x*' if in stencil).
+        X coordinates label columns and y coordinates label rows.
+        """
+        # Extract coordinates for the specific z-slice
+        slice_points = {(p.x, p.y) for p in points if p.z == z_slice}
+        if isinstance(points[0], GroupPoint):
+            group_map = {(p.x, p.y):p.g for p in points if p.z == z_slice}
+        
+        if not slice_points:
+            print(f"No points in stencil at Z-slice: {z_slice}")
+            return ""
+
+        # Determine bounding box (ensure origin 0,0 is included for reference)
+        xs = [p[0] for p in slice_points] + [0]
+        ys = [p[1] for p in slice_points] + [0]
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+        out_str = ""
+        out_str = f"--- Stencil Z-Slice: {z_slice} ---" + "\n"
+        x_values = range(min_x, max_x + 1)
+        y_values = range(max_y, min_y - 1, -1)
+        
+        if isinstance(points[0], GroupPoint):
+            max_group = max(len(str(point.g)) for point in points)
+            cell_width = max(4, max(len(str(x)) for x in x_values)) + max_group + 1
+            row_label_width = max(3, max(len(str(y)) for y in y_values))
+        elif isinstance(points[0], Point):
+            cell_width = max(4, max(len(str(x)) for x in x_values))
+            row_label_width = max(3, max(len(str(y)) for y in y_values))
+        else:
+            raise OpsError("Visualizer only support Point or GroupPoint list")
+            
+        out_str += f"{'y/x':>{row_label_width}} | "
+        out_str += " ".join(f"{x:^{cell_width}}" for x in x_values) + "\n"
+        # Y goes top to bottom in terminal, so we iterate backwards
+        for y in y_values:
+            row_cells = []
+            for x in x_values:
+                is_stencil_point = (x, y) in slice_points
+                if not origin:
+                    is_origin = (x == 0 and y == 0 and z_slice == 0)
+                else:
+                    # print(f"origin type: {type(origin)}")
+                    is_origin = (x == origin.x and y == origin.y and z_slice == origin.z)
+                
+                if isinstance(points[0], GroupPoint) and is_stencil_point:
+                    grstr = ":" + str(group_map[(x,y)])
+                elif isinstance(points[0], GroupPoint):
+                    grstr = "  "
+                else:
+                    grstr = ""
+                    
+                if is_stencil_point and is_origin:
+                    cell = f"[x*{grstr}]" # Origin AND a stencil point
+                elif is_stencil_point:
+                    cell = f"[ *{grstr}]" # Stencil point
+                elif is_origin:
+                    cell = f"[x {grstr}]" # Origin, but not in stencil
+                else:
+                    cell = f" . {grstr} "# Empty space
+                    
+                row_cells.append(f"{cell:^{cell_width}}")
+            out_str += f"{y:>{row_label_width}} | " + " ".join(row_cells) + "\n"
+        out_str += "-" * 25 + "\n"
+        return out_str
+                
+    @staticmethod
+    def print_to_terminal(points: List[Point], origin: Point = None):
+        """
+        Prints a 3D slice of the stencil to the terminal by slicing them to 2D planes
+        and printing them.
+        """
+        print("--- Stencil Points ---")
+        for z_slice in sorted({point.z for point in points}):
+            StencilVisualizer.print_to_terminal_2d(points, z_slice, origin)
+        print("===========")
+        
+    @staticmethod
+    def print_to_terminal_2d(points: List[Point], z_slice: int = 0, origin: Point = None): 
+        """
+        Prints a 2D slice of the stencil to the terminal.
+        Points in the stencil are marked with ' *', the origin with 'x' (or 'x*' if in stencil).
+        """
+        out_str = StencilVisualizer.to_string(points, z_slice, origin)
+        print()
+        print(out_str)
+
+    @staticmethod
+    def save_as_image(points: List[Point], filename: str = "stencil.png", origin: Point = None):
+        """
+        Generates and saves a 3D scatter plot of the stencil.
+        """
+        fig = plt.figure(figsize=(8, 8))
+        ax = fig.add_subplot(111, projection='3d')
+
+        xs = [p.x for p in points]
+        ys = [p.y for p in points]
+        zs = [p.z for p in points]
+
+        # Plot stencil points
+        ax.scatter(xs, ys, zs, c='blue', s=200, label='Stencil Points', depthshade=False, alpha=0.2)
+        
+        # Add index text markers to each point
+        for i, (x, y, z) in enumerate(zip(xs, ys, zs)):
+            # The leading space in f' {i}' helps prevent the text from overlapping the dot
+            ax.text(x, y, z, f'({x},{y},{z})', size=8, color='black', fontweight='light', fontstyle='italic')
+            
+        # Highlight origin
+        if not origin:
+            ax.scatter([0], [0], [0], c='red', marker='x', s=200, label='Origin (0,0,0)', linewidths=3)
+        else:
+            ax.scatter([origin.x], [origin.y], [origin.z], c='red', marker='x', s=200, label='Origin (0,0,0)', linewidths=3)
+
+        # Draw lines from origin to points to show connectivity (optional but helpful)
+        # for x, y, z in zip(xs, ys, zs):
+        #     ax.plot([0, x], [0, y], [0, z], color='gray', linestyle='--', alpha=0.5)
+
+        # Formatting
+        ax.set_xlabel('X Offset')
+        ax.set_ylabel('Y Offset')
+        ax.set_zlabel('Z Offset')
+        ax.set_title('3D Stencil Representation')
+        
+        # Force integer ticks based on min/max bounds
+        ax.set_xticks(range(min(xs + [0]), max(xs + [0]) + 1))
+        ax.set_yticks(range(min(ys + [0]), max(ys + [0]) + 1))
+        ax.set_zticks(range(min(zs + [0]), max(zs + [0]) + 1))
+
+        plt.legend()
+        plt.tight_layout()
+        
+        # Save to file or show
+        plt.savefig(filename, dpi=300)
+        print(f"Saved stencil image to {filename}")
+        plt.close()
+        
 def pointsToArray(points: List[Point], ndim: int) -> List[int]:
     array = []
     for point in points:
@@ -343,7 +514,7 @@ def cordinateOriginTranslation(origin: Point, array: List[Point]) -> List[Point]
     return translated
 
 #Window buffer algo uses adjusted index, where base is (x_min, y_min, z_min)
-def windowBuffChainingAlgo(sorted_array: List[Point], ndim: int) -> Tuple[List[str], List[Tuple[str, str]]]:
+def windowBuffChainingAlgo(sorted_array: List[Point], ndim: int, suffix: str = "") -> Tuple[List[str], List[Tuple[str, str]]]:
     chains = []
     unique_buffers = []
     # chains.append(("rd_val", "axis_read"))
@@ -352,7 +523,7 @@ def windowBuffChainingAlgo(sorted_array: List[Point], ndim: int) -> Tuple[List[s
     
     for p_idx in range(len(sorted_array)):
         if p_idx == len(sorted_array) - 1:
-            chains.append((p_idx, "read_val"))
+            chains.append((p_idx, "read_val" + suffix))
             if prev_buff:
                 chains.append((prev_buff.pop(), feeding_point.pop()))
         elif isInSameRow(sorted_array[p_idx], sorted_array[p_idx+1]):
@@ -361,11 +532,11 @@ def windowBuffChainingAlgo(sorted_array: List[Point], ndim: int) -> Tuple[List[s
             is_aligned = False
             if sorted_array[p_idx+1].z == sorted_array[p_idx].z:
                 buffer_type = BufferType.LINE_BUFF
-                curr_buff_name = "buf_r" + str(sorted_array[p_idx].y) + "_" + str(sorted_array[p_idx+1].y) + "_p" + str(sorted_array[p_idx].z)
+                curr_buff_name = "buf_r" + str(sorted_array[p_idx].y) + "_" + str(sorted_array[p_idx+1].y) + "_p" + str(sorted_array[p_idx].z) + suffix
                 is_aligned =  sorted_array[p_idx+1].x == sorted_array[p_idx].x
             else:
                 buffer_type = BufferType.PLANE_BUFF
-                curr_buff_name = "buf_p" + str(sorted_array[p_idx].z) + "_" + str(sorted_array[p_idx+1].z)
+                curr_buff_name = "buf_p" + str(sorted_array[p_idx].z) + "_" + str(sorted_array[p_idx+1].z) + suffix
                 is_aligned =  sorted_array[p_idx+1].x == sorted_array[p_idx].x and sorted_array[p_idx+1].y == sorted_array[p_idx].y
             curr_buff = WindowBuffer(curr_buff_name, buffer_type, sorted_array[p_idx+1], sorted_array[p_idx], is_aligned)
             unique_buffers.append(curr_buff)
@@ -378,6 +549,172 @@ def windowBuffChainingAlgo(sorted_array: List[Point], ndim: int) -> Tuple[List[s
 
     return (unique_buffers, chains)  
 
+def stencilShift(points: List[Point], shift_size: int, shift_dim: int) -> List[Point]:
+    if not (0 <= shift_dim < 3):
+        raise OpsError(f"shift_dim must be in [0, 2], got {shift_dim}")
+    
+    shift_points = []
+    for point in points:
+        new_point = deepcopy(point)
+        new_point[shift_dim] = point[shift_dim] + shift_size
+        shift_points.append(new_point)
+    
+    return shift_points
+
+def yVectStencilConstruct(base_sten_points: List[Point], y_vect_factor: int) -> List[Point]:
+    # print(f"[yVectStencilConstruct]: Original points: {base_sten_points}, y_vect_factor: {y_vect_factor}")
+    y_vec_sten_points = set(deepcopy(base_sten_points))
+    
+    for i in range(1,y_vect_factor):
+        shift_points = stencilShift(base_sten_points, i, 1)
+        shift_points_set = set(shift_points)
+        # print(f"[yVectStencilConstruct]: Shift: {i}, shifted: {shift_points_set}")
+        y_vec_sten_points.update(shift_points_set)
+    
+    # print(f"[yVectStencilConstruct]: Points after shifts: {list(y_vec_sten_points)}, y_vect_factor: {y_vect_factor}")    
+    return list(y_vec_sten_points)
+
+def planerRWAlignment(plane_points: List[Point], plane_idx: int, is_last_plane: bool, y_vect_factor: int) -> List[Point]:
+    max_row = max([point.y for point in plane_points])
+    min_row = min([point.y for point in plane_points])
+    adjusted_points = plane_points
+    print(f"[planerRWAlignment] max_row: {max_row}, min_row: {min_row}")
+    
+    def rowXFootprint(points: List[Point], row_index: int) -> List[int]:
+        points = [point for point in points if point.y == row_index]
+        return [point.x for point in points]
+
+    adjusted_points = [] 
+    for i in range(max_row+1, min_row, -y_vect_factor):
+        i_start = i - y_vect_factor
+        i_adj = max(i_start, 0)
+        x_super = set()  # slice common footprint
+        print(f"[planerRWAlignment] i: {i}, i_start: {i_adj}, i_end: {i-1}")
+        
+        for j in range(i_adj, i):
+            x_super |= set(rowXFootprint(plane_points, j))
+        print(f"[planerRWAlignment] rowXFootprint for slice: {x_super}")
+        
+        for j in range(i_adj, i):
+            if is_last_plane and (i_adj <= 0):
+                # original_row_points = [point for point in adjusted_points if point.y == j]
+                # adjusted_points = [point for point in adjusted_points if point.y != j]
+                original_row_x_footprint = rowXFootprint(plane_points,j)
+                min_x = min(original_row_x_footprint)
+                print(f"[planerRWAlignment] original_row_x_footprint: {original_row_x_footprint}, row: {j}, plane: {plane_idx},is_last_place: true, min_x={min_x}, x_super:  {x_super}")
+                adjusted_points.extend([Point([x, j, plane_idx]) for x in x_super if x >= min_x])
+            elif j >= 0:
+                # adjusted_points = [point for point in adjusted_points if point.y != j]
+                adjusted_points.extend([Point([x, j, plane_idx]) for x in x_super])
+
+        if i_start < 0 and (not is_last_plane):
+                for j in range(i_start,0):
+                    adjusted_points.extend([Point([x, j, plane_idx]) for x in x_super])
+    
+    print(f"[planerRWAlignment] adjusted_points: {adjusted_points}")
+    StencilVisualizer.save_as_image(adjusted_points, f"yVectStencilAlignment_adjusted_points_{plane_idx}.png")
+    return adjusted_points
+
+def yVectStencilAlignment(points: List[Point], origin: Point, y_vect_factor: int) -> Tuple[List[Point], Point]:
+    # print(f"[yVectStencilAlignment] Original Points: {points}")
+    
+    max_z = max([point.z for point in points])
+    
+    aligned_points = []
+    
+    for z in range(max_z+1):
+        # plane_points = [point for point in points if point.z == z]
+        # print(f"[yVectStencilAlignment] plane_points: {plane_points} of plane: {z}")
+        # StencilVisualizer.save_as_image(plane_points, f"yVectStencilAlignment_planerpoint_{z}.png", origin)
+        aligned_points.extend(planerRWAlignment([point for point in points if point.z == z], z, z == max_z, y_vect_factor))
+    
+    # print(f"[yVectStencilAlignment] aligned_points: {aligned_points}")
+    
+    min_y = min([point.y for point in aligned_points])
+    
+    # if min_y < 0:
+    #     delta = -min_y    
+    #     aligned_points = stencilShift(aligned_points, delta, 1)
+    #     shifted_origin = Point([origin.x, origin.y - delta, origin.z])
+    # else:
+    #     shifted_origin = origin
+    shifted_origin = origin
+    return aligned_points, shifted_origin    
+    
+def yVectStencilGeneration(stencil: Stencil, y_vect_factor: int) -> Stencil:
+    stencil_pts_v_vect = yVectStencilConstruct(stencil.points, y_vect_factor)
+    # StencilVisualizer.save_as_image(stencil_pts_v_vect, "AfterYVectStencilConstruct.png")
+    # print(f"stencil_base_point: {stencil.base_point}")
+    rw_aligned_pts, origin = yVectStencilAlignment(stencil_pts_v_vect, stencil.base_point, y_vect_factor)
+    # StencilVisualizer.save_as_image(rw_aligned_pts, "AfterYVectStencilAlignment.png", origin)
+    d_m = Point([min([point.x for point in rw_aligned_pts]), min([point.y for point in rw_aligned_pts]), min([point.z for point in rw_aligned_pts])])
+    d_p = Point([max([point.x for point in rw_aligned_pts]), max([point.y for point in rw_aligned_pts]), max([point.z for point in rw_aligned_pts])])
+    size = d_p - d_m
+    for i in range(stencil.dim):
+        size[i] += 1
+        
+    return Stencil(stencil.id, stencil.dim, stencil.stencil_ptr + "_yvect", len(rw_aligned_pts), sorted(rw_aligned_pts, key=cmp_to_key(pointCompare)), origin, size, d_m, d_p)
+
+
+def yVectGenGroupPoints(points: List[Point], y_vect_factor: int) -> List[GroupPoint]:
+    max_z = max([point.z for point in points])
+    out_list = []
+    for z in range(max_z+1):
+        plane_points = [point for point in points if point.z == z]
+        max_row = max([point.y for point in plane_points])
+        min_row = min([point.y for point in plane_points])
+        
+        for i in range(max_row+1, min_row, -y_vect_factor):
+            i_start = i - y_vect_factor
+              
+            for idx, j in enumerate(range(i_start, i)):
+                row_points = [point for point in plane_points if point.y == j]
+                
+                for point in row_points:
+                    
+                    g_point = GroupPoint([point.x, point.y, point.z],idx)
+                    
+                    if g_point not in out_list:
+                        out_list.append(g_point)
+                    
+    return out_list
+                
+    
+    
+def yVectWindowBuffChainingAlgo(sorted_array: List[GroupPoint], ndim: int, y_vect_fact: int) -> Tuple[List[str], List[Tuple[str, str]]]:
+    chains = []
+    unique_buffers = []
+    # chains.append(("rd_val", "axis_read"))
+    prev_buff = []
+    feeding_point = []
+    
+    
+    # def remap_points(sorted_array: List[GroupPoint], grp_filtered_points: List[Point], grp_chain: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
+    #     for link in grp_chain:
+    #         if link[0].isnumeric:
+    #             grp_pt_idx = link[0]
+                
+    for grp in range(y_vect_fact):
+        grp_filtered_points = [Point([p.x, p.y, p.z]) for p in sorted_array if p.g == grp]
+        grp_buffers, grp_chains = windowBuffChainingAlgo(grp_filtered_points, ndim, "_" + str(grp)) 
+        unique_buffers.extend(grp_buffers)
+        
+        def find_gbl_index(grp_idx: int):
+            grp_point = grp_filtered_points[grp_idx]
+            gbl_idx = findIdx(sorted_array, lambda p: (p.x == grp_point.x and p.y == grp_point.y and p.z == grp_point.z))
+            if gbl_idx == None:
+                raise OpsError(f"Error finding global index. grp_idx: {grp_idx}, grp_point: {grp_point}, g")
+            return gbl_idx
+        
+        for i, link in enumerate(grp_chains):
+            src = find_gbl_index(link[0]) if isinstance(link[0], int) else link[0]
+            dst = find_gbl_index(link[1]) if isinstance(link[1], int) else link[1]
+            grp_chains[i] = (src, dst)
+                
+        chains.extend(grp_chains)
+
+    return (unique_buffers, chains)  
+            
 def genRowDiscriptors(array: List[Point], base_point: Point = Point([0,0,0]))-> List[StencilRowDiscriptor]:
     
     row_discriptors = []
@@ -424,6 +761,37 @@ def  computeWidenPoints(row_discriptors: List[StencilRowDiscriptor], vector_fact
     
     return widen_points, point_to_widen_point_map
 
+def  computeYvectWidenPoints(stencil: Stencil, y_vect_factor: int):
+    # First comput Y-vect groups from basic points then apply standard widen points
+    def orderByPlane(points: List[Point]) -> List[List]:
+        points_by_plane: Dict[int, List[Point]] = {}
+        for point in points:
+            points_by_plane.setdefault(point.z, []).append(point)
+
+        return [
+            sorted(points_by_plane[plane], key=lambda point: (point.y, point.x))
+            for plane in sorted(points_by_plane)
+        ]
+        
+    grouped_points = orderByPlane(stencil.points)
+    for idx, plane_points in enumerate(grouped_points):
+        logging.debug(f"{function_name()}: group: {idx}, grouped_points: {StencilVisualizer.to_string(plane_points, stencil.base_point)}")
+        
+    yVectorized_points = []
+    point_to_yVect_point_map = {}
+    
+    for plane_points in grouped_points:
+        y_top = max(point.y for point in plane_points)
+        
+        for point in plane_points:
+            g = (int)((point.y - y_top + y_vect_factor - 1)/y_vect_factor) # Adjusted yVectorised index
+            l = y_top + g * y_vect_factor - point.y # Lane of the vectoriszed group
+            new_point = Point([point.x, g, point.z])
+            yVectorized_points.append(new_point)
+            point_to_yVect_point_map[point] = (new_point, l)
+            
+    return yVectorized_points, point_to_yVect_point_map
+
 @dataclass(frozen=False)
 class StencilRowDiscriptor:
     row_id: Tuple[int, int]
@@ -443,6 +811,11 @@ class WindowBufferDiscriptor:
     window_buffers: List[WindowBuffer]
     chains: List[Tuple[str, str]]
     point_to_widen_map: Optional[dict[Point, Point]]
+
+@dataclass(frozen=False)
+class YVectWindowBufferDiscriptor(WindowBufferDiscriptor):
+    yVect_stencil: Stencil
+    yVect_GroupPoints: Optional[List[GroupPoint]]
 
 @dataclass(frozen=False)
 class WindowBuffer:
